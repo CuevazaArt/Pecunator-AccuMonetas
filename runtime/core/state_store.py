@@ -17,6 +17,8 @@ class StateStore:
     )
     recent_trades: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=50))
     balances: List[Dict[str, Any]] = field(default_factory=list)
+    """Spot /api/v3/account total balance rows Binance returned (before non-zero filter)."""
+    balances_total_assets_in_response: int = 0
     open_orders: List[Dict[str, Any]] = field(default_factory=list)
     my_trades: List[Dict[str, Any]] = field(default_factory=list)
     """REST account summary excluding raw balances row list (commission / flags / etc.)."""

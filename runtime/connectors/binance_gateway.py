@@ -103,9 +103,13 @@ class BinanceGateway:
 
         summ = summarize_binance_account_rest(data)
         self.state.account_summary = summ
+        raw_bal = data.get("balances", [])
+        if not isinstance(raw_bal, list):
+            raw_bal = []
+        self.state.balances_total_assets_in_response = len(raw_bal)
         self.state.balances = [
             b
-            for b in data.get("balances", [])
+            for b in raw_bal
             if float(b.get("free", 0) or 0) > 0 or float(b.get("locked", 0) or 0) > 0
         ]
         self.bus.publish("account.balances", self.state.balances)

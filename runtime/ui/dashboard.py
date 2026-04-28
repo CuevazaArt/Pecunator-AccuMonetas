@@ -62,20 +62,31 @@ async def _auto_start(ctx: AppContext) -> None:
     if not pair:
         mp = ctx.cached_master_password or vault_unlock_password_from_env()
         if mp and ctx.config.exists():
-            pair = ctx.config.get_pair_for_active(mp)
+            try:
+                pair = ctx.config.get_pair_for_active(mp)
+            except ValueError as e:
+                ctx.state.last_error = sanitize_log_message(str(e))
+                return
             if pair:
                 ctx.cached_master_password = mp
     if not pair:
         return
+    if ctx.gateway:
+        await ctx.gateway.stop()
+        ctx.gateway = None
+
     ak, sec = pair
+    g = BinanceGateway(ak, sec, ctx.bus, ctx.state, ctx.log_line)
     try:
-        if ctx.gateway:
-            await ctx.gateway.stop()
-        ctx.gateway = BinanceGateway(ak, sec, ctx.bus, ctx.state, ctx.log_line)
-        await ctx.gateway.start()
-        await ctx.gateway.fetch_account()
+        await g.start()
+        await g.fetch_account()
+        ctx.gateway = g
         ctx.state.last_error = None
     except Exception as e:
+        try:
+            await g.stop()
+        except Exception:
+            pass
         ctx.gateway = None
         ctx.state.connected = False
         ctx.state.last_error = sanitize_log_message(str(e))
@@ -131,7 +142,12 @@ def mount(ctx: AppContext) -> None:
                         await ctx.gateway.stop()
                         ctx.gateway = None
                         ctx.state.connected = False
-                    if ctx.config.remove_credential(cid, mp):
+                    try:
+                        ok = ctx.config.remove_credential(cid, mp)
+                    except ValueError as e:
+                        ui.notify(str(e), type="warning")
+                        return
+                    if ok:
                         sync_sel()
                         fill_public(col)
                         ui.notify("Removed.", type="positive")
@@ -194,14 +210,14 @@ def mount(ctx: AppContext) -> None:
                     ui.notify("API key / secret look incomplete.", type="warning")
                     return
                 try:
-                    ctx.config.add_credential(ak, sk, mp)
-                    ctx.cached_master_password = mp
-                    rb = rf.get("rb")
-                    if rb and rb.value:
-                        save_remembered_master(ctx.config.data_dir, mp)
+                    _, was_update = ctx.config.add_credential(ak, sk, mp)
                 except ValueError as e:
                     ui.notify(str(e), type="warning")
                     return
+                ctx.cached_master_password = mp
+                rb = rf.get("rb")
+                if rb and rb.value:
+                    save_remembered_master(ctx.config.data_dir, mp)
                 inp_ak.value = ""
                 inp_sk.value = ""
                 add.close()
@@ -209,7 +225,10 @@ def mount(ctx: AppContext) -> None:
                 if ph:
                     fill_public(ph)
                 sync_sel()
-                ui.notify("Saved.", type="positive")
+                ui.notify(
+                    "Already stored: secret updated for this API key." if was_update else "Credential saved.",
+                    type="positive",
+                )
 
             with ui.row().classes("justify-end gap-sm"):
                 ui.button("Cancel", on_click=add.close).props("dense flat")
@@ -227,8 +246,19 @@ def mount(ctx: AppContext) -> None:
                 value=bool(remembered),
             )
 
+            def persist_master_remembered() -> None:
+                rb = rf.get("rb")
+                if not rb or not getattr(rb, "value", False):
+                    return
+                mi = rf.get("mp")
+                s = ((mi.value or "").strip()) if mi else ""
+                if len(s) >= 12:
+                    ctx.cached_master_password = s
+                    save_remembered_master(ctx.config.data_dir, s)
+
             def on_chk() -> None:
-                s = (inp_mp.value or "").strip()
+                mi = rf.get("mp")
+                s = (mi.value or "").strip() if mi else ""
                 if cb_rm.value:
                     if len(s) >= 12:
                         save_remembered_master(ctx.config.data_dir, s)
@@ -237,6 +267,7 @@ def mount(ctx: AppContext) -> None:
                     clear_remembered_master(ctx.config.data_dir)
 
             cb_rm.on_value_change(lambda _: on_chk())
+            inp_mp.on("blur", lambda _: persist_master_remembered())
 
             pubs0 = ctx.config.list_public_credentials()
             opt_map = {x["id"]: _short(x["public_key"]) for x in pubs0}
@@ -294,6 +325,7 @@ def mount(ctx: AppContext) -> None:
             rows=[],
             row_key="asset",
         ).props("dense flat bordered")
+        bal_hint = ui.label("").classes("text-caption text-grey-6 mb-sm")
 
         conn_lbl = ui.label("REST: OFF · WS idle").classes("text-subtitle2 text-grey-5")
         ui.separator().classes("my-md")
@@ -316,22 +348,38 @@ def mount(ctx: AppContext) -> None:
                         ui.notify("Open Vault — enter master password.", type="warning")
                         vault.open()
                         return
-                    blob = ctx.config.get_pair_for_active(mp_in)
+                    try:
+                        blob = ctx.config.get_pair_for_active(mp_in)
+                    except ValueError as e:
+                        ui.notify(str(e), type="warning")
+                        vault.open()
+                        return
                     ctx.cached_master_password = mp_in
+                    rb = rf.get("rb")
+                    if rb and getattr(rb, "value", False) and len(mp_in) >= 12:
+                        save_remembered_master(ctx.config.data_dir, mp_in)
                 if not blob:
                     ui.notify("No keys.", type="warning")
                     vault.open()
                     return
                 ak_, sec_ = blob
+                g = BinanceGateway(ak_, sec_, ctx.bus, ctx.state, ctx.log_line)
                 try:
-                    ctx.gateway = BinanceGateway(ak_, sec_, ctx.bus, ctx.state, ctx.log_line)
-                    await ctx.gateway.start()
-                    await ctx.gateway.fetch_account()
-                    ctx.state.last_error = None
-                    ui.notify("REST online.", type="positive")
+                    await g.start()
+                    await g.fetch_account()
                 except Exception as ex:
+                    try:
+                        await g.stop()
+                    except Exception:
+                        pass
                     ctx.gateway = None
-                    ui.notify(sanitize_log_message(str(ex)), type="negative")
+                    msg = sanitize_log_message(str(ex))
+                    ctx.state.last_error = msg
+                    ui.notify(msg, type="negative")
+                    return
+                ctx.gateway = g
+                ctx.state.last_error = None
+                ui.notify("REST online; balances loaded from Spot account.", type="positive")
 
             ui.button("Connection toggle", icon="bolt", on_click=toggle).props(
                 "dense rounded-borders"
@@ -346,6 +394,7 @@ def mount(ctx: AppContext) -> None:
 
         def repaint() -> None:
             gw = ctx.gateway is not None
+            err = ctx.state.last_error
             conn_lbl.set_text(
                 f"REST: {'ON' if gw else 'OFF'} · WS: {'streaming' if ctx.state.connected else 'idle'}",
             )
@@ -358,8 +407,20 @@ def mount(ctx: AppContext) -> None:
                 {"k": "makerCommission", "v": str(s.get("makerCommission", "—"))},
                 {"k": "takerCommission", "v": str(s.get("takerCommission", "—"))},
                 {"k": "updateTime", "v": str(s.get("updateTime", "—"))},
+                {"k": "last REST error", "v": (err if err else "—")},
             ]
             tbl_bal.rows = _primary(ctx.state.balances)
+            slots = int(getattr(ctx.state, "balances_total_assets_in_response", 0) or 0)
+            nz = len(ctx.state.balances)
+            if gw and slots > 0 and not err:
+                bal_hint.set_text(
+                    f"REST GET /account: table lists assets with free or locked > 0 "
+                    f"({nz} asset(s)); Binance payload had {slots} balance slot(s).",
+                )
+            elif gw and err:
+                bal_hint.set_text("Balances stale or empty until REST succeeds (see row above).")
+            else:
+                bal_hint.set_text("")
 
         ui.timer(0.4, repaint)
 

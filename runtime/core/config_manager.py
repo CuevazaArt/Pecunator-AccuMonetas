@@ -167,29 +167,55 @@ class ConfigManager:
                 return it
         return None
 
-    def add_credential(self, api_key: str, api_secret: str, master_password: str) -> str:
+    def add_credential(self, api_key: str, api_secret: str, master_password: str) -> Tuple[str, bool]:
+        """
+        Add or update a credential under the master password.
+        If the same API key (public) already exists, only the secret is updated.
+        Returns (credential_id, updated_existing).
+        """
         self.validate_master_password_strength(master_password)
+        vault_existed = self.exists() and self._salt_path.is_file()
         payload = self._decrypt_payload(master_password)
+        if vault_existed and payload is None:
+            raise ValueError(
+                "Cannot unlock vault: wrong master password or unreadable credential file.",
+            )
         if payload is None:
             payload = {"v": 2, "items": []}
         items = payload.get("items")
         if not isinstance(items, list):
             items = []
+
+        ak_n = api_key.strip()
+        sk_n = api_secret.strip()
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            prev = str(it.get("api_key", "")).strip()
+            if prev == ak_n:
+                it["api_secret"] = sk_n
+                payload["v"] = 2
+                payload["items"] = items
+                cid = str(it.get("id", "")).strip()
+                if cid:
+                    self._encrypt_and_write(payload, master_password)
+                    self.set_active_credential_id(cid)
+                    return cid, True
         cid = str(uuid.uuid4())
-        items.append(
-            {
-                "id": cid,
-                "api_key": api_key.strip(),
-                "api_secret": api_secret.strip(),
-            }
-        )
+        items.append({"id": cid, "api_key": ak_n, "api_secret": sk_n})
         payload["v"] = 2
         payload["items"] = items
         self._encrypt_and_write(payload, master_password)
-        return cid
+        self.set_active_credential_id(cid)
+        return cid, False
 
     def remove_credential(self, credential_id: str, master_password: str) -> bool:
+        vault_existed = self.exists() and self._salt_path.is_file()
         payload = self._decrypt_payload(master_password)
+        if vault_existed and payload is None:
+            raise ValueError(
+                "Cannot unlock vault: wrong master password or unreadable credential file.",
+            )
         if payload is None:
             return False
         items = payload.get("items")
@@ -205,9 +231,13 @@ class ConfigManager:
         return True
 
     def get_secret_pair(self, credential_id: str, master_password: str) -> Optional[Tuple[str, str]]:
+        if not self.exists() or not self._salt_path.is_file():
+            return None
         payload = self._decrypt_payload(master_password)
         if payload is None:
-            return None
+            raise ValueError(
+                "Cannot unlock vault: wrong master password or unreadable credential file.",
+            )
         items = payload.get("items")
         if not isinstance(items, list):
             return None
@@ -217,21 +247,43 @@ class ConfigManager:
         return str(it["api_key"]).strip(), str(it["api_secret"]).strip()
 
     def get_pair_for_active(self, master_password: str) -> Optional[Tuple[str, str]]:
-        """Resolve active id, or the only stored credential, or first in list."""
-        pubs = self.list_public_credentials()
-        if not pubs:
+        """
+        Return key pair for active id, or sole/first item. Decrypts once.
+        Raises ValueError if vault exists but password does not unlock it.
+        """
+        if not self.exists() or not self._salt_path.is_file():
+            return None
+        payload = self._decrypt_payload(master_password)
+        if payload is None:
+            raise ValueError(
+                "Cannot unlock vault: wrong master password or unreadable credential file.",
+            )
+        items_raw = payload.get("items")
+        if not isinstance(items_raw, list):
+            return None
+        items = [
+            it
+            for it in items_raw
+            if isinstance(it, dict)
+            and str(it.get("api_key", "")).strip()
+            and str(it.get("api_secret", "")).strip()
+        ]
+        if not items:
             return None
         aid = self.get_active_credential_id()
+        chosen: Optional[dict[str, Any]] = None
         if aid:
-            pair = self.get_secret_pair(aid, master_password)
-            if pair:
-                return pair
-        if len(pubs) == 1:
-            self.set_active_credential_id(pubs[0]["id"])
-            return self.get_secret_pair(pubs[0]["id"], master_password)
-        first = pubs[0]["id"]
-        self.set_active_credential_id(first)
-        return self.get_secret_pair(first, master_password)
+            chosen = next((it for it in items if str(it.get("id")) == str(aid)), None)
+        if chosen is None:
+            chosen = items[0]
+            cid = str(chosen.get("id", "")).strip()
+            if cid:
+                self.set_active_credential_id(cid)
+        ak = str(chosen.get("api_key", "")).strip()
+        sec = str(chosen.get("api_secret", "")).strip()
+        if not ak or not sec:
+            return None
+        return ak, sec
 
     def save_credentials(self, api_key: str, api_secret: str, master_password: str) -> None:
         """Backward-compatible: replace vault with a single credential."""
