@@ -32,7 +32,8 @@ def _mono_block(lines: list[str]) -> str:
 def mount(ctx: AppContext) -> None:
     ui.add_head_html(
         "<style>html,body{height:100%;margin:0;overflow:hidden!important;}"
-        ".pec-fill{min-height:0;}</style>"
+        ".pec-fill{min-height:0;}</style>",
+        shared=True,
     )
 
     @ui.page("/", title="PecunatorCore", dark=True)
