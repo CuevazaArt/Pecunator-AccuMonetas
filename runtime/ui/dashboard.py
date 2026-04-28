@@ -242,9 +242,9 @@ def mount(ctx: AppContext) -> None:
             opt_map = {x["id"]: _short(x["public_key"]) for x in pubs0}
             av0 = ctx.config.get_active_credential_id()
             v0 = av0 if av0 and av0 in opt_map else (next(iter(opt_map)) if opt_map else None)
+            ui.label("Active credential").classes("text-caption")
             rf["sel"] = sel_pick = ui.select(
                 opt_map,
-                label="Active credential",
                 value=v0,
             ).props("dense outlined emit-value maps-options").classes("w-full")
 
@@ -263,14 +263,14 @@ def mount(ctx: AppContext) -> None:
 
             with ui.row().classes("gap-sm flex-wrap mt-sm"):
                 ui.button(
+                    "New credential…",
                     icon="add",
-                    label="New credential…",
                     on_click=add.open,
                     color="primary",
                 ).props("dense outline")
                 ui.button(
+                    "Erase vault",
                     icon="delete_forever",
-                    label="Erase vault",
                     color="warning",
                     on_click=wipe.open,
                 ).props("dense outline")
