@@ -13,6 +13,8 @@ class VaultSessionBody(BaseModel):
 
 class GatewayStartBody(BaseModel):
     master_password: Optional[str] = Field(default=None, description="Override or one-shot unlock for gateway start")
+    api_key: Optional[str] = Field(default=None, description="Optional one-shot API key")
+    api_secret: Optional[str] = Field(default=None, description="Optional one-shot API secret")
 
 
 class VaultStatusOut(BaseModel):
@@ -20,6 +22,13 @@ class VaultStatusOut(BaseModel):
     credential_rows: int
     active_credential_id: Optional[str]
     session_cached: bool
+
+
+class ActiveCredentialOut(BaseModel):
+    source: str
+    public_key_hint: str
+    public_key_last4: str
+    active_credential_id: Optional[str] = None
 
 
 class GatewaySnapshotOut(BaseModel):
@@ -89,6 +98,8 @@ class TimeSyncBody(BaseModel):
         default=None,
         description="Optional one-shot vault password for syncing timestamp",
     )
+    api_key: Optional[str] = Field(default=None, description="Optional one-shot API key")
+    api_secret: Optional[str] = Field(default=None, description="Optional one-shot API secret")
 
 
 class TimeSyncOut(BaseModel):

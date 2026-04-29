@@ -250,7 +250,7 @@ class BotService:
         rec.runner.set_credentials(api_key, api_secret)
         await rec.runner.sync_time()
         rep = await rec.runner.run_once()
-        self.mark_run_once(bot_id, rep, error=None)
+        self.mark_run_once(rep, error=None, bot_id=bot_id)
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_run_once", payload)
         return payload

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from runtime.api import deps
 from runtime.api.schemas import (
+    ActiveCredentialOut,
     BotConfigBody,
     BotConfigOut,
     BotStatusOut,
@@ -48,6 +49,11 @@ _LOG = logging.getLogger("pecunator.api")
 def _mask_pk(pk: str) -> str:
     s = pk.strip()
     return s if len(s) <= 24 else f"{s[:14]}…{s[-6:]}"
+
+
+def _pk_last4(pk: str) -> str:
+    s = (pk or "").strip()
+    return s[-4:] if len(s) >= 4 else s
 
 
 @asynccontextmanager
@@ -111,6 +117,43 @@ def create_app() -> FastAPI:
             {"id": p["id"], "public_key": p["public_key"], "public_key_short": _mask_pk(p["public_key"])}
             for p in ctx.config.list_public_credentials()
         ]
+
+    @app.get("/api/v1/credentials/active", response_model=ActiveCredentialOut)
+    async def active_credential(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
+        if ctx.active_api_key_hint:
+            return ActiveCredentialOut(
+                source=ctx.active_api_key_source or "runtime",
+                public_key_hint=ctx.active_api_key_hint,
+                public_key_last4=ctx.active_api_key_last4 or _pk_last4(ctx.active_api_key_hint),
+                active_credential_id=ctx.config.get_active_credential_id(),
+            )
+        env_pair = binance_credentials_from_env()
+        if env_pair:
+            return ActiveCredentialOut(
+                source="env",
+                public_key_hint=_mask_pk(env_pair[0]),
+                public_key_last4=_pk_last4(env_pair[0]),
+                active_credential_id=ctx.config.get_active_credential_id(),
+            )
+        mp = (ctx.cached_master_password or "").strip()
+        if mp:
+            try:
+                pair = ctx.config.get_pair_for_active(mp)
+            except ValueError:
+                pair = None
+            if pair:
+                return ActiveCredentialOut(
+                    source="vault",
+                    public_key_hint=_mask_pk(pair[0]),
+                    public_key_last4=_pk_last4(pair[0]),
+                    active_credential_id=ctx.config.get_active_credential_id(),
+                )
+        return ActiveCredentialOut(
+            source="none",
+            public_key_hint="-",
+            public_key_last4="-",
+            active_credential_id=ctx.config.get_active_credential_id(),
+        )
 
     @app.get("/api/v1/bot/presets")
     async def bot_presets() -> list[dict[str, Any]]:
@@ -218,7 +261,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        pair = _resolve_pair(ctx, body.master_password)
+        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         try:
@@ -243,7 +286,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        pair = _resolve_pair(ctx, body.master_password)
+        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         try:
@@ -275,7 +318,7 @@ def create_app() -> FastAPI:
         body: TimeSyncBody = TimeSyncBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        payload = await _sync_binance_time(ctx, body.master_password)
+        payload = await _sync_binance_time(ctx, body.master_password, body.api_key, body.api_secret)
         return TimeSyncOut(ok=True, **payload)
 
     @app.post("/api/v1/vault/session")
@@ -303,7 +346,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> GatewaySnapshotOut:
-        pair = _resolve_pair(ctx, body.master_password)
+        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         if ctx.gateway:
@@ -332,7 +375,7 @@ def create_app() -> FastAPI:
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
         svc = deps.get_bot()
-        pair = _resolve_pair(ctx, body.master_password)
+        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         svc.runner.set_credentials(pair[0], pair[1])
@@ -355,7 +398,7 @@ def create_app() -> FastAPI:
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
         svc = deps.get_bot()
-        pair = _resolve_pair(ctx, body.master_password)
+        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         svc.runner.set_credentials(pair[0], pair[1])
@@ -403,11 +446,26 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
     )
 
 
-def _resolve_pair(ctx: AppContext, master_password: str | None) -> tuple[str, str] | None:
+def _resolve_pair(
+    ctx: AppContext,
+    master_password: str | None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+) -> tuple[str, str] | None:
+    ak = (api_key or "").strip()
+    sec = (api_secret or "").strip()
+    if ak and sec:
+        ctx.active_api_key_hint = _mask_pk(ak)
+        ctx.active_api_key_last4 = _pk_last4(ak)
+        ctx.active_api_key_source = "inline"
+        return ak, sec
     mp = (master_password or "") or ctx.cached_master_password or ""
     mp = (mp or "").strip()
     pair = binance_credentials_from_env()
     if pair:
+        ctx.active_api_key_hint = _mask_pk(pair[0])
+        ctx.active_api_key_last4 = _pk_last4(pair[0])
+        ctx.active_api_key_source = "env"
         return pair
     if not mp:
         return None
@@ -417,6 +475,9 @@ def _resolve_pair(ctx: AppContext, master_password: str | None) -> tuple[str, st
         raise HTTPException(status_code=401, detail=str(e)) from None
     if pair:
         ctx.cached_master_password = mp
+        ctx.active_api_key_hint = _mask_pk(pair[0])
+        ctx.active_api_key_last4 = _pk_last4(pair[0])
+        ctx.active_api_key_source = "vault"
         if remember_master_password_enabled():
             save_remembered_master(ctx.config.data_dir, mp)
     return pair
@@ -632,7 +693,12 @@ async def _execute_terminal_command(
     return f"unknown command: {key}. type 'help'."
 
 
-async def _sync_binance_time(ctx: AppContext, master_password: str | None) -> dict[str, Any]:
+async def _sync_binance_time(
+    ctx: AppContext,
+    master_password: str | None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+) -> dict[str, Any]:
     bot = deps.get_bot()
     if ctx.gateway:
         payload = await ctx.gateway.sync_time()
@@ -643,7 +709,7 @@ async def _sync_binance_time(ctx: AppContext, master_password: str | None) -> di
                 pass
         return payload
 
-    pair = _resolve_pair(ctx, master_password)
+    pair = _resolve_pair(ctx, master_password, api_key, api_secret)
     if not pair:
         raise HTTPException(status_code=400, detail="No API credentials available")
 

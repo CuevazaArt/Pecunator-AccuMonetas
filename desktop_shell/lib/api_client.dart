@@ -28,6 +28,12 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
+  Future<Map<String, dynamic>> activeCredential() async {
+    final r = await http.get(_u('/api/v1/credentials/active'));
+    _ensure(r);
+    return _jsonMap(r.body);
+  }
+
   Future<Map<String, dynamic>> unlockVault(String masterPassword) async {
     final r = await http.post(
       _u('/api/v1/vault/session'),
@@ -60,11 +66,15 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> botStart({String? masterPassword}) async {
+  Future<Map<String, dynamic>> botStart({String? masterPassword, String? apiKey, String? apiSecret}) async {
     final r = await http.post(
       _u('/api/v1/bot/start'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);
@@ -76,21 +86,29 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> botRunOnce({String? masterPassword}) async {
+  Future<Map<String, dynamic>> botRunOnce({String? masterPassword, String? apiKey, String? apiSecret}) async {
     final r = await http.post(
       _u('/api/v1/bot/run_once'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> gatewayStart({String? masterPassword}) async {
+  Future<Map<String, dynamic>> gatewayStart({String? masterPassword, String? apiKey, String? apiSecret}) async {
     final r = await http.post(
       _u('/api/v1/gateway/start'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);
@@ -124,11 +142,15 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> syncTimestamp({String? masterPassword}) async {
+  Future<Map<String, dynamic>> syncTimestamp({String? masterPassword, String? apiKey, String? apiSecret}) async {
     final r = await http.post(
       _u('/api/v1/time/sync'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);
@@ -166,11 +188,20 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> hubStartBot(String botId, {String? masterPassword}) async {
+  Future<Map<String, dynamic>> hubStartBot(
+    String botId, {
+    String? masterPassword,
+    String? apiKey,
+    String? apiSecret,
+  }) async {
     final r = await http.post(
       _u('/api/v1/hub/bots/$botId/start'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);
@@ -182,11 +213,20 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
-  Future<Map<String, dynamic>> hubRunOnce(String botId, {String? masterPassword}) async {
+  Future<Map<String, dynamic>> hubRunOnce(
+    String botId, {
+    String? masterPassword,
+    String? apiKey,
+    String? apiSecret,
+  }) async {
     final r = await http.post(
       _u('/api/v1/hub/bots/$botId/run_once'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'master_password': masterPassword}),
+      body: jsonEncode({
+        'master_password': masterPassword,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+      }),
     );
     _ensure(r);
     return _jsonMap(r.body);

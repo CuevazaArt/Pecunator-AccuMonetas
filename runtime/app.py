@@ -23,6 +23,9 @@ class AppContext:
     auto_connect_attempted: bool = False
     """Volatile: last master password used successfully in this process, if any."""
     cached_master_password: Optional[str] = None
+    active_api_key_hint: Optional[str] = None
+    active_api_key_last4: Optional[str] = None
+    active_api_key_source: Optional[str] = None
 
     def log_line(self, msg: str) -> None:
         self.logs.append(msg)
