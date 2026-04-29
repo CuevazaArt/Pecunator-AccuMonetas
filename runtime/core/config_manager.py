@@ -1,84 +1,64 @@
-"""Encrypted Binance credential store: multiple pairs + public manifest."""
+"""Binance credential store: multiple pairs + manifest. Encrypted at rest with a machine-local key (no user master password)."""
 
 from __future__ import annotations
 
-import base64
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 from cryptography.fernet import Fernet, InvalidToken
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from runtime.core.security_util import restrict_secret_file
 
-_DEFAULT_ITERATIONS = 480_000
-_MIN_MASTER_PASSWORD_LEN = 12
-
 _MANIFEST = "credential_public.json"
 _ACTIVE = "active_credential_id.txt"
+_CRED_FILE = "credentials.enc"
+_LOCAL_KEY = "vault_local.key"
 
 
 class ConfigManager:
-    """Persist one or more API key + secret lists under a single master password."""
+    """Persist API keys encrypted with a Fernet key stored alongside data (device-local)."""
 
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self._cred_path = self.data_dir / "credentials.enc"
-        self._salt_path = self.data_dir / "salt.bin"
+        self._cred_path = self.data_dir / _CRED_FILE
         self._manifest_path = self.data_dir / _MANIFEST
         self._active_path = self.data_dir / _ACTIVE
+        self._key_path = self.data_dir / _LOCAL_KEY
 
     def exists(self) -> bool:
         return self._cred_path.is_file()
 
-    @staticmethod
-    def _derive_key(password: str, salt: bytes) -> bytes:
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=_DEFAULT_ITERATIONS,
-        )
-        raw = kdf.derive(password.encode("utf-8"))
-        return base64.urlsafe_b64encode(raw)
-
-    def _load_or_create_salt(self) -> bytes:
-        if self._salt_path.is_file():
-            return self._salt_path.read_bytes()
-        salt = os.urandom(16)
-        self._salt_path.write_bytes(salt)
-        restrict_secret_file(self._salt_path)
-        return salt
-
-    @staticmethod
-    def validate_master_password_strength(master_password: str) -> None:
-        if len(master_password) < _MIN_MASTER_PASSWORD_LEN:
-            raise ValueError(
-                f"Master password must be at least {_MIN_MASTER_PASSWORD_LEN} characters"
-            )
-
-    def _fernet(self, master_password: str) -> Fernet:
-        salt = self._load_or_create_salt()
-        key = self._derive_key(master_password, salt)
+    def _local_fernet(self) -> Fernet:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        if not self._key_path.is_file():
+            self._key_path.write_bytes(Fernet.generate_key())
+            restrict_secret_file(self._key_path)
+        key = self._key_path.read_bytes()
         return Fernet(key)
 
-    def _decrypt_payload(self, master_password: str) -> Optional[dict[str, Any]]:
-        if not self.exists() or not self._salt_path.is_file():
+    def _load_payload(self) -> Optional[dict[str, Any]]:
+        if not self.exists():
             return None
-        f = self._fernet(master_password)
+        raw = self._cred_path.read_bytes()
+        if not raw:
+            return None
         try:
-            raw = f.decrypt(self._cred_path.read_bytes())
-        except InvalidToken:
-            return None
-        data = json.loads(raw.decode("utf-8"))
+            f = self._local_fernet()
+            dec = f.decrypt(raw)
+        except InvalidToken as e:
+            raise ValueError(
+                "Cannot read vault file: it may be from an older PecunatorCore build that used a "
+                "master password. Back up if needed, then delete runtime/data/credentials.enc, "
+                "salt.bin, master_remember.fenc, and rem_device.key, restart the engine, and add "
+                "API keys again.",
+            ) from e
+        data = json.loads(dec.decode("utf-8"))
         migrated = self._migrate_payload_if_needed(data)
         if migrated != data:
-            self._encrypt_and_write(migrated, master_password)
+            self._encrypt_and_write(migrated)
         return migrated
 
     def _migrate_payload_if_needed(self, data: Any) -> dict[str, Any]:
@@ -100,11 +80,8 @@ class ConfigManager:
             }
         return {"v": 2, "items": []}
 
-    def _encrypt_and_write(self, payload: dict[str, Any], master_password: str) -> None:
-        self.validate_master_password_strength(master_password)
-        salt = self._load_or_create_salt()
-        key = self._derive_key(master_password, salt)
-        f = Fernet(key)
+    def _encrypt_and_write(self, payload: dict[str, Any]) -> None:
+        f = self._local_fernet()
         blob = json.dumps(payload, separators=(",", ":"), sort_keys=True)
         token = f.encrypt(blob.encode("utf-8"))
         self._cred_path.write_bytes(token)
@@ -178,21 +155,17 @@ class ConfigManager:
         self,
         api_key: str,
         api_secret: str,
-        master_password: str,
         label: str = "",
     ) -> Tuple[str, bool]:
         """
-        Add or update a credential under the master password.
+        Add or update a credential.
         If the same API key (public) already exists, only the secret is updated.
         Returns (credential_id, updated_existing).
         """
-        self.validate_master_password_strength(master_password)
-        vault_existed = self.exists() and self._salt_path.is_file()
-        payload = self._decrypt_payload(master_password)
+        vault_existed = self.exists()
+        payload = self._load_payload()
         if vault_existed and payload is None:
-            raise ValueError(
-                "Cannot unlock vault: wrong master password or unreadable credential file.",
-            )
+            raise ValueError("Cannot unlock vault: unreadable credential file.")
         if payload is None:
             payload = {"v": 2, "items": []}
         items = payload.get("items")
@@ -214,24 +187,22 @@ class ConfigManager:
                 payload["items"] = items
                 cid = str(it.get("id", "")).strip()
                 if cid:
-                    self._encrypt_and_write(payload, master_password)
+                    self._encrypt_and_write(payload)
                     self.set_active_credential_id(cid)
                     return cid, True
         cid = str(uuid.uuid4())
         items.append({"id": cid, "api_key": ak_n, "api_secret": sk_n, "label": label_n})
         payload["v"] = 2
         payload["items"] = items
-        self._encrypt_and_write(payload, master_password)
+        self._encrypt_and_write(payload)
         self.set_active_credential_id(cid)
         return cid, False
 
-    def update_credential_label(self, credential_id: str, label: str, master_password: str) -> bool:
-        vault_existed = self.exists() and self._salt_path.is_file()
-        payload = self._decrypt_payload(master_password)
+    def update_credential_label(self, credential_id: str, label: str) -> bool:
+        vault_existed = self.exists()
+        payload = self._load_payload()
         if vault_existed and payload is None:
-            raise ValueError(
-                "Cannot unlock vault: wrong master password or unreadable credential file.",
-            )
+            raise ValueError("Cannot unlock vault: unreadable credential file.")
         if payload is None:
             return False
         items = payload.get("items")
@@ -242,16 +213,14 @@ class ConfigManager:
             return False
         target["label"] = (label or "").strip()
         payload["items"] = items
-        self._encrypt_and_write(payload, master_password)
+        self._encrypt_and_write(payload)
         return True
 
-    def remove_credential(self, credential_id: str, master_password: str) -> bool:
-        vault_existed = self.exists() and self._salt_path.is_file()
-        payload = self._decrypt_payload(master_password)
+    def remove_credential(self, credential_id: str) -> bool:
+        vault_existed = self.exists()
+        payload = self._load_payload()
         if vault_existed and payload is None:
-            raise ValueError(
-                "Cannot unlock vault: wrong master password or unreadable credential file.",
-            )
+            raise ValueError("Cannot unlock vault: unreadable credential file.")
         if payload is None:
             return False
         items = payload.get("items")
@@ -261,19 +230,17 @@ class ConfigManager:
         if len(new_items) == len(items):
             return False
         payload["items"] = new_items
-        self._encrypt_and_write(payload, master_password)
+        self._encrypt_and_write(payload)
         if self.get_active_credential_id() == credential_id:
             self.set_active_credential_id(new_items[0]["id"] if new_items else None)
         return True
 
-    def get_secret_pair(self, credential_id: str, master_password: str) -> Optional[Tuple[str, str]]:
-        if not self.exists() or not self._salt_path.is_file():
+    def get_secret_pair(self, credential_id: str) -> Optional[Tuple[str, str]]:
+        if not self.exists():
             return None
-        payload = self._decrypt_payload(master_password)
+        payload = self._load_payload()
         if payload is None:
-            raise ValueError(
-                "Cannot unlock vault: wrong master password or unreadable credential file.",
-            )
+            raise ValueError("Cannot unlock vault: unreadable credential file.")
         items = payload.get("items")
         if not isinstance(items, list):
             return None
@@ -282,18 +249,13 @@ class ConfigManager:
             return None
         return str(it["api_key"]).strip(), str(it["api_secret"]).strip()
 
-    def get_pair_for_active(self, master_password: str) -> Optional[Tuple[str, str]]:
-        """
-        Return key pair for active id, or sole/first item. Decrypts once.
-        Raises ValueError if vault exists but password does not unlock it.
-        """
-        if not self.exists() or not self._salt_path.is_file():
+    def get_pair_for_active(self) -> Optional[Tuple[str, str]]:
+        """Return key pair for active id, or first item."""
+        if not self.exists():
             return None
-        payload = self._decrypt_payload(master_password)
+        payload = self._load_payload()
         if payload is None:
-            raise ValueError(
-                "Cannot unlock vault: wrong master password or unreadable credential file.",
-            )
+            raise ValueError("Cannot unlock vault: unreadable credential file.")
         items_raw = payload.get("items")
         if not isinstance(items_raw, list):
             return None
@@ -321,9 +283,8 @@ class ConfigManager:
             return None
         return ak, sec
 
-    def save_credentials(self, api_key: str, api_secret: str, master_password: str) -> None:
+    def save_credentials(self, api_key: str, api_secret: str) -> None:
         """Backward-compatible: replace vault with a single credential."""
-        self.validate_master_password_strength(master_password)
         cid = str(uuid.uuid4())
         payload = {
             "v": 2,
@@ -335,15 +296,22 @@ class ConfigManager:
                 }
             ],
         }
-        self._encrypt_and_write(payload, master_password)
+        self._encrypt_and_write(payload)
         self.set_active_credential_id(cid)
 
-    def load_credentials(self, master_password: str) -> Optional[Tuple[str, str]]:
+    def load_credentials(self) -> Optional[Tuple[str, str]]:
         """Return first pair (compat) or active/first resolved pair."""
-        pair = self.get_pair_for_active(master_password)
-        return pair
+        return self.get_pair_for_active()
 
     def clear_credentials(self) -> None:
-        for p in (self._cred_path, self._salt_path, self._manifest_path, self._active_path):
+        for p in (
+            self._cred_path,
+            self._manifest_path,
+            self._active_path,
+            self._key_path,
+            self.data_dir / "salt.bin",
+            self.data_dir / "master_remember.fenc",
+            self.data_dir / "rem_device.key",
+        ):
             if p.is_file():
                 p.unlink()

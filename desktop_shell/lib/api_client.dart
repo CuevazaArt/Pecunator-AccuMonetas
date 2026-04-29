@@ -24,7 +24,6 @@ class EngineApi {
   Future<Map<String, dynamic>> vaultCredentials() async {
     final resp = await _client.get('/api/v1/vault/credentials');
     if (resp['items'] is List) return resp;
-    // Handle legacy list response
     return {'items': resp['items'] ?? []};
   }
 
@@ -32,45 +31,36 @@ class EngineApi {
     required String apiKey,
     required String apiSecret,
     String? label,
-    String? masterPassword,
   }) =>
       _client.post(
         '/api/v1/vault/credentials',
         body: {
           'api_key': apiKey,
           'api_secret': apiSecret,
-          'label': label,
-          'master_password': masterPassword,
+          if (label != null && label.isNotEmpty) 'label': label,
         },
       );
 
   Future<Map<String, dynamic>> updateVaultCredentialLabel(
     String credentialId, {
     required String label,
-    String? masterPassword,
   }) =>
       _client.patch(
         '/api/v1/vault/credentials/$credentialId',
-        body: {'label': label, 'master_password': masterPassword},
+        body: {'label': label},
       );
 
   Future<Map<String, dynamic>> activateVaultCredential(String credentialId) =>
       _client.post('/api/v1/vault/credentials/$credentialId/activate');
 
-  Future<Map<String, dynamic>> deleteVaultCredential(
-    String credentialId, {
-    String? masterPassword,
-  }) =>
+  Future<Map<String, dynamic>> deleteVaultCredential(String credentialId) =>
       _client.post(
         '/api/v1/vault/credentials/$credentialId/delete',
-        body: {'master_password': masterPassword},
+        body: <String, dynamic>{},
       );
 
-  Future<Map<String, dynamic>> unlockVault(String masterPassword) =>
-      _client.post(
-        '/api/v1/vault/session',
-        body: {'master_password': masterPassword},
-      );
+  Future<Map<String, dynamic>> pingVaultSession() =>
+      _client.post('/api/v1/vault/session', body: <String, dynamic>{});
 
   Future<Map<String, dynamic>> botConfig() => _client.get('/api/v1/bot/config');
 
@@ -80,46 +70,40 @@ class EngineApi {
   Future<Map<String, dynamic>> botStatus() => _client.get('/api/v1/bot/status');
 
   Future<Map<String, dynamic>> botStart({
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/bot/start',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
 
   Future<Map<String, dynamic>> botStop() => _client.post('/api/v1/bot/stop');
 
   Future<Map<String, dynamic>> botRunOnce({
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/bot/run_once',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
 
   Future<Map<String, dynamic>> gatewayStart({
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/gateway/start',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
 
@@ -137,26 +121,26 @@ class EngineApi {
 
   Future<Map<String, dynamic>> terminalExecute({
     required String command,
-    String? masterPassword,
   }) =>
       _client.post(
         '/api/v1/terminal/execute',
-        body: {'command': command, 'master_password': masterPassword},
+        body: {'command': command},
       );
 
   Future<Map<String, dynamic>> syncTimestamp({
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/time/sync',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
+
+  Future<Map<String, dynamic>> restWeightSamples({int limit = 200}) =>
+      _client.get('/api/v1/usage/rest-weight/samples?limit=$limit');
 
   Future<Map<String, dynamic>> hubBots() => _client.get('/api/v1/hub/bots');
 
@@ -174,16 +158,14 @@ class EngineApi {
 
   Future<Map<String, dynamic>> hubStartBot(
     String botId, {
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/hub/bots/$botId/start',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
 
@@ -192,16 +174,14 @@ class EngineApi {
 
   Future<Map<String, dynamic>> hubRunOnce(
     String botId, {
-    String? masterPassword,
     String? apiKey,
     String? apiSecret,
   }) =>
       _client.post(
         '/api/v1/hub/bots/$botId/run_once',
         body: {
-          'master_password': masterPassword,
-          'api_key': apiKey,
-          'api_secret': apiSecret,
+          if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
+          if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
         },
       );
 

@@ -7,12 +7,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-class VaultSessionBody(BaseModel):
-    master_password: str = Field(min_length=12, description="Unlocks credentials.enc")
-
-
 class GatewayStartBody(BaseModel):
-    master_password: Optional[str] = Field(default=None, description="Override or one-shot unlock for gateway start")
     api_key: Optional[str] = Field(default=None, description="Optional one-shot API key")
     api_secret: Optional[str] = Field(default=None, description="Optional one-shot API secret")
 
@@ -33,25 +28,27 @@ class ActiveCredentialOut(BaseModel):
 
 
 class VaultCredentialUpsertBody(BaseModel):
-    master_password: Optional[str] = Field(default=None, description="Optional master password")
     api_key: str = Field(min_length=8)
     api_secret: str = Field(min_length=8)
     label: Optional[str] = Field(default=None, max_length=80)
 
 
 class VaultCredentialLabelBody(BaseModel):
-    master_password: Optional[str] = Field(default=None, description="Optional master password")
     label: str = Field(default="", max_length=80)
 
 
 class VaultCredentialDeleteBody(BaseModel):
-    master_password: Optional[str] = Field(default=None, description="Optional master password")
+    """Optional empty JSON body for route compatibility."""
 
 
 class GatewaySnapshotOut(BaseModel):
     gateway_running: bool
     last_error: Optional[str]
     account_summary: dict[str, Any]
+    account_equity: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Rolling spot equity converted to base asset (current/avg/high_avg).",
+    )
     balances: list[dict[str, Any]]
     balances_total_assets_in_response: int
     ws_connected: bool
@@ -108,10 +105,6 @@ class BotStatusOut(BaseModel):
 
 class TerminalExecBody(BaseModel):
     command: str = Field(min_length=1, max_length=512)
-    master_password: Optional[str] = Field(
-        default=None,
-        description="Optional one-shot vault password for commands that need credentials",
-    )
 
 
 class TerminalExecOut(BaseModel):
@@ -121,10 +114,6 @@ class TerminalExecOut(BaseModel):
 
 
 class TimeSyncBody(BaseModel):
-    master_password: Optional[str] = Field(
-        default=None,
-        description="Optional one-shot vault password for syncing timestamp",
-    )
     api_key: Optional[str] = Field(default=None, description="Optional one-shot API key")
     api_secret: Optional[str] = Field(default=None, description="Optional one-shot API secret")
 

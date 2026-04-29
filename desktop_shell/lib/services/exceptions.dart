@@ -78,5 +78,5 @@ class AuthException extends AppException {
       AuthException(message: 'Credencial no encontrada en el vault');
 
   factory AuthException.vaultLocked() =>
-      AuthException(message: 'Vault bloqueado: proporciona la contraseña maestra');
+      AuthException(message: 'Vault no disponible o ilegible');
 }

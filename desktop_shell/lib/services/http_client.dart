@@ -43,6 +43,14 @@ class RobustHttpClient {
         ),
       );
 
+  static const _jsonHeaders = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  Map<String, String> _mergeHeaders(Map<String, String>? headers) =>
+      {..._jsonHeaders, ...?headers};
+
   /// Perform POST request with retry and error handling.
   Future<Map<String, dynamic>> post(
     String endpoint, {
@@ -52,7 +60,7 @@ class RobustHttpClient {
       _requestWithRetry(
         () => _inner.post(
           Uri.parse('$baseUrl$endpoint'),
-          headers: headers,
+          headers: _mergeHeaders(headers),
           body: body != null ? jsonEncode(body) : null,
         ),
       );
@@ -66,7 +74,7 @@ class RobustHttpClient {
       _requestWithRetry(
         () => _inner.patch(
           Uri.parse('$baseUrl$endpoint'),
-          headers: headers,
+          headers: _mergeHeaders(headers),
           body: body != null ? jsonEncode(body) : null,
         ),
       );
@@ -135,11 +143,19 @@ class RobustHttpClient {
     try {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (response.body.isEmpty) return {};
-        return isJson ? jsonDecode(response.body) : {'data': response.body};
+        if (!isJson) return {'data': response.body};
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        if (decoded is List) return {'items': decoded};
+        return {'data': decoded};
       }
 
       // Parse error response
-      final errorBody = isJson ? jsonDecode(response.body) : {};
+      final errorBodyRaw = isJson ? jsonDecode(response.body) : <String, dynamic>{};
+      final errorBody = errorBodyRaw is Map
+          ? Map<String, dynamic>.from(errorBodyRaw)
+          : <String, dynamic>{'detail': errorBodyRaw.toString()};
       final detail = errorBody['detail'] ?? '';
 
       switch (response.statusCode) {

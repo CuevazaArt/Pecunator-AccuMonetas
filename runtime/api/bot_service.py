@@ -1,7 +1,8 @@
-"""API-level singleton hub service for Dorothy bots."""
+"""API-level singleton hub service for Dorothy bots with persistent, resilient execution."""
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 import datetime as dt
 from decimal import Decimal
@@ -21,6 +22,7 @@ class _BotRecord:
     tag: str
     runner: DorothyRunner
     created_at: str
+    desired_running: bool = False
 
 
 class BotService:
@@ -29,12 +31,16 @@ class BotService:
         self._default_bot_id: Optional[str] = None
         self._db_path: Optional[Path] = None
         self._db_lock = threading.Lock()
+        self._immortal_task: Optional[asyncio.Task[Any]] = None
+        self._immortal_stop: Optional[asyncio.Event] = None
+        self._immortal_last_reason: dict[str, str] = {}
 
     def attach_data_dir(self, data_dir: Path) -> None:
         db_path = Path(data_dir) / "dorothy_hub.sqlite"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
         self._init_db()
+        self._load_instances_from_db()
 
     def _init_db(self) -> None:
         if self._db_path is None:
@@ -55,6 +61,142 @@ class BotService:
                     )
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS dorothy_instances (
+                        bot_id TEXT PRIMARY KEY,
+                        tag TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        symbol TEXT NOT NULL,
+                        loop_interval_sec INTEGER NOT NULL,
+                        quote_order_qty TEXT NOT NULL,
+                        profit_factor TEXT NOT NULL,
+                        margin_drop_factor TEXT NOT NULL,
+                        qty_decimals INTEGER NOT NULL,
+                        price_decimals INTEGER NOT NULL,
+                        note TEXT NOT NULL,
+                        simulated INTEGER NOT NULL,
+                        trading_enabled INTEGER NOT NULL,
+                        desired_running INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def _load_instances_from_db(self) -> None:
+        if self._db_path is None:
+            return
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT bot_id, tag, created_at, symbol, loop_interval_sec,
+                           quote_order_qty, profit_factor, margin_drop_factor,
+                           qty_decimals, price_decimals, note,
+                           simulated, trading_enabled, desired_running
+                    FROM dorothy_instances
+                    ORDER BY created_at ASC
+                    """
+                ).fetchall()
+            finally:
+                conn.close()
+
+        for row in rows:
+            bot_id = str(row["bot_id"]).strip()
+            if not bot_id or bot_id in self._bots:
+                continue
+            cfg = DorothyConfig(
+                preset_id="B",
+                symbol=str(row["symbol"]),
+                loop_interval_sec=int(row["loop_interval_sec"]),
+                quote_order_qty=Decimal(str(row["quote_order_qty"])),
+                profit_factor=Decimal(str(row["profit_factor"])),
+                margin_drop_factor=Decimal(str(row["margin_drop_factor"])),
+                qty_decimals=int(row["qty_decimals"]),
+                price_decimals=int(row["price_decimals"]),
+                note=str(row["note"] or ""),
+                simulated=bool(int(row["simulated"])),
+                trading_enabled=bool(int(row["trading_enabled"])),
+            )
+            cfg.normalize()
+            runner = DorothyRunner(
+                self._runner_log_sink(bot_id),
+                self._runner_event_sink(bot_id),
+            )
+            runner.apply_config(cfg)
+            rec = _BotRecord(
+                bot_id=bot_id,
+                tag=str(row["tag"] or "Dorothy").strip() or "Dorothy",
+                runner=runner,
+                created_at=str(row["created_at"]),
+                desired_running=bool(int(row["desired_running"])),
+            )
+            self._bots[bot_id] = rec
+            if self._default_bot_id is None:
+                self._default_bot_id = bot_id
+
+    def _save_instance(self, rec: _BotRecord) -> None:
+        if self._db_path is None:
+            return
+        cfg = rec.runner.config
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO dorothy_instances (
+                        bot_id, tag, created_at, symbol, loop_interval_sec,
+                        quote_order_qty, profit_factor, margin_drop_factor,
+                        qty_decimals, price_decimals, note,
+                        simulated, trading_enabled, desired_running
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(bot_id) DO UPDATE SET
+                        tag=excluded.tag,
+                        created_at=excluded.created_at,
+                        symbol=excluded.symbol,
+                        loop_interval_sec=excluded.loop_interval_sec,
+                        quote_order_qty=excluded.quote_order_qty,
+                        profit_factor=excluded.profit_factor,
+                        margin_drop_factor=excluded.margin_drop_factor,
+                        qty_decimals=excluded.qty_decimals,
+                        price_decimals=excluded.price_decimals,
+                        note=excluded.note,
+                        simulated=excluded.simulated,
+                        trading_enabled=excluded.trading_enabled,
+                        desired_running=excluded.desired_running
+                    """,
+                    (
+                        rec.bot_id,
+                        rec.tag,
+                        rec.created_at,
+                        cfg.symbol,
+                        int(cfg.loop_interval_sec),
+                        str(cfg.quote_order_qty),
+                        str(cfg.profit_factor),
+                        str(cfg.margin_drop_factor),
+                        int(cfg.qty_decimals),
+                        int(cfg.price_decimals),
+                        str(cfg.note or ""),
+                        1 if cfg.simulated else 0,
+                        1 if cfg.trading_enabled else 0,
+                        1 if rec.desired_running else 0,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def _delete_instance(self, bot_id: str) -> None:
+        if self._db_path is None:
+            return
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                conn.execute("DELETE FROM dorothy_instances WHERE bot_id = ?", (bot_id,))
                 conn.commit()
             finally:
                 conn.close()
@@ -116,6 +258,7 @@ class BotService:
             "tag": rec.tag,
             "created_at": rec.created_at,
             "running": rec.runner.running,
+            "desired_running": rec.desired_running,
             "preset_id": cfg.preset_id,
             "symbol": cfg.symbol,
             "simulated": cfg.simulated,
@@ -186,8 +329,10 @@ class BotService:
             tag=(tag or "Dorothy").strip(),
             runner=runner,
             created_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+            desired_running=False,
         )
         self._bots[bot_id_norm] = rec
+        self._save_instance(rec)
         if self._default_bot_id is None:
             self._default_bot_id = bot_id_norm
         payload = self._record_payload(rec)
@@ -195,8 +340,20 @@ class BotService:
         return payload
 
     def list_instances(self) -> list[dict[str, Any]]:
-        rows = [self._record_payload(v) for _, v in sorted(self._bots.items(), key=lambda x: x[1].created_at)]
-        return rows
+        return [
+            self._record_payload(v)
+            for _, v in sorted(self._bots.items(), key=lambda x: x[1].created_at)
+        ]
+
+    def hub_stats(self) -> dict[str, int]:
+        total = len(self._bots)
+        running = sum(1 for r in self._bots.values() if r.runner.running)
+        desired = sum(1 for r in self._bots.values() if r.desired_running)
+        return {
+            "hub_bots_total": total,
+            "hub_bots_running": running,
+            "hub_bots_desired_running": desired,
+        }
 
     def status_instance(self, bot_id: str) -> dict[str, Any]:
         rec = self._bots.get(bot_id)
@@ -248,17 +405,33 @@ class BotService:
         rec.runner.apply_config(cfg)
         if tag is not None and tag.strip():
             rec.tag = tag.strip()
+        self._save_instance(rec)
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_updated", payload)
         return payload
+
+    async def _start_runner(self, rec: _BotRecord, api_key: str, api_secret: str) -> None:
+        rec.runner.set_credentials(api_key, api_secret)
+        await rec.runner.sync_time()
+        await rec.runner.start()
 
     async def start_instance(self, bot_id: str, api_key: str, api_secret: str) -> dict[str, Any]:
         rec = self._bots.get(bot_id)
         if rec is None:
             raise KeyError(bot_id)
-        rec.runner.set_credentials(api_key, api_secret)
-        await rec.runner.sync_time()
-        await rec.runner.start()
+        rec.desired_running = True
+        self._save_instance(rec)
+        try:
+            await self._start_runner(rec, api_key, api_secret)
+        except Exception as e:
+            self._write_log(
+                bot_id,
+                rec.tag,
+                "WARNING",
+                f"bot_start_failed: {e}",
+                {"error": str(e), "desired_running": True},
+            )
+            raise
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_started", payload)
         return payload
@@ -279,6 +452,8 @@ class BotService:
         rec = self._bots.get(bot_id)
         if rec is None:
             raise KeyError(bot_id)
+        rec.desired_running = False
+        self._save_instance(rec)
         await rec.runner.stop()
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_stopped", payload)
@@ -290,15 +465,97 @@ class BotService:
             raise KeyError(bot_id)
         await rec.runner.stop()
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_deleted")
+        self._delete_instance(bot_id)
         del self._bots[bot_id]
         if self._default_bot_id == bot_id:
             self._default_bot_id = next(iter(self._bots.keys()), None)
 
     async def stop_all(self) -> None:
-        for bot_id in list(self._bots.keys()):
+        for rec in self._bots.values():
             try:
-                await self.stop_instance(bot_id)
+                await rec.runner.stop()
             except Exception:
+                pass
+
+    def start_immortality(
+        self,
+        credential_resolver: Callable[[], tuple[str, str] | None],
+        interval_sec: float = 5.0,
+    ) -> None:
+        if self._immortal_task is not None and not self._immortal_task.done():
+            return
+        self._immortal_stop = asyncio.Event()
+        self._immortal_task = asyncio.create_task(
+            self._immortal_loop(credential_resolver, interval_sec=max(1.0, float(interval_sec)))
+        )
+
+    async def stop_immortality(self) -> None:
+        if self._immortal_stop is not None:
+            self._immortal_stop.set()
+        task = self._immortal_task
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self._immortal_task = None
+        self._immortal_stop = None
+        self._immortal_last_reason.clear()
+
+    async def _immortal_loop(
+        self,
+        credential_resolver: Callable[[], tuple[str, str] | None],
+        interval_sec: float,
+    ) -> None:
+        while self._immortal_stop is not None and not self._immortal_stop.is_set():
+            for rec in list(self._bots.values()):
+                if not rec.desired_running or rec.runner.running:
+                    continue
+                try:
+                    pair = credential_resolver()
+                except Exception as e:
+                    reason = f"resolver_failed:{type(e).__name__}"
+                    if self._immortal_last_reason.get(rec.bot_id) != reason:
+                        self._write_log(
+                            rec.bot_id,
+                            rec.tag,
+                            "WARNING",
+                            f"immortal: credential_resolver_failed {e}",
+                        )
+                        self._immortal_last_reason[rec.bot_id] = reason
+                    continue
+                if not pair:
+                    reason = "waiting_credentials"
+                    if self._immortal_last_reason.get(rec.bot_id) != reason:
+                        self._write_log(
+                            rec.bot_id,
+                            rec.tag,
+                            "WARNING",
+                            "immortal: waiting for credentials",
+                        )
+                        self._immortal_last_reason[rec.bot_id] = reason
+                    continue
+                try:
+                    await self._start_runner(rec, pair[0], pair[1])
+                    self._write_log(
+                        rec.bot_id,
+                        rec.tag,
+                        "SYSTEM",
+                        "immortal: bot_resumed",
+                        self._record_payload(rec),
+                    )
+                    self._immortal_last_reason.pop(rec.bot_id, None)
+                except Exception as e:
+                    reason = f"resume_failed:{type(e).__name__}"
+                    if self._immortal_last_reason.get(rec.bot_id) != reason:
+                        self._write_log(
+                            rec.bot_id,
+                            rec.tag,
+                            "WARNING",
+                            f"immortal: resume_failed {e}",
+                        )
+                        self._immortal_last_reason[rec.bot_id] = reason
+            try:
+                await asyncio.wait_for(self._immortal_stop.wait(), timeout=interval_sec)
+            except asyncio.TimeoutError:
                 pass
 
     def get_logs(self, bot_id: str, limit: int = 200) -> list[dict[str, Any]]:

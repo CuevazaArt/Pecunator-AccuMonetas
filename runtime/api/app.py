@@ -30,7 +30,6 @@ from runtime.api.schemas import (
     TerminalExecOut,
     TimeSyncBody,
     TimeSyncOut,
-    VaultSessionBody,
     VaultCredentialDeleteBody,
     VaultCredentialLabelBody,
     VaultCredentialUpsertBody,
@@ -38,14 +37,12 @@ from runtime.api.schemas import (
 )
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
-from runtime.core.master_remember import load_remembered_master, save_remembered_master
+from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_base
 from runtime.core.security_util import sanitize_log_message
 from runtime.core.settings import (
     api_bind_host_for_cors_regex,
     api_weight_limit_1m_display,
     binance_credentials_from_env,
-    remember_master_password_enabled,
-    vault_unlock_password_from_env,
 )
 
 _LOG = logging.getLogger("pecunator.api")
@@ -53,7 +50,7 @@ _LOG = logging.getLogger("pecunator.api")
 
 def _mask_pk(pk: str) -> str:
     s = pk.strip()
-    return s if len(s) <= 24 else f"{s[:14]}…{s[-6:]}"
+    return s if len(s) <= 24 else f"{s[:14]}...{s[-6:]}"
 
 
 def _pk_last4(pk: str) -> str:
@@ -65,19 +62,13 @@ def _pk_last4(pk: str) -> str:
 async def _lifespan(app: FastAPI):
     deps.init_context()
     ctx = deps.get_ctx()
-    mp = vault_unlock_password_from_env()
-    if mp:
-        ctx.cached_master_password = mp
-        _LOG.info("Cached master password loaded from PECUNATOR_VAULT_PASSWORD env")
-    elif remember_master_password_enabled():
-        remembered = load_remembered_master(ctx.config.data_dir)
-        if remembered:
-            ctx.cached_master_password = remembered
-            _LOG.info("Cached master password loaded from device remember store")
+    bot = deps.get_bot()
+    bot.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
     await _autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
     bot = deps.get_bot()
+    await bot.stop_immortality()
     await bot.stop_all()
     if ctx and ctx.gateway:
         try:
@@ -91,7 +82,7 @@ async def _autostart_gateway_if_possible(ctx: AppContext) -> None:
     if ctx.gateway is not None:
         return
     try:
-        pair = _resolve_pair(ctx, None)
+        pair = _resolve_pair(ctx)
     except HTTPException:
         pair = None
     except Exception as e:
@@ -105,6 +96,7 @@ async def _autostart_gateway_if_possible(ctx: AppContext) -> None:
         await gw.start()
         await gw.sync_time()
         await gw.fetch_account()
+        await gw.refresh_equity(force_tickers=True)
         ctx.gateway = gw
         ctx.state.last_error = None
         _LOG.info("Gateway auto-started on API startup")
@@ -144,32 +136,32 @@ def create_app() -> FastAPI:
             vault_file_exists=ctx.config.exists(),
             credential_rows=len(pubs),
             active_credential_id=ctx.config.get_active_credential_id(),
-            session_cached=bool(ctx.cached_master_password),
+            session_cached=False,
         )
 
     @app.get("/api/v1/vault/credentials")
-    async def vault_credentials(ctx: AppContext = Depends(deps.get_ctx)) -> list[dict[str, str]]:
-        return [
-            {
-                "id": p["id"],
-                "public_key": p["public_key"],
-                "public_key_short": _mask_pk(p["public_key"]),
-                "label": p.get("label", ""),
-            }
-            for p in ctx.config.list_public_credentials()
-        ]
+    async def vault_credentials(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, list[dict[str, str]]]:
+        return {
+            "items": [
+                {
+                    "id": p["id"],
+                    "public_key": p["public_key"],
+                    "public_key_short": _mask_pk(p["public_key"]),
+                    "label": p.get("label", ""),
+                }
+                for p in ctx.config.list_public_credentials()
+            ]
+        }
 
     @app.post("/api/v1/vault/credentials")
     async def vault_credentials_add(
         body: VaultCredentialUpsertBody,
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> dict[str, Any]:
-        mp = _resolve_master_for_vault(ctx, body.master_password)
         try:
             cid, updated = ctx.config.add_credential(
                 body.api_key,
                 body.api_secret,
-                mp,
                 label=body.label or "",
             )
         except ValueError as e:
@@ -188,8 +180,7 @@ def create_app() -> FastAPI:
         body: VaultCredentialLabelBody,
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> dict[str, Any]:
-        mp = _resolve_master_for_vault(ctx, body.master_password)
-        ok = ctx.config.update_credential_label(credential_id, body.label or "", mp)
+        ok = ctx.config.update_credential_label(credential_id, body.label or "")
         if not ok:
             raise HTTPException(status_code=404, detail="Credential not found")
         return {"updated": True}
@@ -212,9 +203,8 @@ def create_app() -> FastAPI:
         body: VaultCredentialDeleteBody = VaultCredentialDeleteBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> dict[str, Any]:
-        mp = _resolve_master_for_vault(ctx, body.master_password)
         try:
-            ok = ctx.config.remove_credential(credential_id, mp)
+            ok = ctx.config.remove_credential(credential_id)
         except ValueError as e:
             raise HTTPException(status_code=401, detail=str(e)) from None
         if not ok:
@@ -244,20 +234,18 @@ def create_app() -> FastAPI:
                 active_credential_id=active_id,
                 label=active_label,
             )
-        mp = (ctx.cached_master_password or "").strip()
-        if mp:
-            try:
-                pair = ctx.config.get_pair_for_active(mp)
-            except ValueError:
-                pair = None
-            if pair:
-                return ActiveCredentialOut(
-                    source="vault",
-                    public_key_hint=_mask_pk(pair[0]),
-                    public_key_last4=_pk_last4(pair[0]),
-                    active_credential_id=active_id,
-                    label=active_label,
-                )
+        try:
+            pair = ctx.config.get_pair_for_active()
+        except ValueError:
+            pair = None
+        if pair:
+            return ActiveCredentialOut(
+                source="vault",
+                public_key_hint=_mask_pk(pair[0]),
+                public_key_last4=_pk_last4(pair[0]),
+                active_credential_id=active_id,
+                label=active_label,
+            )
         return ActiveCredentialOut(
             source="none",
             public_key_hint="-",
@@ -375,7 +363,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         try:
@@ -400,7 +388,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         try:
@@ -424,7 +412,7 @@ def create_app() -> FastAPI:
         body: TerminalExecBody,
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        output = await _execute_terminal_command(ctx, body.command, body.master_password)
+        output = await _execute_terminal_command(ctx, body.command)
         return TerminalExecOut(ok=True, command=body.command, output=output)
 
     @app.post("/api/v1/time/sync", response_model=TimeSyncOut)
@@ -432,27 +420,23 @@ def create_app() -> FastAPI:
         body: TimeSyncBody = TimeSyncBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
-        payload = await _sync_binance_time(ctx, body.master_password, body.api_key, body.api_secret)
+        payload = await _sync_binance_time(ctx, body.api_key, body.api_secret)
         return TimeSyncOut(ok=True, **payload)
 
     @app.post("/api/v1/vault/session")
-    async def vault_session(body: VaultSessionBody, ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
+    async def vault_session(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
         if not ctx.config.exists():
             raise HTTPException(status_code=400, detail="No vault file; add credentials first.")
         try:
-            pair = ctx.config.get_pair_for_active(body.master_password)
+            pair = ctx.config.get_pair_for_active()
         except ValueError as e:
             raise HTTPException(status_code=401, detail=str(e)) from None
         if not pair:
-            raise HTTPException(status_code=401, detail="Vault empty or invalid password")
-        ctx.cached_master_password = body.master_password
-        if remember_master_password_enabled():
-            save_remembered_master(ctx.config.data_dir, body.master_password)
+            raise HTTPException(status_code=401, detail="Vault empty or unreadable")
         return {"unlocked": True}
 
     @app.delete("/api/v1/vault/session")
-    async def vault_session_clear(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
-        ctx.cached_master_password = None
+    async def vault_session_clear() -> dict[str, bool]:
         return {"unlocked": False}
 
     @app.post("/api/v1/gateway/start")
@@ -460,7 +444,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> GatewaySnapshotOut:
-        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         if ctx.gateway:
@@ -489,7 +473,7 @@ def create_app() -> FastAPI:
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
         svc = deps.get_bot()
-        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         svc.runner.set_credentials(pair[0], pair[1])
@@ -512,7 +496,7 @@ def create_app() -> FastAPI:
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> Any:
         svc = deps.get_bot()
-        pair = _resolve_pair(ctx, body.master_password, body.api_key, body.api_secret)
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         svc.runner.set_credentials(pair[0], pair[1])
@@ -545,6 +529,16 @@ def create_app() -> FastAPI:
     async def gateway_snapshot(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
         return _snapshot(ctx)
 
+    @app.get("/api/v1/usage/rest-weight/samples")
+    async def usage_rest_weight_samples(
+        limit: int = 200,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        from runtime.core.rest_usage_log import get_rest_usage_log
+
+        rows = get_rest_usage_log(ctx.config.data_dir).list_samples(limit=limit)
+        return {"items": rows}
+
     @app.get("/api/v1/account/wallets")
     async def account_wallets(
         base_asset: str = "USDT",
@@ -556,10 +550,11 @@ def create_app() -> FastAPI:
 
 
 def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
-    return GatewaySnapshotOut(
+    out = GatewaySnapshotOut(
         gateway_running=ctx.gateway is not None,
         last_error=ctx.state.last_error,
         account_summary=dict(ctx.state.account_summary or {}),
+        account_equity=dict(ctx.state.account_equity or {}),
         balances=list(ctx.state.balances),
         balances_total_assets_in_response=int(getattr(ctx.state, "balances_total_assets_in_response", 0) or 0),
         ws_connected=bool(ctx.state.connected),
@@ -567,6 +562,23 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         used_weight_1m=getattr(ctx.state, "api_weight_used_1m", None),
         weight_limit_1m=api_weight_limit_1m_display(),
     )
+    try:
+        from runtime.core.rest_usage_log import get_rest_usage_log
+        from runtime.core.settings import account_poll_interval_sec
+
+        st = deps.get_bot().hub_stats()
+        get_rest_usage_log(ctx.config.data_dir).maybe_record(
+            used=getattr(ctx.state, "api_weight_used_1m", None),
+            limit=api_weight_limit_1m_display(),
+            hub_bots_total=int(st.get("hub_bots_total", 0)),
+            hub_bots_running=int(st.get("hub_bots_running", 0)),
+            poll_sec=account_poll_interval_sec(),
+            gateway_running=ctx.gateway is not None,
+            last_error=ctx.state.last_error,
+        )
+    except Exception:
+        pass
+    return out
 
 
 def _to_decimal_str(value: Any) -> str:
@@ -600,7 +612,7 @@ def _bucket_sum(rows: list[dict[str, Any]], key: str) -> str:
 
 
 async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> dict[str, Any]:
-    pair = _resolve_pair(ctx, None)
+    pair = _resolve_pair(ctx)
     if not pair:
         raise HTTPException(status_code=400, detail="No API credentials available")
 
@@ -678,6 +690,14 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
         else:
             warnings.append("external wallet endpoint not available in this client build")
 
+        equity: dict[str, Any] = {}
+        try:
+            tickers = await asyncio.to_thread(client.get_all_tickers)
+            px = build_ticker_price_map(tickers)
+            equity = compute_spot_equity_in_base(spot_rows, px, base_asset=base)
+        except Exception as e:
+            warnings.append(f"equity unavailable: {sanitize_log_message(str(e))}")
+
         spot_rows.sort(key=lambda r: r.get("asset", ""))
         futures_rows.sort(key=lambda r: r.get("asset", ""))
         earn_rows.sort(key=lambda r: r.get("asset", ""))
@@ -705,6 +725,7 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
                 "stake_earn_total_sum": _bucket_sum(earn_rows, "total"),
                 "external_total_sum": _bucket_sum(external_rows, "total"),
             },
+            "equity": equity,
             "warnings": warnings,
         }
     finally:
@@ -716,7 +737,6 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
 
 def _resolve_pair(
     ctx: AppContext,
-    master_password: str | None,
     api_key: str | None = None,
     api_secret: str | None = None,
 ) -> tuple[str, str] | None:
@@ -727,47 +747,26 @@ def _resolve_pair(
         ctx.active_api_key_last4 = _pk_last4(ak)
         ctx.active_api_key_source = "inline"
         return ak, sec
-    mp = (master_password or "") or ctx.cached_master_password or ""
-    mp = (mp or "").strip()
     pair = binance_credentials_from_env()
     if pair:
         ctx.active_api_key_hint = _mask_pk(pair[0])
         ctx.active_api_key_last4 = _pk_last4(pair[0])
         ctx.active_api_key_source = "env"
         return pair
-    if not mp:
-        return None
     try:
-        pair = ctx.config.get_pair_for_active(mp)
+        pair = ctx.config.get_pair_for_active()
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e)) from None
     if pair:
-        ctx.cached_master_password = mp
         ctx.active_api_key_hint = _mask_pk(pair[0])
         ctx.active_api_key_last4 = _pk_last4(pair[0])
         ctx.active_api_key_source = "vault"
-        if remember_master_password_enabled():
-            save_remembered_master(ctx.config.data_dir, mp)
     return pair
-
-
-def _resolve_master_for_vault(ctx: AppContext, master_password: str | None) -> str:
-    mp = (master_password or "").strip() or (ctx.cached_master_password or "").strip()
-    if not mp:
-        raise HTTPException(
-            status_code=400,
-            detail="Master password required (no cached vault session)",
-        )
-    ctx.cached_master_password = mp
-    if remember_master_password_enabled():
-        save_remembered_master(ctx.config.data_dir, mp)
-    return mp
 
 
 async def _execute_terminal_command(
     ctx: AppContext,
     command: str,
-    master_password: str | None,
 ) -> str:
     cmd = " ".join((command or "").strip().split())
     if not cmd:
@@ -782,11 +781,11 @@ async def _execute_terminal_command(
             "Commands:\n"
             "  help\n"
             "  health\n"
-            "  time sync [master]\n"
+            "  time sync\n"
             "  vault status\n"
-            "  vault unlock <master>\n"
-            "  gateway start|stop|snapshot|fetch [master]\n"
-            "  bot status|start|stop|run_once [master]\n"
+            "  vault unlock (noop check)\n"
+            "  gateway start|stop|snapshot|fetch\n"
+            "  bot status|start|stop|run_once\n"
             "  account\n"
             "  balances\n"
             "  open_orders\n"
@@ -799,9 +798,8 @@ async def _execute_terminal_command(
 
     if key == "time":
         if not rest or rest[0].lower() != "sync":
-            return "usage: time sync [master]"
-        mp = (rest[1] if len(rest) > 1 else None) or master_password
-        payload = await _sync_binance_time(ctx, mp)
+            return "usage: time sync"
+        payload = await _sync_binance_time(ctx)
         return (
             f"time synced ({payload['source']}): local={payload['local_time_ms']} "
             f"server={payload['server_time_ms']} offset_ms={payload['offset_ms']}"
@@ -809,36 +807,30 @@ async def _execute_terminal_command(
 
     if key == "vault":
         if not rest:
-            return "usage: vault status | vault unlock <master>"
+            return "usage: vault status | vault unlock"
         sub = rest[0].lower()
         if sub == "status":
             pubs = ctx.config.list_public_credentials()
             return (
                 f"vault_exists={ctx.config.exists()} rows={len(pubs)} "
-                f"active={ctx.config.get_active_credential_id() or '-'} "
-                f"session_cached={bool(ctx.cached_master_password)}"
+                f"active={ctx.config.get_active_credential_id() or '-'}"
             )
         if sub == "unlock":
-            mp = " ".join(rest[1:]).strip() if len(rest) > 1 else (master_password or "").strip()
-            if not mp:
-                return "master password required"
             try:
-                pair = ctx.config.get_pair_for_active(mp)
+                pair = ctx.config.get_pair_for_active()
             except ValueError as e:
                 return sanitize_log_message(str(e))
             if not pair:
-                return "vault unlocked but no active credential"
-            ctx.cached_master_password = mp
-            return "vault unlocked"
-        return "usage: vault status | vault unlock <master>"
+                return "vault readable but no credential rows"
+            return "vault ok"
+        return "usage: vault status | vault unlock"
 
     if key == "gateway":
         if not rest:
-            return "usage: gateway start|stop|snapshot|fetch [master]"
+            return "usage: gateway start|stop|snapshot|fetch"
         sub = rest[0].lower()
         if sub == "start":
-            mp = (rest[1] if len(rest) > 1 else None) or master_password
-            pair = _resolve_pair(ctx, mp)
+            pair = _resolve_pair(ctx)
             if not pair:
                 return "no credentials available"
             if ctx.gateway:
@@ -873,11 +865,11 @@ async def _execute_terminal_command(
                 return "gateway not running"
             await ctx.gateway.fetch_account()
             return f"account refreshed; balances={len(ctx.state.balances)}"
-        return "usage: gateway start|stop|snapshot|fetch [master]"
+        return "usage: gateway start|stop|snapshot|fetch"
 
     if key == "bot":
         if not rest:
-            return "usage: bot status|start|stop|run_once [master]"
+            return "usage: bot status|start|stop|run_once"
         sub = rest[0].lower()
         if sub == "status":
             st = bot.status_payload()
@@ -886,8 +878,7 @@ async def _execute_terminal_command(
                 f"trading_enabled={st['trading_enabled']} symbol={st['symbol']}"
             )
         if sub in ("start", "run_once"):
-            mp = (rest[1] if len(rest) > 1 else None) or master_password
-            pair = _resolve_pair(ctx, mp)
+            pair = _resolve_pair(ctx)
             if not pair:
                 return "no credentials available"
             bot.runner.set_credentials(pair[0], pair[1])
@@ -907,7 +898,7 @@ async def _execute_terminal_command(
         if sub == "stop":
             await bot.runner.stop()
             return "bot loop stopped"
-        return "usage: bot status|start|stop|run_once [master]"
+        return "usage: bot status|start|stop|run_once"
 
     if key == "account":
         if not ctx.gateway:
@@ -976,7 +967,6 @@ async def _execute_terminal_command(
 
 async def _sync_binance_time(
     ctx: AppContext,
-    master_password: str | None,
     api_key: str | None = None,
     api_secret: str | None = None,
 ) -> dict[str, Any]:
@@ -990,7 +980,7 @@ async def _sync_binance_time(
                 pass
         return payload
 
-    pair = _resolve_pair(ctx, master_password, api_key, api_secret)
+    pair = _resolve_pair(ctx, api_key, api_secret)
     if not pair:
         raise HTTPException(status_code=400, detail="No API credentials available")
 

@@ -44,23 +44,6 @@ def binance_credentials_from_env() -> tuple[str, str] | None:
     return None
 
 
-def vault_unlock_password_from_env() -> str | None:
-    """
-    Optional master password to decrypt credentials.enc (Flutter will send via API later; env for automation).
-    """
-    raw = os.environ.get("PECUNATOR_VAULT_PASSWORD", "").strip()
-    return raw or None
-
-
-def remember_master_password_enabled() -> bool:
-    """
-    Persist last successful master password in encrypted, device-bound local storage.
-    Defaults to enabled for local development convenience.
-    """
-    raw = os.environ.get("PECUNATOR_REMEMBER_MASTER", "1").strip().lower()
-    return raw not in {"0", "false", "no", "off"}
-
-
 def account_poll_interval_sec() -> float:
     """
     REST+polling cadence while the gateway runs (balances, open orders).
@@ -94,3 +77,31 @@ def my_trades_poll_stride() -> int:
     except ValueError:
         return 1
     return max(1, min(n, 1000))
+
+
+def equity_base_asset() -> str:
+    """Base asset for rolling account equity tracking."""
+    return (os.environ.get("PECUNATOR_EQUITY_BASE_ASSET", "USDT").strip().upper() or "USDT")
+
+
+def equity_avg_window_samples() -> int:
+    """Rolling samples for equity average/high-average."""
+    raw = os.environ.get("PECUNATOR_EQUITY_AVG_WINDOW", "6").strip()
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        return 6
+    return max(1, min(n, 300))
+
+
+def equity_poll_stride() -> int:
+    """
+    How many account poll cycles between equity conversions (requires get_all_tickers).
+    1 = every cycle; higher values reduce REST weight.
+    """
+    raw = os.environ.get("PECUNATOR_EQUITY_POLL_STRIDE", "5").strip()
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        return 5
+    return max(1, min(n, 600))

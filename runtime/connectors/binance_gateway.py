@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
 import time
+from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import websockets
@@ -13,9 +15,20 @@ from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
 from runtime.connectors.account_info import summarize_binance_account_rest
+from runtime.core.equity import (
+    EquityRollingWindow,
+    build_ticker_price_map,
+    compute_spot_equity_in_base,
+)
 from runtime.core.event_bus import EventBus
 from runtime.core.security_util import sanitize_log_message
-from runtime.core.settings import account_poll_interval_sec, my_trades_poll_stride
+from runtime.core.settings import (
+    account_poll_interval_sec,
+    equity_avg_window_samples,
+    equity_base_asset,
+    equity_poll_stride,
+    my_trades_poll_stride,
+)
 from runtime.core.state_store import StateStore
 
 WS_BASE = "wss://stream.binance.com:9443/stream"
@@ -53,6 +66,8 @@ class BinanceGateway:
         self._stop = asyncio.Event()
         self._poll_cycle = 0
         self._logged_account_rest_snapshot = False
+        self._ticker_prices: dict[str, Decimal] = {}
+        self._equity_rolling = EquityRollingWindow(sample_window=equity_avg_window_samples())
 
     def _capture_rest_weight_from_client(self) -> None:
         """Read X-MBX-USED-WEIGHT-1M from python-binance last response (same as exampleJV/monitorPesos)."""
@@ -153,6 +168,37 @@ class BinanceGateway:
             self._logged_account_rest_snapshot = True
         else:
             _LOG.debug("%s", _msg)
+
+    async def refresh_equity(self, *, force_tickers: bool = False, base_asset: str | None = None) -> None:
+        if self._client is None:
+            return
+        if force_tickers or not self._ticker_prices:
+            try:
+                raw_tickers = await self._to_thread(lambda: self._client.get_all_tickers())
+                self._ticker_prices = build_ticker_price_map(raw_tickers)
+                self._capture_rest_weight_from_client()
+            except BinanceAPIException as e:
+                self._emit_log(f"equity:ticker {self._api_error_summary(e)}")
+                return
+            except OSError as e:
+                self._emit_log(f"equity:ticker {sanitize_log_message(str(e))}")
+                return
+            except Exception as e:
+                self._emit_log(f"equity:ticker {sanitize_log_message(str(e))}")
+                return
+
+        base = (base_asset or equity_base_asset()).strip().upper() or "USDT"
+        snap = compute_spot_equity_in_base(self.state.balances, self._ticker_prices, base_asset=base)
+        roll = self._equity_rolling.update(base_asset=base, current=Decimal(snap["current"]))
+        self.state.account_equity = {
+            **snap,
+            "avg": roll["avg"],
+            "high_avg": roll["high_avg"],
+            "samples": int(roll["samples"]),
+            "sample_window": int(roll["sample_window"]),
+            "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+        self.bus.publish("account.equity", dict(self.state.account_equity))
 
     async def sync_time(self) -> Dict[str, Any]:
         if self._client is None:
@@ -306,10 +352,13 @@ class BinanceGateway:
 
     async def _poll_account_loop(self, interval: float) -> None:
         stride = my_trades_poll_stride()
+        eq_stride = equity_poll_stride()
         while not self._stop.is_set():
             try:
                 await self.fetch_account()
                 await self.fetch_open_orders()
+                if eq_stride <= 1 or (self._poll_cycle % eq_stride == 0):
+                    await self.refresh_equity(force_tickers=True)
                 self._poll_cycle += 1
                 if stride <= 1 or (self._poll_cycle - 1) % stride == 0:
                     await self.fetch_my_trades(self.state.selected_symbol)
@@ -326,6 +375,7 @@ class BinanceGateway:
         self._stop.clear()
         self._poll_cycle = 0
         self._logged_account_rest_snapshot = False
+        self._ticker_prices = {}
         poll_sec = account_poll_interval_sec()
         self._client = Client(
             self.api_key,
@@ -340,7 +390,10 @@ class BinanceGateway:
         self._ws_task = asyncio.create_task(self._websocket_loop())
         self._poll_task = asyncio.create_task(self._poll_account_loop(poll_sec))
         self._emit_log(
-            f"REST poll cadence {poll_sec:.2f}s, myTrades stride {my_trades_poll_stride()}",
+            (
+                f"REST poll cadence {poll_sec:.2f}s, myTrades stride {my_trades_poll_stride()}, "
+                f"equity stride {equity_poll_stride()} ({equity_base_asset()})"
+            ),
         )
 
     async def restart_market_stream(self) -> None:

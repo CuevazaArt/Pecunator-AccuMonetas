@@ -23,6 +23,8 @@ class StateStore:
     my_trades: List[Dict[str, Any]] = field(default_factory=list)
     # REST account summary excluding raw balances row list (commission / flags / etc.).
     account_summary: Dict[str, Any] = field(default_factory=dict)
+    # Rolling spot equity monitor (converted to base asset).
+    account_equity: Dict[str, Any] = field(default_factory=dict)
     last_error: Optional[str] = None
     connected: bool = False
     # Last X-MBX-USED-WEIGHT-1M from python-binance after a REST call (IP-scoped).

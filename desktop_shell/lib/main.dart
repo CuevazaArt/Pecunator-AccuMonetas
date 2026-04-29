@@ -81,8 +81,11 @@ class _BotControlPageState extends State<BotControlPage> {
   String _lastError = '-';
   bool _gatewayRunning = false;
   bool _gatewayWsConnected = false;
+  String? _gatewayLastError;
   int? _apiWeightUsed;
   int _apiWeightLimit = 6000;
+  DateTime? _binanceSrvUtc;
+  DateTime? _binanceSrvObservedUtc;
   String _activeCredential = 'none · -';
   String _activeCredentialId = '';
   List<Map<String, dynamic>> _hubBots = <Map<String, dynamic>>[];
@@ -100,22 +103,23 @@ class _BotControlPageState extends State<BotControlPage> {
   Timer? _refreshTimer;
   Timer? _clockTimer;
   String _clockText = '--:--:--';
-  DateTime? _serverClockAnchorUtc;
-  DateTime? _serverClockAnchorObservedUtc;
 
   EngineApi get _api => EngineApi(_engineBase);
 
   @override
   void initState() {
     super.initState();
-    _clockText = _formatClock(_estimatedServerLocalNow());
+    _tickBinanceClock();
     _refreshAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncTimestamp();
+    });
     _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       _backgroundRefresh();
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() => _clockText = _formatClock(_estimatedServerLocalNow()));
+        setState(_tickBinanceClock);
       }
     });
   }
@@ -149,35 +153,36 @@ class _BotControlPageState extends State<BotControlPage> {
     return '$hh:$mm:$ss';
   }
 
-  DateTime _estimatedServerLocalNow() {
-    if (_serverClockAnchorUtc != null &&
-        _serverClockAnchorObservedUtc != null) {
-      final elapsed = DateTime.now().toUtc().difference(
-        _serverClockAnchorObservedUtc!,
-      );
-      return _serverClockAnchorUtc!.add(elapsed).toLocal();
+  DateTime? _displayBinanceUtcNow() {
+    if (_binanceSrvUtc != null && _binanceSrvObservedUtc != null) {
+      final elapsed = DateTime.now().toUtc().difference(_binanceSrvObservedUtc!);
+      return _binanceSrvUtc!.add(elapsed);
     }
-    return DateTime.now();
+    return null;
   }
 
-  void _updateClockAnchorFromDorothyCycles() {
-    DateTime? newestUtc;
-    for (final b in _hubBots) {
-      final ts = (b['last_cycle_ts'] ?? '').toString().trim();
-      if (ts.isEmpty) continue;
-      final parsed = DateTime.tryParse(ts)?.toUtc();
-      if (parsed == null) continue;
-      if (newestUtc == null || parsed.isAfter(newestUtc)) {
-        newestUtc = parsed;
-      }
+  void _tickBinanceClock() {
+    final t = _displayBinanceUtcNow();
+    _clockText = t != null ? _formatClock(t) : '--:--:--';
+  }
+
+  Color _gatewayTrafficColor() {
+    if (!_gatewayRunning) {
+      return Colors.grey;
     }
-    if (newestUtc == null) return;
-    if (_serverClockAnchorUtc == null ||
-        newestUtc.isAfter(_serverClockAnchorUtc!)) {
-      _serverClockAnchorUtc = newestUtc;
-      _serverClockAnchorObservedUtc = DateTime.now().toUtc();
-      _clockText = _formatClock(_estimatedServerLocalNow());
+    final err = _gatewayLastError;
+    if (err != null && err.isNotEmpty) {
+      return Colors.redAccent;
     }
+    final u = _apiWeightUsed;
+    final lim = _apiWeightLimit;
+    if (u != null && lim > 0 && u >= (lim * 0.85).round()) {
+      return Colors.redAccent;
+    }
+    if (!_gatewayWsConnected) {
+      return Colors.redAccent;
+    }
+    return Colors.green;
   }
 
   String _settingTooltip(String field) {
@@ -241,7 +246,6 @@ class _BotControlPageState extends State<BotControlPage> {
     final hub = await _api.hubBots();
     final botsRaw = (hub['bots'] as List?) ?? const [];
     _hubBots = botsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    _updateClockAnchorFromDorothyCycles();
     _configHistory = _buildConfigHistory(_hubBots);
     final liveIds = _hubBots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
     _expandedBots.removeWhere((id) => !liveIds.contains(id));
@@ -260,6 +264,12 @@ class _BotControlPageState extends State<BotControlPage> {
       final snap = await _api.gatewaySnapshot();
       _gatewayRunning = snap['gateway_running'] == true;
       _gatewayWsConnected = snap['ws_connected'] == true;
+      final le = snap['last_error'];
+      if (le == null || le.toString().trim().isEmpty) {
+        _gatewayLastError = null;
+      } else {
+        _gatewayLastError = le.toString();
+      }
       final uw = snap['used_weight_1m'];
       if (uw is int) {
         _apiWeightUsed = uw;
@@ -279,6 +289,7 @@ class _BotControlPageState extends State<BotControlPage> {
     } catch (_) {
       _gatewayRunning = false;
       _gatewayWsConnected = false;
+      _gatewayLastError = null;
       _apiWeightUsed = null;
     }
   }
@@ -315,6 +326,8 @@ class _BotControlPageState extends State<BotControlPage> {
         'qty_decimals': int.tryParse((draft['qDec'] ?? '8').trim()) ?? 8,
         'price_decimals': int.tryParse((draft['pDec'] ?? '4').trim()) ?? 4,
         'note': (draft['note'] ?? '').trim(),
+        'simulated': (draft['simulated'] ?? 'true') == 'true',
+        'trading_enabled': (draft['trading_enabled'] ?? 'false') == 'true',
       });
       if (wasRunning) {
         await _api.hubStopBot(botId);
@@ -336,6 +349,8 @@ class _BotControlPageState extends State<BotControlPage> {
         'qty_decimals': int.tryParse(_qtyDecCtrl.text.trim()) ?? 8,
         'price_decimals': int.tryParse(_priceDecCtrl.text.trim()) ?? 4,
         'note': _noteCtrl.text.trim(),
+        'simulated': true,
+        'trading_enabled': false,
       });
       await _reloadData();
     });
@@ -350,7 +365,16 @@ class _BotControlPageState extends State<BotControlPage> {
 
   Future<void> _syncTimestamp() async {
     await _withBusy(() async {
-      await _api.syncTimestamp();
+      final r = await _api.syncTimestamp();
+      final ms = r['server_time_ms'];
+      if (ms is num) {
+        _binanceSrvUtc = DateTime.fromMillisecondsSinceEpoch(
+          ms.toInt(),
+          isUtc: true,
+        );
+        _binanceSrvObservedUtc = DateTime.now().toUtc();
+        _tickBinanceClock();
+      }
       await _reloadData();
     });
   }
@@ -384,6 +408,11 @@ class _BotControlPageState extends State<BotControlPage> {
     await _withBusy(() async {
       await _api.deleteVaultCredential(credentialId);
       await _reloadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Credencial eliminada')),
+        );
+      }
     });
   }
 
@@ -413,15 +442,24 @@ class _BotControlPageState extends State<BotControlPage> {
   Future<void> _addCredential() async {
     final apiKey = _credKeyCtrl.text.trim();
     final apiSecret = _credSecretCtrl.text.trim();
+    final label = _credLabelCtrl.text.trim();
     if (apiKey.isEmpty || apiSecret.isEmpty) {
       setState(() => _lastError = 'API key y secret son requeridos');
+      return;
+    }
+    if (apiKey.length < 8 || apiSecret.length < 8) {
+      setState(() => _lastError = 'API key y secret deben tener al menos 8 caracteres');
+      return;
+    }
+    if (label.length > 80) {
+      setState(() => _lastError = 'Nombre local máximo 80 caracteres');
       return;
     }
     await _withBusy(() async {
       final created = await _api.addVaultCredential(
         apiKey: apiKey,
         apiSecret: apiSecret,
-        label: _credLabelCtrl.text.trim(),
+        label: label,
       );
       final newId = (created['id'] ?? '').toString();
       if (newId.isNotEmpty) {
@@ -431,6 +469,11 @@ class _BotControlPageState extends State<BotControlPage> {
       _credSecretCtrl.clear();
       _credLabelCtrl.clear();
       await _reloadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Credencial guardada y activada')),
+        );
+      }
     });
   }
 
@@ -543,6 +586,51 @@ class _BotControlPageState extends State<BotControlPage> {
     setState(() {});
   }
 
+  Future<bool?> _confirmLiveTradingDialog() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar modo LIVE'),
+        content: const Text(
+          'Vas a desactivar el modo simulado. Dorothy podrá enviar órdenes '
+          'reales a Binance con las API keys activas. Las pérdidas son posibles. '
+          '¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sí, modo LIVE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _patchBotLiveSim(
+    String botId, {
+    required bool simulated,
+    required bool tradingEnabled,
+  }) async {
+    await _withBusy(() async {
+      await _api.hubUpdateBot(botId, {
+        'simulated': simulated,
+        'trading_enabled': tradingEnabled,
+      });
+      await _reloadData();
+    });
+  }
+
+  Future<void> _openRestUsageDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _RestWeightMonitorDialog(api: _api),
+    );
+  }
+
   Future<void> _confirmDeleteBot(String botId) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -584,6 +672,15 @@ class _BotControlPageState extends State<BotControlPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'Guarda tus credenciales Binance en el cofre local cifrado. '
+                        'No necesitas contraseña maestra; solo API key + API secret.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       if (_vaultCredentials.isEmpty)
                         const Padding(
                           padding: EdgeInsets.only(bottom: 8),
@@ -621,6 +718,26 @@ class _BotControlPageState extends State<BotControlPage> {
                                   ),
                                 ),
                                 const SizedBox(width: 4),
+                                if (!isActive)
+                                  TextButton(
+                                    onPressed: _loading
+                                        ? null
+                                        : () async {
+                                            await _withBusy(() async {
+                                              await _api.activateVaultCredential(id);
+                                              await _reloadData();
+                                            });
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Credencial activada'),
+                                                ),
+                                              );
+                                            }
+                                            setModal(() {});
+                                          },
+                                    child: const Text('Activar'),
+                                  ),
                                 IconButton(
                                   tooltip: 'Borrar',
                                   onPressed: _loading
@@ -653,6 +770,12 @@ class _BotControlPageState extends State<BotControlPage> {
                               child: TextField(
                                 controller: _credSecretCtrl,
                                 obscureText: true,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) async {
+                                  if (_loading) return;
+                                  await _addCredential();
+                                  setModal(() {});
+                                },
                                 decoration: const InputDecoration(
                                   labelText: 'API secret',
                                   isDense: true,
@@ -977,7 +1100,7 @@ class _BotControlPageState extends State<BotControlPage> {
 
   Map<String, String> _draftFor(Map<String, dynamic> bot) {
     final botId = (bot['bot_id'] ?? '').toString();
-    return _draftByBotId.putIfAbsent(botId, () {
+    final d = _draftByBotId.putIfAbsent(botId, () {
       return <String, String>{
         'tag': (bot['tag'] ?? 'Dorothy').toString(),
         'symbol': (bot['symbol'] ?? 'XRPUSDT').toString(),
@@ -988,8 +1111,14 @@ class _BotControlPageState extends State<BotControlPage> {
         'qDec': (bot['qty_decimals'] ?? 8).toString(),
         'pDec': (bot['price_decimals'] ?? 4).toString(),
         'note': (bot['note'] ?? '').toString(),
+        'simulated': 'true',
+        'trading_enabled': 'false',
       };
     });
+    d['simulated'] = ((bot['simulated'] ?? true) == true).toString();
+    d['trading_enabled'] =
+        ((bot['trading_enabled'] ?? false) == true).toString();
+    return d;
   }
 
   Widget _draftField(
@@ -1065,28 +1194,47 @@ class _BotControlPageState extends State<BotControlPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Center(
-              child: Text(
-                'GW ${_gatewayRunning ? "ON" : "OFF"}'
-                '${_gatewayWsConnected ? " · WS" : ""}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: _gatewayRunning
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud, size: 16, color: _gatewayTrafficColor()),
+                  const SizedBox(width: 4),
+                  Text(
+                    'GW ${_gatewayRunning ? "ON" : "OFF"}'
+                    '${_gatewayWsConnected ? " · WS" : ""}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: _gatewayTrafficColor(),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
           IconButton(
             onPressed: _loading ? null : _startGateway,
             tooltip: 'Iniciar gateway Binance',
-            icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+            icon: Icon(
+              Icons.cloud_upload_outlined,
+              size: 18,
+              color: _gatewayRunning ? _gatewayTrafficColor() : Colors.grey,
+            ),
           ),
           IconButton(
             onPressed: _loading ? null : _stopGateway,
             tooltip: 'Detener gateway',
-            icon: const Icon(Icons.cloud_off_outlined, size: 18),
+            icon: Icon(
+              Icons.cloud_off_outlined,
+              size: 18,
+              color: _gatewayRunning ? _gatewayTrafficColor() : Colors.grey,
+            ),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _openRestUsageDialog,
+            tooltip:
+                'Historial local de peso REST (evitar 429/418). Misma IP para todas las instancias.',
+            icon: const Icon(Icons.analytics_outlined, size: 18),
           ),
           IconButton(
             onPressed: _loading ? null : _openSqliteInfo,
@@ -1101,18 +1249,45 @@ class _BotControlPageState extends State<BotControlPage> {
               size: 18,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Center(
-              child: Text(
-                _clockText,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+          Tooltip(
+            message:
+                'Hora del servidor Binance en UTC (GET /api/v3/time a través del motor). '
+                'No es la hora de tu PC. Pulsa el icono de reloj para sincronizar de nuevo.',
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.public,
+                      size: 15,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _clockText,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'UTC',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           IconButton(
             onPressed: _loading ? null : _syncTimestamp,
-            tooltip: 'Sync timestamp',
+            tooltip: 'Sincronizar reloj con servidor Binance',
             icon: const Icon(Icons.schedule, size: 18),
           ),
           IconButton(
@@ -1398,6 +1573,42 @@ class _BotControlPageState extends State<BotControlPage> {
                   ),
                   children: [
                     Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Modo simulado'),
+                        subtitle: Text(
+                          ((b['simulated'] ?? true) == true)
+                              ? 'Sin órdenes reales en Binance (recomendado para pruebas).'
+                              : (((b['trading_enabled'] ?? false) == true)
+                                  ? 'LIVE: Dorothy puede colocar órdenes reales.'
+                                  : 'Configuración incompleta: LIVE requiere confirmación.'),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        value: (b['simulated'] ?? true) == true,
+                        onChanged: _loading
+                            ? null
+                            : (wantSim) async {
+                                if (wantSim) {
+                                  await _patchBotLiveSim(
+                                    botId,
+                                    simulated: true,
+                                    tradingEnabled: false,
+                                  );
+                                } else {
+                                  final ok = await _confirmLiveTradingDialog();
+                                  if (ok == true && mounted) {
+                                    await _patchBotLiveSim(
+                                      botId,
+                                      simulated: false,
+                                      tradingEnabled: true,
+                                    );
+                                  }
+                                }
+                              },
+                      ),
+                    ),
+                    Padding(
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -1556,6 +1767,221 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 }
 
+class _RestWeightMonitorDialog extends StatefulWidget {
+  const _RestWeightMonitorDialog({required this.api});
+
+  final EngineApi api;
+
+  @override
+  State<_RestWeightMonitorDialog> createState() => _RestWeightMonitorDialogState();
+}
+
+class _RestWeightMonitorDialogState extends State<_RestWeightMonitorDialog> {
+  bool _loading = true;
+  String _error = '';
+  List<Map<String, dynamic>> _rows = <Map<String, dynamic>>[];
+  int? _liveUsed;
+  int _liveLimit = 6000;
+  bool _gatewayRunning = false;
+  double _animFrom = 0;
+  double _animTo = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _refresh(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  double _pct(int? used, int limit) {
+    if (used == null || limit <= 0) return 0;
+    final raw = used / limit;
+    if (raw.isNaN || raw.isInfinite) return 0;
+    return raw.clamp(0, 1);
+  }
+
+  String _asciiBar(int? used, int limit) {
+    final u = (used ?? 0).clamp(0, limit <= 0 ? 1 : limit);
+    final total = limit <= 0 ? 1 : limit;
+    final percent = (u / total) * 100;
+    const barLength = 30;
+    final filled = ((barLength * percent) / 100).floor().clamp(0, barLength);
+    final bar = ('▓' * filled) + ('-' * (barLength - filled));
+    return '[$bar] ${percent.toStringAsFixed(2)}% ($u/$total)';
+  }
+
+  Future<void> _refresh({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = '';
+      });
+    }
+    try {
+      final samples = await widget.api.restWeightSamples(limit: 200);
+      final snap = await widget.api.gatewaySnapshot();
+      final rowsRaw = (samples['items'] as List?) ?? const [];
+      final rows = rowsRaw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final usedRaw = snap['used_weight_1m'];
+      final limitRaw = snap['weight_limit_1m'];
+      int? used;
+      if (usedRaw is int) {
+        used = usedRaw;
+      } else if (usedRaw is num) {
+        used = usedRaw.toInt();
+      } else {
+        used = int.tryParse('$usedRaw');
+      }
+      var limit = 6000;
+      if (limitRaw is int) {
+        limit = limitRaw;
+      } else if (limitRaw is num) {
+        limit = limitRaw.toInt();
+      } else {
+        limit = int.tryParse('$limitRaw') ?? 6000;
+      }
+      final nextPct = _pct(used, limit);
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _gatewayRunning = snap['gateway_running'] == true;
+        _liveUsed = used;
+        _liveLimit = limit <= 0 ? 6000 : limit;
+        _animFrom = _animTo;
+        _animTo = nextPct;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Monitor de peso REST (X-MBX-USED-WEIGHT-1M)'),
+      content: SizedBox(
+        width: 860,
+        height: 560,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Este monitor muestra el encabezado acumulado de Binance por ventana de 1 minuto '
+              'y por IP compartida. No es por bot individual y puede subir por llamadas de otros '
+              'procesos/terminales que usen la misma red.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Lógica de cálculo (igual a monitorPesos): ocupación = used_weight_1m / weight_limit_1m.',
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            ),
+            const SizedBox(height: 10),
+            if (_loading)
+              const LinearProgressIndicator()
+            else if (_error.isNotEmpty)
+              Text(_error, style: const TextStyle(color: Colors.redAccent))
+            else ...[
+              Row(
+                children: [
+                  Text(
+                    'Gateway: ${_gatewayRunning ? "ON" : "OFF"}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _gatewayRunning ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Peso actual: ${_liveUsed ?? "-"} / $_liveLimit',
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: _animFrom, end: _animTo),
+                duration: const Duration(milliseconds: 650),
+                builder: (context, v, _) => LinearProgressIndicator(
+                  minHeight: 10,
+                  value: v,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                _asciiBar(_liveUsed, _liveLimit),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: _rows.isEmpty
+                    ? const Text(
+                        'Aún no hay muestras. Activa el gateway y espera algunos segundos.',
+                      )
+                    : Scrollbar(
+                        child: ListView.separated(
+                          itemCount: _rows.length,
+                          separatorBuilder: (_, index) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final m = _rows[i];
+                            final ts = (m['ts_utc'] ?? '-').toString();
+                            final u = m['used_weight_1m'];
+                            final lim = m['weight_limit_1m'];
+                            final bt = m['hub_bots_total'];
+                            final br = m['hub_bots_running'];
+                            final poll = m['poll_interval_sec'];
+                            final gw = m['gateway_running'];
+                            final err = m['last_error_snippet'];
+                            return SelectableText(
+                              '$ts · peso $u/$lim · bots $br/$bt · poll ${poll}s · '
+                              'GW ${gw == true ? "on" : "off"}'
+                              '${err != null && err.toString().isNotEmpty ? " · err $err" : ""}',
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 11,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => _refresh(),
+          child: const Text('Actualizar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cerrar'),
+        ),
+      ],
+    );
+  }
+}
+
 class SpotAccountPage extends StatefulWidget {
   const SpotAccountPage({
     super.key,
@@ -1575,12 +2001,14 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
   String _error = '-';
   String _fetchedAt = '-';
   Map<String, dynamic> _summary = <String, dynamic>{};
+  Map<String, dynamic> _equity = <String, dynamic>{};
   List<Map<String, dynamic>> _spot = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _futures = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _earn = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _external = <Map<String, dynamic>>[];
   List<String> _warnings = <String>[];
   final _baseAssetCtrl = TextEditingController();
+  Timer? _equityTimer;
 
   EngineApi get _api => EngineApi(widget.engineBase);
 
@@ -1589,12 +2017,38 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
     super.initState();
     _baseAssetCtrl.text = _inferBaseAsset(widget.activeSymbols);
     _refresh();
+    _startEquityTimer();
   }
 
   @override
   void dispose() {
+    _equityTimer?.cancel();
     _baseAssetCtrl.dispose();
     super.dispose();
+  }
+
+  void _startEquityTimer() {
+    _equityTimer?.cancel();
+    _equityTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _refreshLiveEquity(),
+    );
+  }
+
+  Future<void> _refreshLiveEquity() async {
+    if (!mounted) return;
+    try {
+      final snap = await _api.gatewaySnapshot();
+      final equity = Map<String, dynamic>.from(
+        (snap['account_equity'] as Map?) ?? const {},
+      );
+      if (!mounted || equity.isEmpty) return;
+      setState(() {
+        _equity = equity;
+      });
+    } catch (_) {
+      // Keep last known equity; manual refresh still reports full errors.
+    }
   }
 
   String _inferBaseAsset(List<String> symbols) {
@@ -1638,6 +2092,9 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
       final summary = Map<String, dynamic>.from(
         (snap['account_summary'] as Map?) ?? const {},
       );
+      final equity = Map<String, dynamic>.from(
+        (snap['account_equity'] as Map?) ?? const {},
+      );
       final spot = ((wallets['spot'] as List?) ?? const [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
@@ -1653,8 +2110,12 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
       final warnings = ((wallets['warnings'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList();
+      final walletEquity = Map<String, dynamic>.from(
+        (wallets['equity'] as Map?) ?? const {},
+      );
       setState(() {
         _summary = summary;
+        _equity = equity.isNotEmpty ? equity : walletEquity;
         _spot = spot;
         _futures = futures;
         _earn = earn;
@@ -1807,6 +2268,43 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
     );
   }
 
+  Widget _equityCard() {
+    final base = (_equity['base_asset'] ?? _baseAssetCtrl.text.trim().toUpperCase()).toString();
+    final current = _plainNum(_equity['current']);
+    final avg = _plainNum(_equity['avg']);
+    final highAvg = _plainNum(_equity['high_avg']);
+    final missing = (_equity['missing_assets_count'] ?? 0).toString();
+    final updatedAt = (_equity['updated_at'] ?? _fetchedAt).toString();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Monitoreo Equity (tiempo real)',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                _kpi('Equity $base', current),
+                _kpi('Promedio', avg),
+                _kpi('Máx prom', highAvg),
+                _kpi('Sin precio', missing),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Actualizado: $updatedAt',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _warningsBlock() {
     if (_warnings.isEmpty) return const SizedBox.shrink();
     return Card(
@@ -1902,6 +2400,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
                 ),
               ),
             _baseAssetBar(),
+            _equityCard(),
             _baseTotalsCard(),
             _warningsBlock(),
             Text(

@@ -21,8 +21,6 @@ class AppContext:
     gateway: Optional[BinanceGateway] = None
     logs: Deque[str] = field(default_factory=lambda: deque(maxlen=500))
     auto_connect_attempted: bool = False
-    """Volatile: last master password used successfully in this process, if any."""
-    cached_master_password: Optional[str] = None
     active_api_key_hint: Optional[str] = None
     active_api_key_last4: Optional[str] = None
     active_api_key_source: Optional[str] = None

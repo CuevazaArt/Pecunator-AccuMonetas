@@ -81,6 +81,7 @@ class DorothyRunner:
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
         self._client: Optional[Client] = None
+        self._error_streak = 0
 
     def _emit(
         self,
@@ -278,11 +279,13 @@ class DorothyRunner:
 
     async def _loop(self) -> None:
         while not self._stop.is_set():
+            sleep_sec = float(self.config.loop_interval_sec)
             try:
                 rep = await self.run_once()
                 self._last_report = rep
                 self._last_error = None
                 self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
+                self._error_streak = 0
                 self._emit(
                     "INFO",
                     f"bot:{rep.get('decision')} symbol={rep.get('symbol')} simulated={rep.get('simulated')}",
@@ -292,9 +295,26 @@ class DorothyRunner:
                 raise
             except Exception as e:
                 self._last_error = sanitize_log_message(str(e))
+                self._error_streak += 1
+                # Recreate client on failures so transient socket/session faults can self-heal.
+                if self._client is not None:
+                    try:
+                        self._client.session.close()
+                    except Exception:
+                        pass
+                    self._client = None
+                sleep_sec = min(
+                    60.0,
+                    max(2.0, min(float(self.config.loop_interval_sec), float(2 ** min(self._error_streak, 6)))),
+                )
                 self._emit("ERROR", f"bot:error {self._last_error}", {"error": self._last_error})
+                self._emit(
+                    "WARNING",
+                    f"bot:retry_in {sleep_sec:.0f}s (streak={self._error_streak})",
+                    {"retry_sec": sleep_sec, "streak": self._error_streak},
+                )
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=float(self.config.loop_interval_sec))
+                await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
             except asyncio.TimeoutError:
                 pass
 

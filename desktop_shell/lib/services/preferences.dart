@@ -2,6 +2,18 @@
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _PrefsKeys {
+  static const String darkMode = 'app.darkMode';
+  static const String engineHost = 'app.engineHost';
+  static const String enginePort = 'app.enginePort';
+  static const String lastBotTag = 'app.lastBotTag';
+  static const String lastSymbol = 'app.lastSymbol';
+  static const String lastBaseAsset = 'app.lastBaseAsset';
+  static const String configHistory = 'app.configHistory';
+  static const String expandedBots = 'app.expandedBots';
+  static const String lastScrollPos = 'app.lastScrollPos';
+}
+
 class AppPreferences {
   static late final SharedPreferences _prefs;
 
@@ -10,45 +22,45 @@ class AppPreferences {
   }
 
   // Theme
-  static bool get darkMode => _prefs.getBool(_Keys.darkMode) ?? true;
+  static bool get darkMode => _prefs.getBool(_PrefsKeys.darkMode) ?? true;
 
   static Future<void> setDarkMode(bool value) =>
-      _prefs.setBool(_Keys.darkMode, value);
+      _prefs.setBool(_PrefsKeys.darkMode, value);
 
   // Engine connection
   static String get engineHost =>
-      _prefs.getString(_Keys.engineHost) ?? '127.0.0.1';
+      _prefs.getString(_PrefsKeys.engineHost) ?? '127.0.0.1';
 
   static Future<void> setEngineHost(String value) =>
-      _prefs.setString(_Keys.engineHost, value);
+      _prefs.setString(_PrefsKeys.engineHost, value);
 
-  static int get enginePort => _prefs.getInt(_Keys.enginePort) ?? 8765;
+  static int get enginePort => _prefs.getInt(_PrefsKeys.enginePort) ?? 8765;
 
   static Future<void> setEnginePort(int value) =>
-      _prefs.setInt(_Keys.enginePort, value);
+      _prefs.setInt(_PrefsKeys.enginePort, value);
 
   // Bot config defaults
   static String get lastBotTag =>
-      _prefs.getString(_Keys.lastBotTag) ?? 'Dorothy';
+      _prefs.getString(_PrefsKeys.lastBotTag) ?? 'Dorothy';
 
   static Future<void> setLastBotTag(String value) =>
-      _prefs.setString(_Keys.lastBotTag, value);
+      _prefs.setString(_PrefsKeys.lastBotTag, value);
 
   static String get lastSymbol =>
-      _prefs.getString(_Keys.lastSymbol) ?? 'XRPUSDT';
+      _prefs.getString(_PrefsKeys.lastSymbol) ?? 'XRPUSDT';
 
   static Future<void> setLastSymbol(String value) =>
-      _prefs.setString(_Keys.lastSymbol, value);
+      _prefs.setString(_PrefsKeys.lastSymbol, value);
 
   static String get lastBaseAsset =>
-      _prefs.getString(_Keys.lastBaseAsset) ?? 'USDT';
+      _prefs.getString(_PrefsKeys.lastBaseAsset) ?? 'USDT';
 
   static Future<void> setLastBaseAsset(String value) =>
-      _prefs.setString(_Keys.lastBaseAsset, value);
+      _prefs.setString(_PrefsKeys.lastBaseAsset, value);
 
   // Config history
   static List<String> get configHistory =>
-      _prefs.getStringList(_Keys.configHistory) ?? [];
+      _prefs.getStringList(_PrefsKeys.configHistory) ?? [];
 
   static Future<void> addConfigHistory(String config) async {
     final history = configHistory;
@@ -57,39 +69,26 @@ class AppPreferences {
     if (history.length > 50) {
       history.removeRange(50, history.length);
     }
-    await _prefs.setStringList(_Keys.configHistory, history);
+    await _prefs.setStringList(_PrefsKeys.configHistory, history);
   }
 
   static Future<void> clearConfigHistory() =>
-      _prefs.remove(_Keys.configHistory);
+      _prefs.remove(_PrefsKeys.configHistory);
 
   // Expanded bots (for UI state)
   static Set<String> get expandedBotIds =>
-      Set<String>.from(_prefs.getStringList(_Keys.expandedBots) ?? []);
+      Set<String>.from(_prefs.getStringList(_PrefsKeys.expandedBots) ?? []);
 
   static Future<void> setExpandedBotIds(Set<String> ids) =>
-      _prefs.setStringList(_Keys.expandedBots, ids.toList());
+      _prefs.setStringList(_PrefsKeys.expandedBots, ids.toList());
 
   // Last scroll positions
   static int get lastLogScrollPosition =>
-      _prefs.getInt(_Keys.lastScrollPos) ?? 0;
+      _prefs.getInt(_PrefsKeys.lastScrollPos) ?? 0;
 
   static Future<void> setLastLogScrollPosition(int position) =>
-      _prefs.setInt(_Keys.lastScrollPos, position);
+      _prefs.setInt(_PrefsKeys.lastScrollPos, position);
 
   // Clear all
   static Future<void> clearAll() => _prefs.clear();
-
-  /// Internal key constants to prevent typos.
-  class _Keys {
-    static const String darkMode = 'app.darkMode';
-    static const String engineHost = 'app.engineHost';
-    static const String enginePort = 'app.enginePort';
-    static const String lastBotTag = 'app.lastBotTag';
-    static const String lastSymbol = 'app.lastSymbol';
-    static const String lastBaseAsset = 'app.lastBaseAsset';
-    static const String configHistory = 'app.configHistory';
-    static const String expandedBots = 'app.expandedBots';
-    static const String lastScrollPos = 'app.lastScrollPos';
-  }
 }
