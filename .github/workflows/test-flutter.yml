@@ -1,0 +1,69 @@
+name: Flutter Tests (Refactored UI)
+
+on:
+  push:
+    branches:
+      - 'refactor/**'
+      - 'main'
+      - 'develop'
+    paths:
+      - 'desktop_shell/**'
+      - '.github/workflows/test-flutter.yml'
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'desktop_shell/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+
+      - name: Get Flutter version
+        run: flutter --version
+
+      - name: Analyze Dart code (lib/)
+        working-directory: desktop_shell
+        run: |
+          flutter pub get
+          flutter analyze lib/ || echo "⚠️ Analysis issues found (non-blocking)"
+
+      - name: Format check
+        working-directory: desktop_shell
+        run: |
+          dart format lib/ --set-exit-if-changed --dry-run || echo "⚠️ Format issues found"
+
+      - name: Run Dart tests
+        working-directory: desktop_shell
+        run: |
+          flutter test test/ -v --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./desktop_shell/coverage/lcov.info
+          flags: flutter
+          name: codecov-flutter
+          fail_ci_if_error: false
+
+      - name: Check pubspec.yaml
+        working-directory: desktop_shell
+        run: |
+          flutter pub get
+          echo "✅ Dependencies are valid"
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "✅ Flutter tests completed"

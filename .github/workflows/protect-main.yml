@@ -1,0 +1,40 @@
+name: Protect Main (No Direct Merges)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - 'main'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR source
+        if: startsWith(github.head_ref, 'refactor/')
+        run: |
+          echo "❌ ERROR: Cannot merge refactor/* branches directly to main"
+          echo ""
+          echo "Protection Policy:"
+          echo "  ✅ Can merge TO refactor/stable-ui-and-tests"
+          echo "  ✅ Can merge refactor branches TO develop (with approval)"
+          echo "  ❌ Cannot merge refactor branches TO main (protection active)"
+          echo ""
+          echo "Process:"
+          echo "  1. Get approval from @Cuevaza on refactor branch"
+          echo "  2. Get authorization: 'merge to main approved'"
+          echo "  3. Create separate PR to main when authorized"
+          exit 1
+
+      - name: Allow docs-only PRs to main
+        if: |
+          !startsWith(github.head_ref, 'refactor/') &&
+          github.head_ref != 'main'
+        run: |
+          echo "✅ Non-refactor PR detected (allowed)"
+          echo "Source: ${{ github.head_ref }}"
+
+      - name: Require reviews for main
+        if: '!startsWith(github.head_ref, ''refactor/'')'
+        run: |
+          echo "ℹ️  Main branch requires approvals (standard policy)"

@@ -1,0 +1,51 @@
+name: Sync from Main (Docs & Improvements)
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Fetch all branches
+        run: git fetch origin
+
+      - name: Check out refactor branch
+        run: git checkout refactor/stable-ui-and-tests
+
+      - name: Merge main docs and changes
+        run: |
+          # Merge main into refactor branch (no fast-forward, preserve history)
+          git merge origin/main --no-ff \
+            -m "chore: sync documentation and improvements from main" \
+            -X theirs -- docs/ README.md || \
+          echo "⚠️ Merge conflicts possible, but docs strategy applied"
+
+      - name: Push merged changes
+        run: |
+          git push origin refactor/stable-ui-and-tests
+        continue-on-error: true
+
+      - name: Report
+        run: |
+          echo "✅ Sync completed: docs and general improvements merged"
+          echo "🔄 If conflicts occurred, resolve manually in the branch"

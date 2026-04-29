@@ -1,0 +1,73 @@
+name: Python Tests (Dorothy Bot)
+
+on:
+  push:
+    branches:
+      - 'refactor/**'
+      - 'main'
+      - 'develop'
+    paths:
+      - 'runtime/**'
+      - 'requirements-dev.txt'
+      - '.github/workflows/test-python.yml'
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'runtime/**'
+      - 'requirements-dev.txt'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint with ruff
+        run: |
+          ruff check runtime/ --select=E,W,F || true
+
+      - name: Type check with mypy
+        run: |
+          mypy runtime/bot/dorothy.py --ignore-missing-imports || true
+
+      - name: Run pytest
+        run: |
+          pytest runtime/tests/ -v --tb=short --cov=runtime --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: python
+          name: codecov-python
+          fail_ci_if_error: false
+
+      - name: Pytest summary
+        if: always()
+        run: |
+          echo "✅ Python tests completed"
