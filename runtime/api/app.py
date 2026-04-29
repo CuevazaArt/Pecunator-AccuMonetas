@@ -6,10 +6,11 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from typing import Any
 
 from binance.client import Client
+from binance.exceptions import BinanceAPIException
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -38,6 +39,7 @@ from runtime.api.schemas import (
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_base
+from runtime.core.ops_audit_log import get_ops_audit_log
 from runtime.core.security_util import sanitize_log_message
 from runtime.core.settings import (
     api_bind_host_for_cors_regex,
@@ -546,6 +548,43 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
 
+    @app.get("/api/v1/ops/protocol/status")
+    async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
+        audit = get_ops_audit_log(ctx.config.data_dir)
+        return {
+            "close_protocol": audit.last("close_protocol"),
+            "red_button": audit.last("red_button"),
+            "hub_stats": deps.get_bot().hub_stats(),
+        }
+
+    @app.post("/api/v1/ops/protocol/close")
+    async def ops_protocol_close(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        summary = await _execute_close_protocol(ctx, base_asset=base_asset)
+        rec = get_ops_audit_log(ctx.config.data_dir).record(
+            op_name="close_protocol",
+            status=str(summary.get("status", "unknown")),
+            summary=summary,
+            error=str(summary.get("error", "")).strip() or None,
+        )
+        return {"record": rec, "summary": summary}
+
+    @app.post("/api/v1/ops/red_button")
+    async def ops_red_button(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        summary = await _execute_red_button(ctx, base_asset=base_asset)
+        rec = get_ops_audit_log(ctx.config.data_dir).record(
+            op_name="red_button",
+            status=str(summary.get("status", "unknown")),
+            summary=summary,
+            error=str(summary.get("error", "")).strip() or None,
+        )
+        return {"record": rec, "summary": summary}
+
     return app
 
 
@@ -735,6 +774,250 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
             pass
 
 
+async def _stop_dorothy_for_protocol() -> tuple[int, list[str]]:
+    svc = deps.get_bot()
+    stopped = 0
+    errors: list[str] = []
+    for row in svc.list_instances():
+        bot_id = str(row.get("bot_id", "")).strip()
+        if not bot_id:
+            continue
+        should_stop = bool(row.get("running")) or bool(row.get("desired_running"))
+        if not should_stop:
+            continue
+        try:
+            await svc.stop_instance(bot_id)
+            stopped += 1
+        except Exception as e:
+            errors.append(f"{bot_id}: {sanitize_log_message(str(e))}")
+    return stopped, errors
+
+
+def _format_lot_quantity(symbol_info: dict[str, Any] | None, raw_qty: Decimal) -> Decimal | None:
+    if not symbol_info or raw_qty <= 0:
+        return None
+    filters = symbol_info.get("filters") if isinstance(symbol_info, dict) else None
+    if not isinstance(filters, list):
+        return None
+    min_qty = Decimal("0")
+    step = Decimal("0")
+    for f in filters:
+        if not isinstance(f, dict):
+            continue
+        if str(f.get("filterType")) == "LOT_SIZE":
+            try:
+                min_qty = Decimal(str(f.get("minQty", "0")))
+                step = Decimal(str(f.get("stepSize", "0")))
+            except (InvalidOperation, TypeError, ValueError):
+                return None
+            break
+    if step <= 0:
+        return None
+    qty = (raw_qty / step).to_integral_value(rounding=ROUND_DOWN) * step
+    if qty < min_qty or qty <= 0:
+        return None
+    return qty
+
+
+async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> dict[str, Any]:
+    started_at = time.time()
+    base = (base_asset or "USDT").strip().upper() or "USDT"
+    summary: dict[str, Any] = {
+        "protocol": "close_protocol",
+        "base_asset": base,
+        "status": "ok",
+        "stopped_dorothy_instances": 0,
+        "stop_errors": [],
+        "open_orders_seen": 0,
+        "limit_orders_canceled": 0,
+        "cancel_errors": [],
+        "equity_snapshot": {},
+        "log_lines": [],
+    }
+    pair = _resolve_pair(ctx)
+    if not pair:
+        summary["status"] = "failed"
+        summary["error"] = "No API credentials available"
+        summary["log_lines"].append("No API credentials available.")
+        return summary
+
+    stopped, stop_errors = await _stop_dorothy_for_protocol()
+    summary["stopped_dorothy_instances"] = stopped
+    summary["stop_errors"] = stop_errors
+    summary["log_lines"].append(f"Dorothy instances stopped before protocol: {stopped}.")
+    if stop_errors:
+        summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
+
+    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    try:
+        orders = await asyncio.to_thread(client.get_open_orders)
+        if not isinstance(orders, list):
+            orders = []
+        summary["open_orders_seen"] = len(orders)
+        for order in orders:
+            if not isinstance(order, dict):
+                continue
+            if str(order.get("type", "")).upper() != "LIMIT":
+                continue
+            sym = str(order.get("symbol", "")).upper()
+            oid = order.get("orderId")
+            if not sym or oid is None:
+                continue
+            try:
+                await asyncio.to_thread(client.cancel_order, symbol=sym, orderId=oid)
+                summary["limit_orders_canceled"] += 1
+            except Exception as e:
+                summary["cancel_errors"].append(f"{sym}#{oid}: {sanitize_log_message(str(e))}")
+
+        account = await asyncio.to_thread(client.get_account)
+        balances = account.get("balances", []) if isinstance(account, dict) else []
+        tickers = await asyncio.to_thread(client.get_all_tickers)
+        px_map = build_ticker_price_map(tickers if isinstance(tickers, list) else [])
+        summary["equity_snapshot"] = compute_spot_equity_in_base(
+            balances if isinstance(balances, list) else [],
+            px_map,
+            base_asset=base,
+        )
+
+        if summary["stop_errors"] or summary["cancel_errors"]:
+            summary["status"] = "partial"
+        summary["log_lines"].append(
+            f"Open orders seen={summary['open_orders_seen']}, limit canceled={summary['limit_orders_canceled']}."
+        )
+        summary["log_lines"].append(
+            f"Equity snapshot in {base}: {summary['equity_snapshot'].get('current', '0')}."
+        )
+    except BinanceAPIException as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Binance API error: {summary['error']}")
+    except Exception as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Unexpected error: {summary['error']}")
+    finally:
+        try:
+            await asyncio.to_thread(client.close_connection)
+        except Exception:
+            pass
+
+    summary["elapsed_sec"] = round(time.time() - started_at, 3)
+    return summary
+
+
+async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict[str, Any]:
+    started_at = time.time()
+    base = (base_asset or "USDT").strip().upper() or "USDT"
+    summary: dict[str, Any] = {
+        "protocol": "red_button",
+        "base_asset": base,
+        "status": "ok",
+        "stopped_dorothy_instances": 0,
+        "stop_errors": [],
+        "assets_evaluated": 0,
+        "assets_sold": 0,
+        "orders_canceled": 0,
+        "skipped_assets": [],
+        "sell_errors": [],
+        "log_lines": [],
+    }
+    pair = _resolve_pair(ctx)
+    if not pair:
+        summary["status"] = "failed"
+        summary["error"] = "No API credentials available"
+        summary["log_lines"].append("No API credentials available.")
+        return summary
+
+    stopped, stop_errors = await _stop_dorothy_for_protocol()
+    summary["stopped_dorothy_instances"] = stopped
+    summary["stop_errors"] = stop_errors
+    summary["log_lines"].append(f"Dorothy instances stopped before RED BUTTON: {stopped}.")
+    if stop_errors:
+        summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
+
+    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    try:
+        account = await asyncio.to_thread(client.get_account)
+        balances = account.get("balances", []) if isinstance(account, dict) else []
+        if not isinstance(balances, list):
+            balances = []
+
+        exch = await asyncio.to_thread(client.get_exchange_info)
+        symbols = {}
+        if isinstance(exch, dict):
+            raw_symbols = exch.get("symbols", [])
+            if isinstance(raw_symbols, list):
+                symbols = {
+                    str(s.get("symbol", "")).upper(): s
+                    for s in raw_symbols
+                    if isinstance(s, dict) and str(s.get("symbol", "")).strip()
+                }
+
+        for row in balances:
+            if not isinstance(row, dict):
+                continue
+            asset = str(row.get("asset", "")).upper()
+            try:
+                free_qty = Decimal(str(row.get("free", "0") or "0"))
+            except (InvalidOperation, TypeError, ValueError):
+                summary["skipped_assets"].append(f"{asset or '?'}: invalid free quantity")
+                continue
+            if asset == base or free_qty <= 0:
+                continue
+            summary["assets_evaluated"] += 1
+            symbol = f"{asset}{base}"
+            symbol_info = symbols.get(symbol)
+            if not symbol_info or str(symbol_info.get("status", "")).upper() != "TRADING":
+                summary["skipped_assets"].append(f"{asset}: no direct {symbol} trading pair")
+                continue
+
+            try:
+                open_orders = await asyncio.to_thread(client.get_open_orders, symbol=symbol)
+                if isinstance(open_orders, list):
+                    for order in open_orders:
+                        if not isinstance(order, dict):
+                            continue
+                        oid = order.get("orderId")
+                        if oid is None:
+                            continue
+                        await asyncio.to_thread(client.cancel_order, symbol=symbol, orderId=oid)
+                        summary["orders_canceled"] += 1
+            except Exception as e:
+                summary["sell_errors"].append(f"{asset}: cancel orders {sanitize_log_message(str(e))}")
+                continue
+
+            qty = _format_lot_quantity(symbol_info, free_qty)
+            if qty is None:
+                summary["skipped_assets"].append(f"{asset}: quantity below LOT_SIZE/minQty")
+                continue
+
+            try:
+                await asyncio.to_thread(client.order_market_sell, symbol=symbol, quantity=str(qty))
+                summary["assets_sold"] += 1
+                summary["log_lines"].append(f"Sold {qty} {asset} -> {base} using {symbol}.")
+            except Exception as e:
+                summary["sell_errors"].append(f"{asset}: market sell {sanitize_log_message(str(e))}")
+
+        if summary["stop_errors"] or summary["sell_errors"]:
+            summary["status"] = "partial"
+    except BinanceAPIException as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Binance API error: {summary['error']}")
+    except Exception as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Unexpected error: {summary['error']}")
+    finally:
+        try:
+            await asyncio.to_thread(client.close_connection)
+        except Exception:
+            pass
+
+    summary["elapsed_sec"] = round(time.time() - started_at, 3)
+    return summary
+
+
 def _resolve_pair(
     ctx: AppContext,
     api_key: str | None = None,
@@ -786,6 +1069,7 @@ async def _execute_terminal_command(
             "  vault unlock (noop check)\n"
             "  gateway start|stop|snapshot|fetch\n"
             "  bot status|start|stop|run_once\n"
+            "  ops status|close|red_button\n"
             "  account\n"
             "  balances\n"
             "  open_orders\n"
@@ -899,6 +1183,38 @@ async def _execute_terminal_command(
             await bot.runner.stop()
             return "bot loop stopped"
         return "usage: bot status|start|stop|run_once"
+
+    if key == "ops":
+        if not rest:
+            return "usage: ops status|close|red_button"
+        sub = rest[0].lower()
+        if sub == "status":
+            audit = get_ops_audit_log(ctx.config.data_dir)
+            close_state = audit.last("close_protocol")
+            red_state = audit.last("red_button")
+            return (
+                f"close={close_state.get('status') if close_state else '-'} "
+                f"red_button={red_state.get('status') if red_state else '-'}"
+            )
+        if sub == "close":
+            rep = await _execute_close_protocol(ctx)
+            get_ops_audit_log(ctx.config.data_dir).record(
+                op_name="close_protocol",
+                status=str(rep.get("status", "unknown")),
+                summary=rep,
+                error=str(rep.get("error", "")).strip() or None,
+            )
+            return f"close protocol: {rep.get('status', '-')}"
+        if sub == "red_button":
+            rep = await _execute_red_button(ctx)
+            get_ops_audit_log(ctx.config.data_dir).record(
+                op_name="red_button",
+                status=str(rep.get("status", "unknown")),
+                summary=rep,
+                error=str(rep.get("error", "")).strip() or None,
+            )
+            return f"red button: {rep.get('status', '-')}"
+        return "usage: ops status|close|red_button"
 
     if key == "account":
         if not ctx.gateway:

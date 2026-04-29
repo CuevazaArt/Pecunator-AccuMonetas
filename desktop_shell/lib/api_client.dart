@@ -1,4 +1,3 @@
-import 'services/exceptions.dart';
 import 'services/http_client.dart';
 
 class EngineApi {
@@ -141,6 +140,21 @@ class EngineApi {
 
   Future<Map<String, dynamic>> restWeightSamples({int limit = 200}) =>
       _client.get('/api/v1/usage/rest-weight/samples?limit=$limit');
+
+  Future<Map<String, dynamic>> protocolOpsStatus() =>
+      _client.get('/api/v1/ops/protocol/status');
+
+  Future<Map<String, dynamic>> executeCloseProtocol({
+    String baseAsset = 'USDT',
+  }) => _client.post(
+    '/api/v1/ops/protocol/close?base_asset=${Uri.encodeComponent(baseAsset)}',
+  );
+
+  Future<Map<String, dynamic>> executeRedButton({
+    String baseAsset = 'USDT',
+  }) => _client.post(
+    '/api/v1/ops/red_button?base_asset=${Uri.encodeComponent(baseAsset)}',
+  );
 
   Future<Map<String, dynamic>> hubBots() => _client.get('/api/v1/hub/bots');
 

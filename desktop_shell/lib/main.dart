@@ -97,6 +97,8 @@ class _BotControlPageState extends State<BotControlPage> {
   final Set<String> _expandedBots = <String>{};
   final Map<String, Map<String, String>> _draftByBotId =
       <String, Map<String, String>>{};
+  Map<String, dynamic>? _closeProtocolState;
+  Map<String, dynamic>? _redButtonState;
   final _credLabelCtrl = TextEditingController();
   final _credKeyCtrl = TextEditingController();
   final _credSecretCtrl = TextEditingController();
@@ -292,6 +294,17 @@ class _BotControlPageState extends State<BotControlPage> {
       _gatewayLastError = null;
       _apiWeightUsed = null;
     }
+    try {
+      final st = await _api.protocolOpsStatus();
+      _closeProtocolState = st['close_protocol'] is Map
+          ? Map<String, dynamic>.from(st['close_protocol'] as Map)
+          : null;
+      _redButtonState = st['red_button'] is Map
+          ? Map<String, dynamic>.from(st['red_button'] as Map)
+          : null;
+    } catch (_) {
+      // Keep previous operation status if endpoint is unavailable.
+    }
   }
 
   Future<void> _refreshAll() async {
@@ -395,6 +408,122 @@ class _BotControlPageState extends State<BotControlPage> {
       }
       await _reloadData();
     });
+  }
+
+  Color _opStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'ok':
+        return Colors.greenAccent;
+      case 'partial':
+        return Colors.orangeAccent;
+      case 'failed':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Future<bool?> _confirmProtocolDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ejecutar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runCloseProtocol() async {
+    final ok = await _confirmProtocolDialog(
+      title: 'Ejecutar protocolo de cierre',
+      message:
+          'Antes de cerrar/cancelar órdenes, se detendrán todas las instancias Dorothy '
+          'para evitar ciclos de disposición/convertir activos en paralelo. ¿Continuar?',
+    );
+    if (ok != true) return;
+    await _withBusy(() async {
+      final r = await _api.executeCloseProtocol();
+      final rec = r['record'];
+      final summary = r['summary'];
+      if (rec is Map) {
+        _closeProtocolState = Map<String, dynamic>.from(rec);
+      } else if (summary is Map) {
+        _closeProtocolState = <String, dynamic>{
+          'status': summary['status'],
+          'summary': summary,
+        };
+      }
+      await _reloadData();
+    });
+  }
+
+  Future<void> _runRedButton() async {
+    final ok = await _confirmProtocolDialog(
+      title: 'Ejecutar RED BUTTON',
+      message:
+          'Esto intentará vender a mercado activos Spot al base asset (USDT por defecto). '
+          'Primero detendrá todas las instancias Dorothy para evitar conflictos operativos. '
+          'Usar solo en eventos de salida de emergencia. ¿Continuar?',
+    );
+    if (ok != true) return;
+    await _withBusy(() async {
+      final r = await _api.executeRedButton();
+      final rec = r['record'];
+      final summary = r['summary'];
+      if (rec is Map) {
+        _redButtonState = Map<String, dynamic>.from(rec);
+      } else if (summary is Map) {
+        _redButtonState = <String, dynamic>{
+          'status': summary['status'],
+          'summary': summary,
+        };
+      }
+      await _reloadData();
+    });
+  }
+
+  void _openProtocolSummaryDialog(String title, Map<String, dynamic>? row) {
+    if (row == null) return;
+    final summary = row['summary'] is Map
+        ? Map<String, dynamic>.from(row['summary'] as Map)
+        : <String, dynamic>{};
+    final rendered = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(<String, dynamic>{...row, 'summary': summary});
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 900,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              rendered,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteBot(String botId) async {
@@ -1170,6 +1299,91 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
+  Widget _protocolModuleCard({
+    required String title,
+    required IconData icon,
+    required String description,
+    required String precautions,
+    required Map<String, dynamic>? state,
+    required VoidCallback onRun,
+    required VoidCallback onViewSummary,
+    required Color accent,
+  }) {
+    final status = (state?['status'] ?? '-').toString();
+    final ts = (state?['ts_utc'] ?? '-').toString();
+    final summary = state?['summary'] is Map
+        ? Map<String, dynamic>.from(state?['summary'] as Map)
+        : <String, dynamic>{};
+    final stopped = (summary['stopped_dorothy_instances'] ?? '-').toString();
+    final elapsed = (summary['elapsed_sec'] ?? '-').toString();
+    final errors = [
+      ...(summary['stop_errors'] is List ? (summary['stop_errors'] as List) : const []),
+      ...(summary['cancel_errors'] is List ? (summary['cancel_errors'] as List) : const []),
+      ...(summary['sell_errors'] is List ? (summary['sell_errors'] as List) : const []),
+    ].length;
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: accent),
+                  const SizedBox(width: 6),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message:
+                        '$description\n\nPrecauciones:\n$precautions',
+                    child: const Icon(Icons.info_outline, size: 16),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'status: $status',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: _opStatusColor(status),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Última ejecución: $ts',
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Dorothy detenidas: $stopped · errores: $errors · elapsed: ${_plainNum(elapsed)}s',
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _loading ? null : onRun,
+                    icon: const Icon(Icons.play_arrow, size: 16),
+                    label: const Text('Ejecutar'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: state == null ? null : onViewSummary,
+                    icon: const Icon(Icons.receipt_long, size: 16),
+                    label: const Text('Resumen'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1351,6 +1565,43 @@ class _BotControlPageState extends State<BotControlPage> {
                   style: const TextStyle(color: Colors.redAccent, fontSize: 12),
                 ),
               ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _protocolModuleCard(
+                  title: 'Protocolo de Cierre',
+                  icon: Icons.rule_folder_outlined,
+                  accent: Colors.amberAccent,
+                  description:
+                      'Cancela órdenes LIMIT abiertas y toma snapshot operativo/equity de salida.',
+                  precautions:
+                      '- Detiene Dorothy antes de ejecutar.\n'
+                      '- Úsalo para cierre controlado, no para liquidación total.\n'
+                      '- Revisa el resumen para trazabilidad.',
+                  state: _closeProtocolState,
+                  onRun: _runCloseProtocol,
+                  onViewSummary: () => _openProtocolSummaryDialog(
+                    'Resumen · Protocolo de Cierre',
+                    _closeProtocolState,
+                  ),
+                ),
+                _protocolModuleCard(
+                  title: 'RED BUTTON',
+                  icon: Icons.warning_amber_rounded,
+                  accent: Colors.redAccent,
+                  description:
+                      'Rutina de salida de emergencia: intenta convertir balances Spot al asset base vía ventas a mercado.',
+                  precautions:
+                      '- Detiene Dorothy antes de vender.\n'
+                      '- Puede fallar en activos sin par directo o por filtros LOT_SIZE.\n'
+                      '- Ejecutar solo cuando sea estrictamente necesario.',
+                  state: _redButtonState,
+                  onRun: _runRedButton,
+                  onViewSummary: () =>
+                      _openProtocolSummaryDialog('Resumen · RED BUTTON', _redButtonState),
+                ),
+              ],
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(8),

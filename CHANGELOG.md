@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Exposed equity in `GET /api/v1/gateway/snapshot` and included on-demand equity in `GET /api/v1/account/wallets`.
 - Updated Spot UI to show a live equity card in the account details window.
 
+### Operational protocols: close protocol + red button
+
+- Added API operations with mandatory Dorothy pre-stop to avoid disposal/conversion loops:
+  - `POST /api/v1/ops/protocol/close`
+  - `POST /api/v1/ops/red_button`
+  - `GET /api/v1/ops/protocol/status`
+- Added persistent traceability store `runtime/core/ops_audit_log.py` (`ops_audit.sqlite`) with latest status/summary/error snippets.
+- Added dashboard row with explanatory tooltips, precautions, operation buttons, monitor values, and summary viewer for both modules.
+
 ### Vault — removed user master password
 
 - **Removed:** Any API field or UX flow requiring a **user-supplied master password** (`VaultSessionBody`, `PECUNATOR_VAULT_PASSWORD`, `PECUNATOR_REMEMBER_MASTER`, `runtime/core/master_remember.py`).

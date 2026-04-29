@@ -78,6 +78,10 @@ Si venías de una versión anterior con cofre derivado de contraseña maestra, e
   - `POST /api/v1/gateway/fetch_account`
   - `GET /api/v1/account/wallets?base_asset=USDT`
   - `POST /api/v1/time/sync`
+- Protocolos operativos (trazabilidad):
+  - `GET /api/v1/ops/protocol/status`
+  - `POST /api/v1/ops/protocol/close?base_asset=USDT`
+  - `POST /api/v1/ops/red_button?base_asset=USDT`
 - Hub Dorothy (multi-instancia):
   - `GET /api/v1/hub/bots`
   - `POST /api/v1/hub/bots`
@@ -94,6 +98,7 @@ Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibi
 
 - [`CHANGELOG.md`](CHANGELOG.md) — cambios relevantes y políticas (p. ej. cofre / contraseña maestra)  
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
+- [`docs/syncfusion-charts-integration.md`](docs/syncfusion-charts-integration.md) — plan para integrar `syncfusion_flutter_charts` (equity/REST timeline)  
 - [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md) — límites Binance REST/WebSocket y checklist  
 - [`docs/binance-limits-snapshots/`](docs/binance-limits-snapshots/) — snapshots fechados de `exchangeInfo.rateLimits`  
 - [`docs/git-cursor-github.md`](docs/git-cursor-github.md) — Git / Cursor / GitHub  
