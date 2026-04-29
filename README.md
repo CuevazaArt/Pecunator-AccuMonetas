@@ -1,6 +1,7 @@
 # PecunatorCore
 
-Pecunator Core is a modular, high-integrity engine for real-time trading systems: Python **engine** (`runtime/`) plus a **Flutter desktop** shell (generated under `desktop_shell/`). There is **no web dashboard** in this repo.
+PecunatorCore is a modular trading runtime with a local Python engine and a dedicated Flutter desktop UI.
+This repository is **desktop-first**: there is **no browser dashboard**.
 
 ## Directiva de trabajo
 
@@ -14,6 +15,7 @@ Pecunator Core is a modular, high-integrity engine for real-time trading systems
 1. Instalar [Flutter SDK (Windows)](https://docs.flutter.dev/get-started/install/windows).
 2. En la raíz del repo: `powershell -ExecutionPolicy Bypass -File scripts/init_flutter_desktop.ps1`
 3. Abrir `desktop_shell/` en el IDE Flutter y ejecutar (p. ej. `flutter run -d windows`).
+4. Producción Windows: `flutter build windows` y ejecutar `desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe`.
 
 Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
@@ -24,14 +26,36 @@ Por defecto **`python main.py`** levanta la API en **http://127.0.0.1:8765** (aj
 - OpenAPI: http://127.0.0.1:8765/docs  
 - Solo stub de log (sin servidor): `PECUNATOR_ENGINE_STUB=1 python main.py`
 
-Conectores Binance, cofre y estado: `runtime/` (ver `runtime/api/`).
+Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).
 
-### Bot preset B (exampleJV -> API for Flutter)
+## API surface (current)
 
-- Preset path: `GET /api/v1/bot/presets` (includes preset `B` with `XRPUSDT`, `450s`, `quote 8`, `profit 0.05`, `drop 0.004`).
-- Current config: `GET /api/v1/bot/config` and update via `PUT /api/v1/bot/config`.
-- Run loop: `POST /api/v1/bot/start`, `POST /api/v1/bot/stop`, one shot `POST /api/v1/bot/run_once`.
-- Safety model: `simulated=true` by default. Live mode requires explicit switches: `simulated=false` and `trading_enabled=true`.
+- Vault + credenciales:
+  - `GET /api/v1/vault/status`
+  - `GET /api/v1/vault/credentials`
+  - `POST /api/v1/vault/credentials`
+  - `PATCH /api/v1/vault/credentials/{credential_id}`
+  - `POST /api/v1/vault/credentials/{credential_id}/activate`
+  - `POST /api/v1/vault/credentials/{credential_id}/delete`
+  - `GET /api/v1/credentials/active`
+- Gateway Binance:
+  - `POST /api/v1/gateway/start`
+  - `POST /api/v1/gateway/stop`
+  - `GET /api/v1/gateway/snapshot`
+  - `POST /api/v1/gateway/fetch_account`
+  - `GET /api/v1/account/wallets?base_asset=USDT`
+  - `POST /api/v1/time/sync`
+- Hub Dorothy (multi-instancia):
+  - `GET /api/v1/hub/bots`
+  - `POST /api/v1/hub/bots`
+  - `PATCH /api/v1/hub/bots/{bot_id}`
+  - `DELETE /api/v1/hub/bots/{bot_id}`
+  - `POST /api/v1/hub/bots/{bot_id}/start`
+  - `POST /api/v1/hub/bots/{bot_id}/stop`
+  - `POST /api/v1/hub/bots/{bot_id}/run_once`
+  - `GET /api/v1/hub/bots/{bot_id}/logs`
+
+Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibility.
 
 ## Git
 

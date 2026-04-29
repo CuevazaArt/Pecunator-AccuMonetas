@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from binance.client import Client
@@ -512,6 +513,13 @@ def create_app() -> FastAPI:
     async def gateway_snapshot(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
         return _snapshot(ctx)
 
+    @app.get("/api/v1/account/wallets")
+    async def account_wallets(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
+
     return app
 
 
@@ -525,6 +533,145 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         ws_connected=bool(ctx.state.connected),
         selected_symbol=ctx.state.selected_symbol,
     )
+
+
+def _to_decimal_str(value: Any) -> str:
+    try:
+        return str(Decimal(str(value or "0")))
+    except (InvalidOperation, ValueError, TypeError):
+        return "0"
+
+
+def _is_non_zero(value: str) -> bool:
+    try:
+        return Decimal(value) != 0
+    except (InvalidOperation, ValueError, TypeError):
+        return False
+
+
+def _bucket_sum(rows: list[dict[str, Any]], key: str) -> str:
+    total = Decimal("0")
+    for row in rows:
+        try:
+            total += Decimal(str(row.get(key, "0")))
+        except (InvalidOperation, ValueError, TypeError):
+            pass
+    return str(total)
+
+
+async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> dict[str, Any]:
+    pair = _resolve_pair(ctx, None)
+    if not pair:
+        raise HTTPException(status_code=400, detail="No API credentials available")
+
+    client = Client(pair[0], pair[1], requests_params={"timeout": 15})
+    base = (base_asset or "USDT").strip().upper() or "USDT"
+    warnings: list[str] = []
+    spot_rows: list[dict[str, Any]] = []
+    futures_rows: list[dict[str, Any]] = []
+    earn_rows: list[dict[str, Any]] = []
+    external_rows: list[dict[str, Any]] = []
+    try:
+        account = await asyncio.to_thread(client.get_account)
+        raw_balances = account.get("balances", []) if isinstance(account, dict) else []
+        if not isinstance(raw_balances, list):
+            raw_balances = []
+        for b in raw_balances:
+            asset = str((b or {}).get("asset", "")).upper()
+            free = _to_decimal_str((b or {}).get("free", "0"))
+            locked = _to_decimal_str((b or {}).get("locked", "0"))
+            total = _to_decimal_str(Decimal(free) + Decimal(locked))
+            if not _is_non_zero(total):
+                continue
+            row = {"asset": asset, "free": free, "locked": locked, "total": total}
+            if asset.startswith("LD"):
+                earn_rows.append(row)
+            else:
+                spot_rows.append(row)
+
+        if hasattr(client, "futures_account_balance"):
+            try:
+                fut = await asyncio.to_thread(client.futures_account_balance)
+                if isinstance(fut, list):
+                    for r in fut:
+                        asset = str((r or {}).get("asset", "")).upper()
+                        wb = _to_decimal_str((r or {}).get("balance", "0"))
+                        cw = _to_decimal_str((r or {}).get("crossWalletBalance", "0"))
+                        if not (_is_non_zero(wb) or _is_non_zero(cw)):
+                            continue
+                        futures_rows.append(
+                            {
+                                "asset": asset,
+                                "wallet_balance": wb,
+                                "cross_wallet_balance": cw,
+                                "total": wb,
+                            }
+                        )
+            except Exception as e:
+                warnings.append(f"futures unavailable: {sanitize_log_message(str(e))}")
+        else:
+            warnings.append("futures endpoint not available in this client build")
+
+        if hasattr(client, "get_funding_wallet"):
+            try:
+                ext = await asyncio.to_thread(client.get_funding_wallet)
+                if isinstance(ext, list):
+                    for r in ext:
+                        asset = str((r or {}).get("asset", "")).upper()
+                        free = _to_decimal_str((r or {}).get("free", "0"))
+                        locked = _to_decimal_str((r or {}).get("locked", "0"))
+                        freeze = _to_decimal_str((r or {}).get("freeze", "0"))
+                        total = _to_decimal_str(Decimal(free) + Decimal(locked) + Decimal(freeze))
+                        if not _is_non_zero(total):
+                            continue
+                        external_rows.append(
+                            {
+                                "asset": asset,
+                                "free": free,
+                                "locked": locked,
+                                "freeze": freeze,
+                                "total": total,
+                            }
+                        )
+            except Exception as e:
+                warnings.append(f"external wallet unavailable: {sanitize_log_message(str(e))}")
+        else:
+            warnings.append("external wallet endpoint not available in this client build")
+
+        spot_rows.sort(key=lambda r: r.get("asset", ""))
+        futures_rows.sort(key=lambda r: r.get("asset", ""))
+        earn_rows.sort(key=lambda r: r.get("asset", ""))
+        external_rows.sort(key=lambda r: r.get("asset", ""))
+
+        return {
+            "base_asset": base,
+            "spot": spot_rows,
+            "futures": futures_rows,
+            "stake_earn": earn_rows,
+            "external": external_rows,
+            "base_asset_totals": {
+                "spot": next((r for r in spot_rows if r.get("asset") == base), {"total": "0"}),
+                "futures": next((r for r in futures_rows if r.get("asset") == base), {"total": "0"}),
+                "stake_earn": next((r for r in earn_rows if r.get("asset") == f"LD{base}"), {"total": "0"}),
+                "external": next((r for r in external_rows if r.get("asset") == base), {"total": "0"}),
+            },
+            "summary": {
+                "spot_assets": len(spot_rows),
+                "futures_assets": len(futures_rows),
+                "stake_earn_assets": len(earn_rows),
+                "external_assets": len(external_rows),
+                "spot_total_sum": _bucket_sum(spot_rows, "total"),
+                "futures_total_sum": _bucket_sum(futures_rows, "total"),
+                "stake_earn_total_sum": _bucket_sum(earn_rows, "total"),
+                "external_total_sum": _bucket_sum(external_rows, "total"),
+            },
+            "warnings": warnings,
+        }
+    finally:
+        try:
+            await asyncio.to_thread(client.close_connection)
+        except Exception:
+            pass
 
 
 def _resolve_pair(

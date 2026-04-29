@@ -71,30 +71,33 @@ class _BotControlPageState extends State<BotControlPage> {
   List<Map<String, String>> _configHistory = <Map<String, String>>[];
   List<Map<String, dynamic>> _vaultCredentials = <Map<String, dynamic>>[];
   final Map<String, String> _hubLogsByBot = <String, String>{};
-  final Map<String, ScrollController> _logScrollByBot = <String, ScrollController>{};
+  final Map<String, ScrollController> _logScrollByBot =
+      <String, ScrollController>{};
   final Set<String> _expandedBots = <String>{};
-  final Map<String, Map<String, String>> _draftByBotId = <String, Map<String, String>>{};
-  final Map<String, String> _vaultLabelDraftById = <String, String>{};
+  final Map<String, Map<String, String>> _draftByBotId =
+      <String, Map<String, String>>{};
   final _credLabelCtrl = TextEditingController();
   final _credKeyCtrl = TextEditingController();
   final _credSecretCtrl = TextEditingController();
   Timer? _refreshTimer;
   Timer? _clockTimer;
   String _clockText = '--:--:--';
+  DateTime? _serverClockAnchorUtc;
+  DateTime? _serverClockAnchorObservedUtc;
 
   EngineApi get _api => EngineApi(_engineBase);
 
   @override
   void initState() {
     super.initState();
-    _clockText = _formatClock(DateTime.now());
+    _clockText = _formatClock(_estimatedServerLocalNow());
     _refreshAll();
     _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       _backgroundRefresh();
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() => _clockText = _formatClock(DateTime.now()));
+        setState(() => _clockText = _formatClock(_estimatedServerLocalNow()));
       }
     });
   }
@@ -128,6 +131,62 @@ class _BotControlPageState extends State<BotControlPage> {
     return '$hh:$mm:$ss';
   }
 
+  DateTime _estimatedServerLocalNow() {
+    if (_serverClockAnchorUtc != null &&
+        _serverClockAnchorObservedUtc != null) {
+      final elapsed = DateTime.now().toUtc().difference(
+        _serverClockAnchorObservedUtc!,
+      );
+      return _serverClockAnchorUtc!.add(elapsed).toLocal();
+    }
+    return DateTime.now();
+  }
+
+  void _updateClockAnchorFromDorothyCycles() {
+    DateTime? newestUtc;
+    for (final b in _hubBots) {
+      final ts = (b['last_cycle_ts'] ?? '').toString().trim();
+      if (ts.isEmpty) continue;
+      final parsed = DateTime.tryParse(ts)?.toUtc();
+      if (parsed == null) continue;
+      if (newestUtc == null || parsed.isAfter(newestUtc)) {
+        newestUtc = parsed;
+      }
+    }
+    if (newestUtc == null) return;
+    if (_serverClockAnchorUtc == null ||
+        newestUtc.isAfter(_serverClockAnchorUtc!)) {
+      _serverClockAnchorUtc = newestUtc;
+      _serverClockAnchorObservedUtc = DateTime.now().toUtc();
+      _clockText = _formatClock(_estimatedServerLocalNow());
+    }
+  }
+
+  String _settingTooltip(String field) {
+    switch (field) {
+      case 'tag':
+        return 'Nombre local de la instancia Dorothy.';
+      case 'symbol':
+        return 'Activo a operar (ej. XRPUSDT). En Dorothy define el mercado objetivo.';
+      case 'loop':
+        return 'Segundos entre iteraciones del bot (tiempoEntreEjecucion).';
+      case 'qty':
+        return 'Monto por compra en moneda quote (quoteOrderQtyModulo, comúnmente USDT).';
+      case 'profit':
+        return 'Factor de beneficio por ciclo. 0.05 equivale a 5% objetivo de ganancia.';
+      case 'drop':
+        return 'Margen adicional de caída para habilitar compra, evita compras concentradas.';
+      case 'qDec':
+        return 'Decimales de cantidad para cumplir filtros de lote de Binance.';
+      case 'pDec':
+        return 'Decimales de precio SELL LIMIT para cumplir PRICE_FILTER.';
+      case 'note':
+        return 'Nota breve operativa del seteo (máximo 20 caracteres).';
+      default:
+        return field;
+    }
+  }
+
   Future<void> _withBusy(Future<void> Function() fn) async {
     if (_loading) return;
     setState(() => _loading = true);
@@ -137,9 +196,9 @@ class _BotControlPageState extends State<BotControlPage> {
     } catch (e) {
       _lastError = e.toString();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_lastError)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_lastError)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -150,23 +209,21 @@ class _BotControlPageState extends State<BotControlPage> {
     final cred = await _api.activeCredential();
     final creds = await _api.vaultCredentials();
     final rows = (creds['items'] as List?) ?? const [];
-    _vaultCredentials = rows.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    _vaultCredentials = rows
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     final source = (cred['source'] ?? 'none').toString();
     final last4 = (cred['public_key_last4'] ?? '-').toString();
     _activeCredentialId = (cred['active_credential_id'] ?? '').toString();
     final activeLabel = (cred['label'] ?? '').toString().trim();
-    final activeName = activeLabel.isNotEmpty ? activeLabel : (_activeCredentialId.isEmpty ? '-' : _activeCredentialId);
+    final activeName = activeLabel.isNotEmpty
+        ? activeLabel
+        : (_activeCredentialId.isEmpty ? '-' : _activeCredentialId);
     _activeCredential = '$activeName · $last4 · $source';
-    final credIds = _vaultCredentials.map((r) => (r['id'] ?? '').toString()).toSet();
-    _vaultLabelDraftById.removeWhere((id, _) => !credIds.contains(id));
-    for (final row in _vaultCredentials) {
-      final id = (row['id'] ?? '').toString();
-      if (id.isEmpty) continue;
-      _vaultLabelDraftById.putIfAbsent(id, () => (row['label'] ?? '').toString());
-    }
     final hub = await _api.hubBots();
     final botsRaw = (hub['bots'] as List?) ?? const [];
     _hubBots = botsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    _updateClockAnchorFromDorothyCycles();
     _configHistory = _buildConfigHistory(_hubBots);
     final liveIds = _hubBots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
     _expandedBots.removeWhere((id) => !liveIds.contains(id));
@@ -200,11 +257,15 @@ class _BotControlPageState extends State<BotControlPage> {
   Future<void> _saveBotConfig(String botId) async {
     final draft = _draftByBotId[botId];
     if (draft == null) return;
+    final wasRunning = _hubBots.any(
+      (b) => (b['bot_id'] ?? '').toString() == botId && b['running'] == true,
+    );
     await _withBusy(() async {
       await _api.hubUpdateBot(botId, {
         'tag': (draft['tag'] ?? 'Dorothy').trim(),
         'symbol': (draft['symbol'] ?? 'XRPUSDT').trim(),
-        'loop_interval_sec': int.tryParse((draft['loop'] ?? '450').trim()) ?? 450,
+        'loop_interval_sec':
+            int.tryParse((draft['loop'] ?? '450').trim()) ?? 450,
         'quote_order_qty': (draft['qty'] ?? '8').trim(),
         'profit_factor': (draft['profit'] ?? '0.05').trim(),
         'margin_drop_factor': (draft['drop'] ?? '0.004').trim(),
@@ -212,6 +273,10 @@ class _BotControlPageState extends State<BotControlPage> {
         'price_decimals': int.tryParse((draft['pDec'] ?? '4').trim()) ?? 4,
         'note': (draft['note'] ?? '').trim(),
       });
+      if (wasRunning) {
+        await _api.hubStopBot(botId);
+        await _api.hubStartBot(botId);
+      }
       await _reloadData();
     });
   }
@@ -272,31 +337,34 @@ class _BotControlPageState extends State<BotControlPage> {
     });
   }
 
-  Future<void> _activateCredential(String credentialId) async {
-    await _withBusy(() async {
-      await _api.activateVaultCredential(credentialId);
-      await _reloadData();
-    });
-  }
-
-  Future<void> _saveCredentialLabel(String credentialId) async {
-    final label = (_vaultLabelDraftById[credentialId] ?? '').trim();
-    await _withBusy(() async {
-      await _api.updateVaultCredentialLabel(
-        credentialId,
-        label: label,
-      );
-      await _reloadData();
-    });
-  }
-
   Future<void> _deleteCredential(String credentialId) async {
     await _withBusy(() async {
-      await _api.deleteVaultCredential(
-        credentialId,
-      );
+      await _api.deleteVaultCredential(credentialId);
       await _reloadData();
     });
+  }
+
+  Future<void> _confirmDeleteCredential(String credentialId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text('Eliminar credencial $credentialId del vault local.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await _deleteCredential(credentialId);
+    }
   }
 
   Future<void> _addCredential() async {
@@ -307,11 +375,15 @@ class _BotControlPageState extends State<BotControlPage> {
       return;
     }
     await _withBusy(() async {
-      await _api.addVaultCredential(
+      final created = await _api.addVaultCredential(
         apiKey: apiKey,
         apiSecret: apiSecret,
         label: _credLabelCtrl.text.trim(),
       );
+      final newId = (created['id'] ?? '').toString();
+      if (newId.isNotEmpty) {
+        await _api.activateVaultCredential(newId);
+      }
       _credKeyCtrl.clear();
       _credSecretCtrl.clear();
       _credLabelCtrl.clear();
@@ -345,7 +417,9 @@ class _BotControlPageState extends State<BotControlPage> {
       final level = (m['level'] ?? '-').toString();
       final msg = (m['message'] ?? '').toString();
       final payloadText = _formatLogPayload(m['payload']);
-      out.add('$ts [$level] $msg${payloadText.isEmpty ? '' : ' | $payloadText'}');
+      out.add(
+        '$ts [$level] $msg${payloadText.isEmpty ? '' : ' | $payloadText'}',
+      );
     }
     return out.join('\n');
   }
@@ -387,7 +461,9 @@ class _BotControlPageState extends State<BotControlPage> {
     return jsonEncode(p);
   }
 
-  List<Map<String, String>> _buildConfigHistory(List<Map<String, dynamic>> bots) {
+  List<Map<String, String>> _buildConfigHistory(
+    List<Map<String, dynamic>> bots,
+  ) {
     final seen = <String>{};
     final out = <Map<String, String>>[];
     for (final b in bots) {
@@ -429,10 +505,18 @@ class _BotControlPageState extends State<BotControlPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar eliminación'),
-        content: Text('Eliminar la instancia $botId y conservar solo su historial SQLite.'),
+        content: Text(
+          'Eliminar la instancia $botId y conservar solo su historial SQLite.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
@@ -460,53 +544,38 @@ class _BotControlPageState extends State<BotControlPage> {
                       if (_vaultCredentials.isEmpty)
                         const Padding(
                           padding: EdgeInsets.only(bottom: 8),
-                          child: Text('No hay claves registradas. Agrega una nueva.'),
+                          child: Text(
+                            'No hay claves registradas. Agrega una nueva.',
+                          ),
                         ),
                       ..._vaultCredentials.map((row) {
                         final id = (row['id'] ?? '').toString();
-                        final short = (row['public_key_short'] ?? '-').toString();
+                        final short = (row['public_key_short'] ?? '-')
+                            .toString();
                         final isActive = id == _activeCredentialId;
-                        final labelDraft = _vaultLabelDraftById[id] ?? '';
+                        final label = (row['label'] ?? '').toString().trim();
+                        final display = label.isNotEmpty ? label : id;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
+                                SizedBox(width: 210, child: Text(display)),
+                                const SizedBox(width: 6),
                                 SizedBox(
-                                  width: 180,
-                                  child: TextFormField(
-                                    key: ValueKey('cred-label-$id-$labelDraft'),
-                                    initialValue: labelDraft,
-                                    onChanged: (v) => _vaultLabelDraftById[id] = v,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Nombre local',
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                    ),
+                                  width: 230,
+                                  child: SelectableText(short),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  isActive ? 'ACTIVA' : '',
+                                  style: TextStyle(
+                                    color: isActive
+                                        ? Colors.greenAccent
+                                        : Theme.of(context).hintColor,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                SizedBox(width: 230, child: SelectableText(short)),
-                                const SizedBox(width: 6),
-                                OutlinedButton(
-                                  onPressed: _loading
-                                      ? null
-                                      : () async {
-                                          await _saveCredentialLabel(id);
-                                          setModal(() {});
-                                        },
-                                  child: const Text('Editar'),
-                                ),
-                                const SizedBox(width: 4),
-                                OutlinedButton(
-                                  onPressed: _loading
-                                      ? null
-                                      : () async {
-                                          await _activateCredential(id);
-                                          setModal(() {});
-                                        },
-                                  child: Text(isActive ? 'Activa' : 'Activar'),
                                 ),
                                 const SizedBox(width: 4),
                                 IconButton(
@@ -514,10 +583,13 @@ class _BotControlPageState extends State<BotControlPage> {
                                   onPressed: _loading
                                       ? null
                                       : () async {
-                                          await _deleteCredential(id);
+                                          await _confirmDeleteCredential(id);
                                           setModal(() {});
                                         },
-                                  icon: const Icon(Icons.delete_outline, size: 18),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
                                 ),
                               ],
                             ),
@@ -563,7 +635,10 @@ class _BotControlPageState extends State<BotControlPage> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cerrar'),
+                ),
                 IconButton(
                   tooltip: 'Start gateway',
                   onPressed: _loading ? null : _startGateway,
@@ -595,7 +670,9 @@ class _BotControlPageState extends State<BotControlPage> {
             children: [
               const SelectableText('runtime/data/dorothy_hub.sqlite'),
               const SizedBox(height: 8),
-              const Text('Cada instancia se identifica por su bot_id y guarda historial crudo completo.'),
+              const Text(
+                'Cada instancia se identifica por su bot_id y guarda historial crudo completo.',
+              ),
               const SizedBox(height: 10),
               ..._hubBots.map((b) {
                 final botId = (b['bot_id'] ?? '').toString();
@@ -615,7 +692,12 @@ class _BotControlPageState extends State<BotControlPage> {
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
       ),
     );
   }
@@ -635,7 +717,8 @@ class _BotControlPageState extends State<BotControlPage> {
               ? const Text('Sin registros')
               : ListView.separated(
                   itemCount: logs.length,
-                  separatorBuilder: (_, separatorIndex) => const Divider(height: 8),
+                  separatorBuilder: (_, separatorIndex) =>
+                      const Divider(height: 8),
                   itemBuilder: (ctx, i) {
                     final row = Map<String, dynamic>.from(logs[i] as Map);
                     final ts = (row['ts_utc'] ?? '-').toString();
@@ -653,12 +736,20 @@ class _BotControlPageState extends State<BotControlPage> {
                   },
                 ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _openSqliteRecordDetail(String botId, Map<String, dynamic> row) async {
+  Future<void> _openSqliteRecordDetail(
+    String botId,
+    Map<String, dynamic> row,
+  ) async {
     if (!mounted) return;
     final pretty = const JsonEncoder.withIndent('  ').convert(row);
     await showDialog<void>(
@@ -675,7 +766,12 @@ class _BotControlPageState extends State<BotControlPage> {
             ),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
       ),
     );
   }
@@ -709,7 +805,8 @@ class _BotControlPageState extends State<BotControlPage> {
               : ListView.separated(
                   shrinkWrap: true,
                   itemCount: _configHistory.length,
-                  separatorBuilder: (_, separatorIndex) => const Divider(height: 10),
+                  separatorBuilder: (_, separatorIndex) =>
+                      const Divider(height: 10),
                   itemBuilder: (ctx, i) {
                     final h = _configHistory[i];
                     final note = (h['note'] ?? '').trim();
@@ -733,7 +830,113 @@ class _BotControlPageState extends State<BotControlPage> {
                   },
                 ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDorothyGuide() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Instructivo Dorothy7.0'),
+        content: SizedBox(
+          width: 860,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                ExpansionTile(
+                  title: Text('1) Lógica base del ciclo'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: Text(
+                        'Cada ciclo consulta open orders y ticker del símbolo. '
+                        'Si existe una SELL LIMIT ancla, calcula umbral de entrada: '
+                        'anchor * (1 - (profit + drop)). Si no existe ancla, habilita compra.',
+                      ),
+                    ),
+                  ],
+                ),
+                ExpansionTile(
+                  title: Text('2) Seteo clave (preset B)'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: Text(
+                        'Preset por defecto: XRPUSDT, loop 450s, qty 8 quote, profit 0.05, drop 0.004. '
+                        'qDec/pDec controlan redondeo para respetar filtros del símbolo.',
+                      ),
+                    ),
+                  ],
+                ),
+                ExpansionTile(
+                  title: Text('3) Operación desde el dashboard'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: Text(
+                        'La instancia corre en ciclo perpetuo con botón ACTIVO/INACTIVO. '
+                        'Si editas parámetros usa Guardar seteo para aplicarlos, y si estaba ACTIVO '
+                        'se reinicia automáticamente para tomar el nuevo seteo al instante.',
+                      ),
+                    ),
+                  ],
+                ),
+                ExpansionTile(
+                  title: Text('4) Qué mirar en operación'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: Text(
+                        'Revisa: precio de mercado vs umbral, órdenes SELL LIMIT ancla, '
+                        'quote disponible para compra, base del símbolo para ventas, '
+                        'y errores de filtros (PRICE_FILTER / NOTIONAL).',
+                      ),
+                    ),
+                  ],
+                ),
+                ExpansionTile(
+                  title: Text('5) Riesgos y buenas prácticas'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      child: Text(
+                        'Validar decimales del símbolo, notional mínimo y saldo suficiente antes de correr. '
+                        'Mantener sync de timestamp y monitorear logs crudos de Binance por instancia.',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSpotAccountPage() async {
+    final symbols = _hubBots
+        .map((b) => (b['symbol'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            SpotAccountPage(engineBase: _engineBase, activeSymbols: symbols),
       ),
     );
   }
@@ -811,6 +1014,16 @@ class _BotControlPageState extends State<BotControlPage> {
         title: const Text('PecunatorCore · Dorothy Hub'),
         actions: [
           IconButton(
+            onPressed: _loading ? null : _openDorothyGuide,
+            tooltip: 'Instructivo Dorothy7.0',
+            icon: const Icon(Icons.menu_book, size: 18),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _openSpotAccountPage,
+            tooltip: 'Resumen cuenta Spot',
+            icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+          ),
+          IconButton(
             onPressed: _loading ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
@@ -823,7 +1036,10 @@ class _BotControlPageState extends State<BotControlPage> {
           IconButton(
             onPressed: () => widget.onThemeChanged(!widget.darkMode),
             tooltip: widget.darkMode ? 'Modo día' : 'Modo noche',
-            icon: Icon(widget.darkMode ? Icons.light_mode : Icons.dark_mode, size: 18),
+            icon: Icon(
+              widget.darkMode ? Icons.light_mode : Icons.dark_mode,
+              size: 18,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 4),
@@ -863,7 +1079,10 @@ class _BotControlPageState extends State<BotControlPage> {
             if (_lastError != '-')
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text(_lastError, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                child: Text(
+                  _lastError,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
               ),
             Card(
               child: Padding(
@@ -872,23 +1091,68 @@ class _BotControlPageState extends State<BotControlPage> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _field(_tagCtrl, 'tag', width: 150),
+                      _field(
+                        _tagCtrl,
+                        'tag',
+                        width: 150,
+                        tooltip: _settingTooltip('tag'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_symbolCtrl, 'symbol', width: 110),
+                      _field(
+                        _symbolCtrl,
+                        'symbol',
+                        width: 110,
+                        tooltip: _settingTooltip('symbol'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_loopCtrl, 'loop', width: 80),
+                      _field(
+                        _loopCtrl,
+                        'loop',
+                        width: 80,
+                        tooltip: _settingTooltip('loop'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_quoteCtrl, 'qty', width: 80),
+                      _field(
+                        _quoteCtrl,
+                        'qty',
+                        width: 80,
+                        tooltip: _settingTooltip('qty'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_profitCtrl, 'profit', width: 90),
+                      _field(
+                        _profitCtrl,
+                        'profit',
+                        width: 90,
+                        tooltip: _settingTooltip('profit'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_dropCtrl, 'drop', width: 90),
+                      _field(
+                        _dropCtrl,
+                        'drop',
+                        width: 90,
+                        tooltip: _settingTooltip('drop'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_qtyDecCtrl, 'qDec', width: 70),
+                      _field(
+                        _qtyDecCtrl,
+                        'qDec',
+                        width: 70,
+                        tooltip: _settingTooltip('qDec'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_priceDecCtrl, 'pDec', width: 70),
+                      _field(
+                        _priceDecCtrl,
+                        'pDec',
+                        width: 70,
+                        tooltip: _settingTooltip('pDec'),
+                      ),
                       const SizedBox(width: 6),
-                      _field(_noteCtrl, 'note', width: 110, tooltip: 'Nota breve del seteo (max 20)'),
+                      _field(
+                        _noteCtrl,
+                        'note',
+                        width: 110,
+                        tooltip: _settingTooltip('note'),
+                      ),
                       const SizedBox(width: 10),
                       IconButton(
                         tooltip: 'Seteos usados anteriormente',
@@ -916,7 +1180,9 @@ class _BotControlPageState extends State<BotControlPage> {
                   padding: const EdgeInsets.all(14),
                   child: Text(
                     'Sin instancias Dorothy. Crea la primera instancia en la fila superior.',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -924,7 +1190,10 @@ class _BotControlPageState extends State<BotControlPage> {
               final botId = (b['bot_id'] ?? '').toString();
               final running = b['running'] == true;
               final draft = _draftFor(b);
-              final logController = _logScrollByBot.putIfAbsent(botId, () => ScrollController());
+              final logController = _logScrollByBot.putIfAbsent(
+                botId,
+                () => ScrollController(),
+              );
               final logs = _hubLogsByBot[botId] ?? '(expande para cargar logs)';
               return Card(
                 child: ExpansionTile(
@@ -941,27 +1210,63 @@ class _BotControlPageState extends State<BotControlPage> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        Icon(Icons.circle, size: 11, color: running ? Colors.greenAccent : Colors.redAccent),
+                        Icon(
+                          Icons.circle,
+                          size: 11,
+                          color: running
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                        ),
                         const SizedBox(width: 6),
                         Text((b['tag'] ?? '-').toString()),
                         const SizedBox(width: 12),
-                        Text((b['symbol'] ?? '-').toString(), style: const TextStyle(fontFamily: 'monospace')),
+                        Text(
+                          (b['symbol'] ?? '-').toString(),
+                          style: const TextStyle(fontFamily: 'monospace'),
+                        ),
                         const SizedBox(width: 10),
-                        Text('id $botId', style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+                        Text(
+                          'id $botId',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Text('loop ${(b['loop_interval_sec'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'loop ${(b['loop_interval_sec'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('qty ${(b['quote_order_qty'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'qty ${(b['quote_order_qty'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('p ${(b['profit_factor'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'p ${(b['profit_factor'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('d ${(b['margin_drop_factor'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'd ${(b['margin_drop_factor'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('qDec ${(b['qty_decimals'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'qDec ${(b['qty_decimals'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('pDec ${(b['price_decimals'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'pDec ${(b['price_decimals'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 8),
-                        Text('note ${(b['note'] ?? '-')}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          'note ${(b['note'] ?? '-')}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -971,17 +1276,20 @@ class _BotControlPageState extends State<BotControlPage> {
                       SizedBox(
                         height: 30,
                         child: Tooltip(
-                          message: 'Activar o detener ciclo perpetuo de la instancia',
+                          message:
+                              'Activar o detener ciclo perpetuo de la instancia',
                           child: TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: running ? Colors.greenAccent : Colors.orangeAccent,
-                          ),
-                          onPressed: _loading
-                              ? null
-                              : () async {
+                            style: TextButton.styleFrom(
+                              foregroundColor: running
+                                  ? Colors.greenAccent
+                                  : Colors.orangeAccent,
+                            ),
+                            onPressed: _loading
+                                ? null
+                                : () async {
                                     await _toggleBotLoop(botId, running);
                                   },
-                          child: Text(running ? 'ACTIVO' : 'INACTIVO'),
+                            child: Text(running ? 'ACTIVO' : 'INACTIVO'),
                           ),
                         ),
                       ),
@@ -990,8 +1298,8 @@ class _BotControlPageState extends State<BotControlPage> {
                         onPressed: _loading
                             ? null
                             : () async {
-                                  await _confirmDeleteBot(botId);
-                                },
+                                await _confirmDeleteBot(botId);
+                              },
                         icon: const Icon(Icons.delete_outline, size: 18),
                       ),
                     ],
@@ -1003,30 +1311,96 @@ class _BotControlPageState extends State<BotControlPage> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _draftField(botId, draft, 'tag', label: 'tag', width: 140),
+                            _draftField(
+                              botId,
+                              draft,
+                              'tag',
+                              label: 'tag',
+                              width: 140,
+                              tooltip: _settingTooltip('tag'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'symbol', label: 'symbol', width: 100),
+                            _draftField(
+                              botId,
+                              draft,
+                              'symbol',
+                              label: 'symbol',
+                              width: 100,
+                              tooltip: _settingTooltip('symbol'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'loop', label: 'loop', width: 75),
+                            _draftField(
+                              botId,
+                              draft,
+                              'loop',
+                              label: 'loop',
+                              width: 75,
+                              tooltip: _settingTooltip('loop'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'qty', label: 'qty', width: 75),
+                            _draftField(
+                              botId,
+                              draft,
+                              'qty',
+                              label: 'qty',
+                              width: 75,
+                              tooltip: _settingTooltip('qty'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'profit', label: 'profit', width: 85),
+                            _draftField(
+                              botId,
+                              draft,
+                              'profit',
+                              label: 'profit',
+                              width: 85,
+                              tooltip: _settingTooltip('profit'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'drop', label: 'drop', width: 85),
+                            _draftField(
+                              botId,
+                              draft,
+                              'drop',
+                              label: 'drop',
+                              width: 85,
+                              tooltip: _settingTooltip('drop'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'qDec', label: 'qDec', width: 70),
+                            _draftField(
+                              botId,
+                              draft,
+                              'qDec',
+                              label: 'qDec',
+                              width: 70,
+                              tooltip: _settingTooltip('qDec'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'pDec', label: 'pDec', width: 70),
+                            _draftField(
+                              botId,
+                              draft,
+                              'pDec',
+                              label: 'pDec',
+                              width: 70,
+                              tooltip: _settingTooltip('pDec'),
+                            ),
                             const SizedBox(width: 6),
-                            _draftField(botId, draft, 'note', label: 'note', width: 110),
+                            _draftField(
+                              botId,
+                              draft,
+                              'note',
+                              label: 'note',
+                              width: 110,
+                              tooltip: _settingTooltip('note'),
+                            ),
                             const SizedBox(width: 8),
                             Tooltip(
-                              message: 'Guardar cambios de seteo para esta instancia',
+                              message:
+                                  'Guardar y aplicar seteo ahora (reinicia si estaba activo)',
                               child: FilledButton.tonalIcon(
-                                onPressed: _loading ? null : () => _saveBotConfig(botId),
+                                onPressed: _loading
+                                    ? null
+                                    : () => _saveBotConfig(botId),
                                 icon: const Icon(Icons.save, size: 16),
-                                label: const Text('Guardar seteo'),
+                                label: const Text('Guardar y aplicar'),
                               ),
                             ),
                           ],
@@ -1039,11 +1413,16 @@ class _BotControlPageState extends State<BotControlPage> {
                         children: [
                           Text(
                             'Reinicio ciclo en: ${_cycleCountdown(b)}',
-                            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
                           ),
                           const Spacer(),
                           TextButton(
-                            onPressed: _loading ? null : () => _openSqliteRecordsList(botId),
+                            onPressed: _loading
+                                ? null
+                                : () => _openSqliteRecordsList(botId),
                             child: const Text('Ver registros DB'),
                           ),
                         ],
@@ -1051,18 +1430,26 @@ class _BotControlPageState extends State<BotControlPage> {
                     ),
                     Container(
                       width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 80, maxHeight: 240),
+                      constraints: const BoxConstraints(
+                        minHeight: 80,
+                        maxHeight: 240,
+                      ),
                       margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Theme.of(context).dividerColor),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: SingleChildScrollView(
                         controller: logController,
                         child: SelectableText(
                           logs,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -1070,6 +1457,430 @@ class _BotControlPageState extends State<BotControlPage> {
                 ),
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SpotAccountPage extends StatefulWidget {
+  const SpotAccountPage({
+    super.key,
+    required this.engineBase,
+    required this.activeSymbols,
+  });
+
+  final String engineBase;
+  final List<String> activeSymbols;
+
+  @override
+  State<SpotAccountPage> createState() => _SpotAccountPageState();
+}
+
+class _SpotAccountPageState extends State<SpotAccountPage> {
+  bool _loading = false;
+  String _error = '-';
+  String _fetchedAt = '-';
+  Map<String, dynamic> _summary = <String, dynamic>{};
+  List<Map<String, dynamic>> _spot = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _futures = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _earn = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _external = <Map<String, dynamic>>[];
+  List<String> _warnings = <String>[];
+  final _baseAssetCtrl = TextEditingController();
+
+  EngineApi get _api => EngineApi(widget.engineBase);
+
+  @override
+  void initState() {
+    super.initState();
+    _baseAssetCtrl.text = _inferBaseAsset(widget.activeSymbols);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _baseAssetCtrl.dispose();
+    super.dispose();
+  }
+
+  String _inferBaseAsset(List<String> symbols) {
+    if (symbols.isEmpty) return 'USDT';
+    final s = symbols.first.trim().toUpperCase();
+    const quotes = [
+      'USDT',
+      'FDUSD',
+      'USDC',
+      'BUSD',
+      'BTC',
+      'ETH',
+      'BNB',
+      'TRY',
+      'EUR',
+    ];
+    for (final q in quotes) {
+      if (s.endsWith(q) && s.length > q.length) return q;
+    }
+    return 'USDT';
+  }
+
+  Future<void> _refresh({String? forceBaseAsset}) async {
+    if (_loading) return;
+    final base = (forceBaseAsset ?? _baseAssetCtrl.text).trim().toUpperCase();
+    if (base.isEmpty) {
+      setState(() => _error = 'Base asset requerido (ej. USDT)');
+      return;
+    }
+    _baseAssetCtrl.text = base;
+    setState(() {
+      _loading = true;
+      _error = '-';
+    });
+    try {
+      await _api.gatewayStart();
+      final snapFuture = _api.gatewayFetchAccount();
+      final walletsFuture = _api.accountWallets(baseAsset: base);
+      final snap = await snapFuture;
+      final wallets = await walletsFuture;
+      final summary = Map<String, dynamic>.from(
+        (snap['account_summary'] as Map?) ?? const {},
+      );
+      final spot = ((wallets['spot'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final futures = ((wallets['futures'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final earn = ((wallets['stake_earn'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final external = ((wallets['external'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final warnings = ((wallets['warnings'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList();
+      setState(() {
+        _summary = summary;
+        _spot = spot;
+        _futures = futures;
+        _earn = earn;
+        _external = external;
+        _warnings = warnings;
+        _fetchedAt = DateTime.now().toLocal().toString();
+      });
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Widget _kpi(String label, String value) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _walletColumn(
+    String title,
+    List<Map<String, dynamic>> rows, {
+    required String primaryKey,
+    String? secondaryKey,
+  }) {
+    final base = _baseAssetCtrl.text.trim().toUpperCase();
+    final highlighted = rows.where((r) {
+      final asset = (r['asset'] ?? '').toString().toUpperCase();
+      return asset == base || asset == 'LD$base';
+    }).toList();
+    final ordered = [
+      ...highlighted,
+      ...rows.where((r) => !highlighted.contains(r)),
+    ];
+    final list = ordered.take(120).toList();
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$title (${rows.length})',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              if (list.isEmpty)
+                const Text('(vacío)', style: TextStyle(fontSize: 12))
+              else
+                SizedBox(
+                  height: 350,
+                  child: ListView.separated(
+                    itemCount: list.length,
+                    separatorBuilder: (_, separatorIndex) =>
+                        const Divider(height: 8),
+                    itemBuilder: (ctx, i) {
+                      final row = list[i];
+                      final asset = (row['asset'] ?? '').toString();
+                      final primary = (row[primaryKey] ?? '0').toString();
+                      final secondary = secondaryKey == null
+                          ? null
+                          : (row[secondaryKey] ?? '0').toString();
+                      final isBase =
+                          asset.toUpperCase() == base ||
+                          asset.toUpperCase() == 'LD$base';
+                      return Row(
+                        children: [
+                          SizedBox(
+                            width: 88,
+                            child: Text(
+                              asset,
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                color: isBase ? Colors.amberAccent : null,
+                                fontWeight: isBase
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              secondary == null
+                                  ? '$primaryKey $primary'
+                                  : '$primaryKey $primary · $secondaryKey $secondary',
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _baseTotalsCard() {
+    final base = _baseAssetCtrl.text.trim().toUpperCase();
+    String pick(
+      List<Map<String, dynamic>> rows,
+      String key, {
+      bool withLd = false,
+    }) {
+      final target = withLd ? 'LD$base' : base;
+      final row = rows.cast<Map<String, dynamic>?>().firstWhere(
+        (r) => (r?['asset'] ?? '').toString().toUpperCase() == target,
+        orElse: () => null,
+      );
+      return (row?[key] ?? '0').toString();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            _kpi('$base Spot', pick(_spot, 'total')),
+            _kpi('$base Futures', pick(_futures, 'total')),
+            _kpi('LD$base Earn', pick(_earn, 'total', withLd: true)),
+            _kpi('$base Ext', pick(_external, 'total')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _warningsBlock() {
+    if (_warnings.isEmpty) return const SizedBox.shrink();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Observaciones de lectura',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            ..._warnings.map(
+              (w) => Text('• $w', style: const TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _baseAssetBar() {
+    final symbols = widget.activeSymbols.join(', ');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            const Text(
+              'Activo base Dorothy:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 110,
+              child: TextField(
+                controller: _baseAssetCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: _loading
+                  ? null
+                  : () => _refresh(forceBaseAsset: _baseAssetCtrl.text),
+              child: const Text('Aplicar'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Símbolos activos Dorothy: ${symbols.isEmpty ? '-' : symbols}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cuenta Spot · Binance'),
+        actions: [
+          IconButton(
+            onPressed: _loading
+                ? null
+                : () => _refresh(forceBaseAsset: _baseAssetCtrl.text),
+            tooltip: 'Refrescar resumen Spot',
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_loading) const LinearProgressIndicator(),
+            if (_error != '-')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _error,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+              ),
+            _baseAssetBar(),
+            _baseTotalsCard(),
+            _warningsBlock(),
+            Text(
+              'Última lectura: $_fetchedAt',
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _kpi(
+                  'Account type',
+                  (_summary['accountType'] ?? '-').toString(),
+                ),
+                _kpi('Can trade', (_summary['canTrade'] ?? '-').toString()),
+                _kpi(
+                  'Can withdraw',
+                  (_summary['canWithdraw'] ?? '-').toString(),
+                ),
+                _kpi('Can deposit', (_summary['canDeposit'] ?? '-').toString()),
+              ],
+            ),
+            Row(
+              children: [
+                _kpi(
+                  'Maker fee',
+                  (_summary['makerCommission'] ?? '-').toString(),
+                ),
+                _kpi(
+                  'Taker fee',
+                  (_summary['takerCommission'] ?? '-').toString(),
+                ),
+                _kpi(
+                  'Buyer fee',
+                  (_summary['buyerCommission'] ?? '-').toString(),
+                ),
+                _kpi(
+                  'Seller fee',
+                  (_summary['sellerCommission'] ?? '-').toString(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _walletColumn(
+                  'Spot',
+                  _spot,
+                  primaryKey: 'free',
+                  secondaryKey: 'locked',
+                ),
+                _walletColumn(
+                  'Futures',
+                  _futures,
+                  primaryKey: 'wallet_balance',
+                  secondaryKey: 'cross_wallet_balance',
+                ),
+                _walletColumn(
+                  'Stake/Earn',
+                  _earn,
+                  primaryKey: 'free',
+                  secondaryKey: 'locked',
+                ),
+                _walletColumn(
+                  'Ext',
+                  _external,
+                  primaryKey: 'free',
+                  secondaryKey: 'locked',
+                ),
+              ],
+            ),
           ],
         ),
       ),

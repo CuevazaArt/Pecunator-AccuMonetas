@@ -1,17 +1,29 @@
-# pecunator_desktop
+# Pecunator Desktop Shell
 
-Pecunator desktop shell
+Dedicated Flutter desktop UI for `PecunatorCore`.
 
-## Getting Started
+## Runtime model
 
-This project is a starting point for a Flutter application.
+- This app talks to the local Python engine over HTTP loopback (`http://127.0.0.1:8765` by default).
+- No web UI and no browser dashboard are used.
+- API keys are handled by the Python vault layer, not stored in Dart sources.
 
-A few resources to get you started if this is your first Flutter project:
+## Run (Windows)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+1. Start engine API from repo root:
+   - `python main.py`
+2. Start Flutter desktop app:
+   - `flutter run -d windows`
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Build (Windows Release)
+
+- `flutter build windows`
+- Run binary:
+  - `build/windows/x64/runner/Release/pecunator_desktop.exe`
+
+## Current feature focus
+
+- Multi-instance Dorothy hub control
+- Active credential visibility and vault management modal
+- Per-instance raw Binance logs (SQLite-backed)
+- Timestamp sync and runtime status controls

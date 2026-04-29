@@ -4,7 +4,8 @@ Human coordination in Spanish (`README` policy); technical identifiers and code 
 
 ## Current state
 
-- Python package `runtime/`: FastAPI HTTP API under `runtime/api/` (default `127.0.0.1:8765`), plus `BinanceGateway`, vault, and `AppContext` for Flutter.
+- Python package `runtime/`: FastAPI HTTP API under `runtime/api/` (default `127.0.0.1:8765`), plus `BinanceGateway` (`python-binance`), encrypted vault, `AppContext`, and Dorothy multi-instance hub.
+- Flutter desktop under `desktop_shell/` is the primary and only UI path.
 
 ## Target layout
 
@@ -49,8 +50,8 @@ flowchart LR
 |-------|--------|
 | 0 | Web stack removed; Flutter + engine API is the plan. |
 | 1 | Flutter SDK; `scripts/init_flutter_desktop.ps1` → `desktop_shell/`. |
-| 2 | ✅ FastAPI facade in `runtime/api/`; next: wire Flutter `http` client. |
-| 3 | Implement Flutter screens against the API. |
+| 2 | ✅ FastAPI facade in `runtime/api/` wired with Flutter `http` client. |
+| 3 | ✅ Flutter screens integrated for vault, hub instances, and logs. |
 
 ## Renaming `runtime` → `engine`
 
