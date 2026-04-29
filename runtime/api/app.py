@@ -30,6 +30,9 @@ from runtime.api.schemas import (
     TimeSyncBody,
     TimeSyncOut,
     VaultSessionBody,
+    VaultCredentialDeleteBody,
+    VaultCredentialLabelBody,
+    VaultCredentialUpsertBody,
     VaultStatusOut,
 )
 from runtime.app import AppContext
@@ -114,18 +117,90 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/vault/credentials")
     async def vault_credentials(ctx: AppContext = Depends(deps.get_ctx)) -> list[dict[str, str]]:
         return [
-            {"id": p["id"], "public_key": p["public_key"], "public_key_short": _mask_pk(p["public_key"])}
+            {
+                "id": p["id"],
+                "public_key": p["public_key"],
+                "public_key_short": _mask_pk(p["public_key"]),
+                "label": p.get("label", ""),
+            }
             for p in ctx.config.list_public_credentials()
         ]
 
+    @app.post("/api/v1/vault/credentials")
+    async def vault_credentials_add(
+        body: VaultCredentialUpsertBody,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        mp = _resolve_master_for_vault(ctx, body.master_password)
+        try:
+            cid, updated = ctx.config.add_credential(
+                body.api_key,
+                body.api_secret,
+                mp,
+                label=body.label or "",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from None
+        pubs = ctx.config.list_public_credentials()
+        row = next((p for p in pubs if p.get("id") == cid), None)
+        return {
+            "id": cid,
+            "updated_existing": bool(updated),
+            "label": (row or {}).get("label", body.label or ""),
+        }
+
+    @app.patch("/api/v1/vault/credentials/{credential_id}")
+    async def vault_credentials_update_label(
+        credential_id: str,
+        body: VaultCredentialLabelBody,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        mp = _resolve_master_for_vault(ctx, body.master_password)
+        ok = ctx.config.update_credential_label(credential_id, body.label or "", mp)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        return {"updated": True}
+
+    @app.post("/api/v1/vault/credentials/{credential_id}/activate")
+    async def vault_credentials_activate(
+        credential_id: str,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        pubs = ctx.config.list_public_credentials()
+        exists = any(str(p.get("id")) == credential_id for p in pubs)
+        if not exists:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        ctx.config.set_active_credential_id(credential_id)
+        return {"active": True, "active_credential_id": credential_id}
+
+    @app.post("/api/v1/vault/credentials/{credential_id}/delete")
+    async def vault_credentials_delete(
+        credential_id: str,
+        body: VaultCredentialDeleteBody = VaultCredentialDeleteBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        mp = _resolve_master_for_vault(ctx, body.master_password)
+        try:
+            ok = ctx.config.remove_credential(credential_id, mp)
+        except ValueError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from None
+        if not ok:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        return {"deleted": True}
+
     @app.get("/api/v1/credentials/active", response_model=ActiveCredentialOut)
     async def active_credential(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
+        active_id = ctx.config.get_active_credential_id()
+        pubs = ctx.config.list_public_credentials()
+        active_pub = next((p for p in pubs if p.get("id") == active_id), None)
+        active_label = (active_pub or {}).get("label", "") or None
         if ctx.active_api_key_hint:
             return ActiveCredentialOut(
                 source=ctx.active_api_key_source or "runtime",
                 public_key_hint=ctx.active_api_key_hint,
                 public_key_last4=ctx.active_api_key_last4 or _pk_last4(ctx.active_api_key_hint),
-                active_credential_id=ctx.config.get_active_credential_id(),
+                active_credential_id=active_id,
+                label=active_label,
             )
         env_pair = binance_credentials_from_env()
         if env_pair:
@@ -133,7 +208,8 @@ def create_app() -> FastAPI:
                 source="env",
                 public_key_hint=_mask_pk(env_pair[0]),
                 public_key_last4=_pk_last4(env_pair[0]),
-                active_credential_id=ctx.config.get_active_credential_id(),
+                active_credential_id=active_id,
+                label=active_label,
             )
         mp = (ctx.cached_master_password or "").strip()
         if mp:
@@ -146,13 +222,15 @@ def create_app() -> FastAPI:
                     source="vault",
                     public_key_hint=_mask_pk(pair[0]),
                     public_key_last4=_pk_last4(pair[0]),
-                    active_credential_id=ctx.config.get_active_credential_id(),
+                    active_credential_id=active_id,
+                    label=active_label,
                 )
         return ActiveCredentialOut(
             source="none",
             public_key_hint="-",
             public_key_last4="-",
-            active_credential_id=ctx.config.get_active_credential_id(),
+            active_credential_id=active_id,
+            label=active_label,
         )
 
     @app.get("/api/v1/bot/presets")
@@ -189,6 +267,7 @@ def create_app() -> FastAPI:
             margin_drop_factor=body.margin_drop_factor,
             qty_decimals=body.qty_decimals,
             price_decimals=body.price_decimals,
+            note=body.note,
             simulated=body.simulated,
             trading_enabled=body.trading_enabled,
         )
@@ -216,6 +295,7 @@ def create_app() -> FastAPI:
                 margin_drop_factor=body.margin_drop_factor,
                 qty_decimals=body.qty_decimals,
                 price_decimals=body.price_decimals,
+                note=body.note,
                 simulated=body.simulated,
                 trading_enabled=body.trading_enabled,
             )
@@ -237,6 +317,7 @@ def create_app() -> FastAPI:
                 margin_drop_factor=body.margin_drop_factor,
                 qty_decimals=body.qty_decimals,
                 price_decimals=body.price_decimals,
+                note=body.note,
                 simulated=body.simulated,
                 trading_enabled=body.trading_enabled,
             )
@@ -481,6 +562,19 @@ def _resolve_pair(
         if remember_master_password_enabled():
             save_remembered_master(ctx.config.data_dir, mp)
     return pair
+
+
+def _resolve_master_for_vault(ctx: AppContext, master_password: str | None) -> str:
+    mp = (master_password or "").strip() or (ctx.cached_master_password or "").strip()
+    if not mp:
+        raise HTTPException(
+            status_code=400,
+            detail="Master password required (no cached vault session)",
+        )
+    ctx.cached_master_password = mp
+    if remember_master_password_enabled():
+        save_remembered_master(ctx.config.data_dir, mp)
+    return mp
 
 
 async def _execute_terminal_command(

@@ -40,6 +40,7 @@ class DorothyConfig:
     margin_drop_factor: Decimal = Decimal("0.004")
     qty_decimals: int = 8
     price_decimals: int = 4
+    note: str = ""
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -51,6 +52,7 @@ class DorothyConfig:
         self.margin_drop_factor = max(_dec(self.margin_drop_factor), Decimal("0"))
         self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
         self.price_decimals = max(0, min(int(self.price_decimals), 18))
+        self.note = (self.note or "").strip()[:20]
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -62,10 +64,15 @@ class DorothyConfig:
 
 
 class DorothyRunner:
-    def __init__(self, log: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        log: Callable[[str], None],
+        event_log: Optional[Callable[[str, str, Optional[dict[str, Any]]], None]] = None,
+    ) -> None:
         self.config = DorothyConfig()
         self.config.normalize()
         self._log = log
+        self._event_log = event_log
         self._task: Optional[asyncio.Task[Any]] = None
         self._stop = asyncio.Event()
         self._last_report: dict[str, Any] = {}
@@ -74,6 +81,20 @@ class DorothyRunner:
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
         self._client: Optional[Client] = None
+
+    def _emit(
+        self,
+        level: str,
+        message: str,
+        payload: Optional[dict[str, Any]] = None,
+    ) -> None:
+        if self._event_log is not None:
+            try:
+                self._event_log(level, message, payload)
+                return
+            except Exception:
+                pass
+        self._log(message)
 
     @property
     def running(self) -> bool:
@@ -126,6 +147,11 @@ class DorothyRunner:
         open_orders = await self._to_thread(lambda: client.get_open_orders(symbol=symbol))
         if not isinstance(open_orders, list):
             open_orders = []
+        self._emit(
+            "INFO",
+            "binance:get_open_orders",
+            {"symbol": symbol, "response": open_orders},
+        )
         sell_limit = [
             o
             for o in open_orders
@@ -136,6 +162,11 @@ class DorothyRunner:
             lowest_sell = min(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
 
         ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
+        self._emit(
+            "INFO",
+            "binance:get_symbol_ticker",
+            {"symbol": symbol, "response": ticker},
+        )
         market_price = _dec(ticker.get("price", "0"), "0")
         should_buy = False
         threshold = None
@@ -173,6 +204,7 @@ class DorothyRunner:
         if c.simulated:
             report["execution"] = "SIMULATED"
             report["message"] = "Dry run only; no orders sent."
+            self._emit("INFO", "bot:decision", {"report": report})
             return report
 
         buy = await self._to_thread(
@@ -182,6 +214,11 @@ class DorothyRunner:
                 type=client.ORDER_TYPE_MARKET,
                 quoteOrderQty=str(c.quote_order_qty),
             )
+        )
+        self._emit(
+            "INFO",
+            "binance:create_order_buy_market",
+            {"symbol": symbol, "response": buy},
         )
         fills = buy.get("fills") or []
         if fills:
@@ -203,12 +240,18 @@ class DorothyRunner:
                 price=str(sell_price),
             )
         )
+        self._emit(
+            "INFO",
+            "binance:create_order_sell_limit",
+            {"symbol": symbol, "response": sell},
+        )
         report["execution"] = "LIVE"
         report["buy_order_id"] = buy.get("orderId")
         report["sell_order_id"] = sell.get("orderId")
         report["filled_qty"] = str(qty)
         report["filled_buy_price"] = str(buy_price)
         report["placed_sell_price"] = str(sell_price)
+        self._emit("INFO", "bot:decision", {"report": report})
         return report
 
     async def sync_time(self) -> dict[str, Any]:
@@ -221,7 +264,11 @@ class DorothyRunner:
             client.timestamp_offset = offset_ms
         except Exception:
             pass
-        self._log(f"bot:time_sync offset_ms={offset_ms}")
+        self._emit(
+            "INFO",
+            f"bot:time_sync offset_ms={offset_ms}",
+            {"server_time": data, "offset_ms": offset_ms},
+        )
         return {
             "local_time_ms": local_ms,
             "server_time_ms": server_ms,
@@ -236,12 +283,16 @@ class DorothyRunner:
                 self._last_report = rep
                 self._last_error = None
                 self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
-                self._log(f"bot:{rep.get('decision')} symbol={rep.get('symbol')} simulated={rep.get('simulated')}")
+                self._emit(
+                    "INFO",
+                    f"bot:{rep.get('decision')} symbol={rep.get('symbol')} simulated={rep.get('simulated')}",
+                    {"report": rep},
+                )
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 self._last_error = sanitize_log_message(str(e))
-                self._log(f"bot:error {self._last_error}")
+                self._emit("ERROR", f"bot:error {self._last_error}", {"error": self._last_error})
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=float(self.config.loop_interval_sec))
             except asyncio.TimeoutError:

@@ -119,8 +119,9 @@ class ConfigManager:
                 continue
             cid = str(it.get("id", "")).strip()
             ak = str(it.get("api_key", "")).strip()
+            label = str(it.get("label", "")).strip()
             if cid and ak:
-                rows.append({"id": cid, "public_key": ak})
+                rows.append({"id": cid, "public_key": ak, "label": label})
         tmp = self._manifest_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(rows, indent=0), encoding="utf-8")
         tmp.replace(self._manifest_path)
@@ -139,7 +140,13 @@ class ConfigManager:
         out: List[dict[str, str]] = []
         for row in raw:
             if isinstance(row, dict) and row.get("id") and row.get("public_key"):
-                out.append({"id": str(row["id"]), "public_key": str(row["public_key"])})
+                out.append(
+                    {
+                        "id": str(row["id"]),
+                        "public_key": str(row["public_key"]),
+                        "label": str(row.get("label", "")),
+                    }
+                )
         return out
 
     def get_active_credential_id(self) -> Optional[str]:
@@ -167,7 +174,13 @@ class ConfigManager:
                 return it
         return None
 
-    def add_credential(self, api_key: str, api_secret: str, master_password: str) -> Tuple[str, bool]:
+    def add_credential(
+        self,
+        api_key: str,
+        api_secret: str,
+        master_password: str,
+        label: str = "",
+    ) -> Tuple[str, bool]:
         """
         Add or update a credential under the master password.
         If the same API key (public) already exists, only the secret is updated.
@@ -188,12 +201,15 @@ class ConfigManager:
 
         ak_n = api_key.strip()
         sk_n = api_secret.strip()
+        label_n = label.strip()
         for it in items:
             if not isinstance(it, dict):
                 continue
             prev = str(it.get("api_key", "")).strip()
             if prev == ak_n:
                 it["api_secret"] = sk_n
+                if label_n:
+                    it["label"] = label_n
                 payload["v"] = 2
                 payload["items"] = items
                 cid = str(it.get("id", "")).strip()
@@ -202,12 +218,32 @@ class ConfigManager:
                     self.set_active_credential_id(cid)
                     return cid, True
         cid = str(uuid.uuid4())
-        items.append({"id": cid, "api_key": ak_n, "api_secret": sk_n})
+        items.append({"id": cid, "api_key": ak_n, "api_secret": sk_n, "label": label_n})
         payload["v"] = 2
         payload["items"] = items
         self._encrypt_and_write(payload, master_password)
         self.set_active_credential_id(cid)
         return cid, False
+
+    def update_credential_label(self, credential_id: str, label: str, master_password: str) -> bool:
+        vault_existed = self.exists() and self._salt_path.is_file()
+        payload = self._decrypt_payload(master_password)
+        if vault_existed and payload is None:
+            raise ValueError(
+                "Cannot unlock vault: wrong master password or unreadable credential file.",
+            )
+        if payload is None:
+            return False
+        items = payload.get("items")
+        if not isinstance(items, list):
+            return False
+        target = self._find_item(items, credential_id)
+        if target is None:
+            return False
+        target["label"] = (label or "").strip()
+        payload["items"] = items
+        self._encrypt_and_write(payload, master_password)
+        return True
 
     def remove_credential(self, credential_id: str, master_password: str) -> bool:
         vault_existed = self.exists() and self._salt_path.is_file()

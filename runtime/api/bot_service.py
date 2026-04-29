@@ -98,6 +98,17 @@ class BotService:
 
         return _sink
 
+    def _runner_event_sink(
+        self,
+        bot_id: str,
+    ) -> Callable[[str, str, Optional[dict[str, Any]]], None]:
+        def _sink(level: str, msg: str, payload: Optional[dict[str, Any]] = None) -> None:
+            rec = self._bots.get(bot_id)
+            tag = rec.tag if rec is not None else "-"
+            self._write_log(bot_id, tag, level or "INFO", msg, payload)
+
+        return _sink
+
     def _record_payload(self, rec: _BotRecord) -> dict[str, Any]:
         cfg = rec.runner.config
         return {
@@ -115,6 +126,7 @@ class BotService:
             "margin_drop_factor": str(cfg.margin_drop_factor),
             "qty_decimals": cfg.qty_decimals,
             "price_decimals": cfg.price_decimals,
+            "note": cfg.note,
             "last_cycle_ts": rec.runner.last_cycle_ts,
             "last_error": rec.runner.last_error,
             "last_report": rec.runner.last_report,
@@ -143,6 +155,7 @@ class BotService:
         margin_drop_factor: str = "0.004",
         qty_decimals: int = 8,
         price_decimals: int = 4,
+        note: str = "",
         simulated: bool = True,
         trading_enabled: bool = False,
     ) -> dict[str, Any]:
@@ -158,11 +171,15 @@ class BotService:
             margin_drop_factor=Decimal(str(margin_drop_factor)),
             qty_decimals=qty_decimals,
             price_decimals=price_decimals,
+            note=note,
             simulated=simulated,
             trading_enabled=trading_enabled,
         )
         cfg.normalize()
-        runner = DorothyRunner(self._runner_log_sink(bot_id_norm))
+        runner = DorothyRunner(
+            self._runner_log_sink(bot_id_norm),
+            self._runner_event_sink(bot_id_norm),
+        )
         runner.apply_config(cfg)
         rec = _BotRecord(
             bot_id=bot_id_norm,
@@ -199,6 +216,7 @@ class BotService:
         margin_drop_factor: Optional[str] = None,
         qty_decimals: Optional[int] = None,
         price_decimals: Optional[int] = None,
+        note: Optional[str] = None,
         simulated: Optional[bool] = None,
         trading_enabled: Optional[bool] = None,
     ) -> dict[str, Any]:
@@ -220,6 +238,8 @@ class BotService:
             cfg.qty_decimals = qty_decimals
         if price_decimals is not None:
             cfg.price_decimals = price_decimals
+        if note is not None:
+            cfg.note = note
         if simulated is not None:
             cfg.simulated = simulated
         if trading_enabled is not None:
@@ -332,6 +352,7 @@ class BotService:
         margin_drop_factor: str,
         qty_decimals: int,
         price_decimals: int,
+        note: str,
         simulated: bool,
         trading_enabled: bool,
     ) -> DorothyConfig:
@@ -345,6 +366,7 @@ class BotService:
             margin_drop_factor=margin_drop_factor,
             qty_decimals=qty_decimals,
             price_decimals=price_decimals,
+            note=note,
             simulated=simulated,
             trading_enabled=trading_enabled,
         )
@@ -357,6 +379,7 @@ class BotService:
             margin_drop_factor=Decimal(payload["margin_drop_factor"]),
             qty_decimals=payload["qty_decimals"],
             price_decimals=payload["price_decimals"],
+            note=payload.get("note", ""),
             simulated=payload["simulated"],
             trading_enabled=payload["trading_enabled"],
         )

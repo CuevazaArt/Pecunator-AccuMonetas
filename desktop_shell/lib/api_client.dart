@@ -34,6 +34,70 @@ class EngineApi {
     return _jsonMap(r.body);
   }
 
+  Future<Map<String, dynamic>> vaultCredentials() async {
+    final r = await http.get(_u('/api/v1/vault/credentials'));
+    _ensure(r);
+    final obj = jsonDecode(r.body);
+    if (obj is List) return {'items': obj};
+    throw ApiException('Invalid vault credentials response');
+  }
+
+  Future<Map<String, dynamic>> addVaultCredential({
+    required String apiKey,
+    required String apiSecret,
+    String? label,
+    String? masterPassword,
+  }) async {
+    final r = await http.post(
+      _u('/api/v1/vault/credentials'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+        'label': label,
+        'master_password': masterPassword,
+      }),
+    );
+    _ensure(r);
+    return _jsonMap(r.body);
+  }
+
+  Future<Map<String, dynamic>> updateVaultCredentialLabel(
+    String credentialId, {
+    required String label,
+    String? masterPassword,
+  }) async {
+    final r = await http.patch(
+      _u('/api/v1/vault/credentials/$credentialId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'label': label,
+        'master_password': masterPassword,
+      }),
+    );
+    _ensure(r);
+    return _jsonMap(r.body);
+  }
+
+  Future<Map<String, dynamic>> activateVaultCredential(String credentialId) async {
+    final r = await http.post(_u('/api/v1/vault/credentials/$credentialId/activate'));
+    _ensure(r);
+    return _jsonMap(r.body);
+  }
+
+  Future<Map<String, dynamic>> deleteVaultCredential(
+    String credentialId, {
+    String? masterPassword,
+  }) async {
+    final r = await http.post(
+      _u('/api/v1/vault/credentials/$credentialId/delete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'master_password': masterPassword}),
+    );
+    _ensure(r);
+    return _jsonMap(r.body);
+  }
+
   Future<Map<String, dynamic>> unlockVault(String masterPassword) async {
     final r = await http.post(
       _u('/api/v1/vault/session'),

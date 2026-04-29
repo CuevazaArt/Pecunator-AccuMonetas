@@ -29,6 +29,23 @@ class ActiveCredentialOut(BaseModel):
     public_key_hint: str
     public_key_last4: str
     active_credential_id: Optional[str] = None
+    label: Optional[str] = None
+
+
+class VaultCredentialUpsertBody(BaseModel):
+    master_password: Optional[str] = Field(default=None, description="Optional master password")
+    api_key: str = Field(min_length=8)
+    api_secret: str = Field(min_length=8)
+    label: Optional[str] = Field(default=None, max_length=80)
+
+
+class VaultCredentialLabelBody(BaseModel):
+    master_password: Optional[str] = Field(default=None, description="Optional master password")
+    label: str = Field(default="", max_length=80)
+
+
+class VaultCredentialDeleteBody(BaseModel):
+    master_password: Optional[str] = Field(default=None, description="Optional master password")
 
 
 class GatewaySnapshotOut(BaseModel):
@@ -49,6 +66,7 @@ class BotConfigBody(BaseModel):
     margin_drop_factor: str = Field(default="0.004")
     qty_decimals: int = Field(default=8, ge=0, le=18)
     price_decimals: int = Field(default=4, ge=0, le=18)
+    note: str = Field(default="", max_length=20)
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -62,6 +80,7 @@ class BotConfigOut(BaseModel):
     margin_drop_factor: str
     qty_decimals: int
     price_decimals: int
+    note: str
     simulated: bool
     trading_enabled: bool
     mode: str
@@ -120,6 +139,7 @@ class HubBotCreateBody(BaseModel):
     margin_drop_factor: str = Field(default="0.004")
     qty_decimals: int = Field(default=8, ge=0, le=18)
     price_decimals: int = Field(default=4, ge=0, le=18)
+    note: str = Field(default="", max_length=20)
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -133,6 +153,7 @@ class HubBotUpdateBody(BaseModel):
     margin_drop_factor: Optional[str] = None
     qty_decimals: Optional[int] = Field(default=None, ge=0, le=18)
     price_decimals: Optional[int] = Field(default=None, ge=0, le=18)
+    note: Optional[str] = Field(default=None, max_length=20)
     simulated: Optional[bool] = None
     trading_enabled: Optional[bool] = None
 
@@ -152,6 +173,7 @@ class HubBotOut(BaseModel):
     margin_drop_factor: str
     qty_decimals: int
     price_decimals: int
+    note: str
     last_cycle_ts: Optional[str]
     last_error: Optional[str]
     last_report: dict[str, Any]
