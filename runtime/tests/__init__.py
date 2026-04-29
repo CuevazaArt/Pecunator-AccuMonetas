@@ -1,0 +1,1 @@
+"""PecunatorCore test suite."""
