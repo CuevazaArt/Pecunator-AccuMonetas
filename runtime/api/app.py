@@ -11,6 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from runtime.api import deps
 from runtime.api.schemas import (
+    BotConfigBody,
+    BotConfigOut,
+    BotStatusOut,
     GatewaySnapshotOut,
     GatewayStartBody,
     VaultSessionBody,
@@ -43,6 +46,8 @@ async def _lifespan(app: FastAPI):
         _LOG.info("Cached master password loaded from PECUNATOR_VAULT_PASSWORD env")
     yield
     ctx = deps.peek_ctx()
+    bot = deps.get_bot()
+    await bot.runner.stop()
     if ctx and ctx.gateway:
         try:
             await ctx.gateway.stop()
@@ -55,7 +60,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="PecunatorCore Engine API",
         description="Local HTTP API for the Flutter shell. Bind loopback only unless you know the risk.",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=_lifespan,
     )
     app.add_middleware(
@@ -88,6 +93,49 @@ def create_app() -> FastAPI:
             for p in ctx.config.list_public_credentials()
         ]
 
+    @app.get("/api/v1/bot/presets")
+    async def bot_presets() -> list[dict[str, Any]]:
+        return [
+            {
+                "preset_id": "B",
+                "name": "Dorothy7 preset B (exampleJV)",
+                "symbol": "XRPUSDT",
+                "loop_interval_sec": 450,
+                "quote_order_qty": "8",
+                "profit_factor": "0.05",
+                "margin_drop_factor": "0.004",
+                "qty_decimals": 8,
+                "price_decimals": 4,
+                "simulated": True,
+                "trading_enabled": False,
+            }
+        ]
+
+    @app.get("/api/v1/bot/config", response_model=BotConfigOut)
+    async def bot_config_get() -> Any:
+        cfg = deps.get_bot().get_config()
+        return BotConfigOut(**cfg.as_json())
+
+    @app.put("/api/v1/bot/config", response_model=BotConfigOut)
+    async def bot_config_set(body: BotConfigBody) -> Any:
+        svc = deps.get_bot()
+        cfg = svc.set_config(
+            symbol=body.symbol,
+            loop_interval_sec=body.loop_interval_sec,
+            quote_order_qty=body.quote_order_qty,
+            profit_factor=body.profit_factor,
+            margin_drop_factor=body.margin_drop_factor,
+            qty_decimals=body.qty_decimals,
+            price_decimals=body.price_decimals,
+            simulated=body.simulated,
+            trading_enabled=body.trading_enabled,
+        )
+        return BotConfigOut(**cfg.as_json())
+
+    @app.get("/api/v1/bot/status", response_model=BotStatusOut)
+    async def bot_status() -> Any:
+        return BotStatusOut(**deps.get_bot().status_payload())
+
     @app.post("/api/v1/vault/session")
     async def vault_session(body: VaultSessionBody, ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
         if not ctx.config.exists():
@@ -111,18 +159,7 @@ def create_app() -> FastAPI:
         body: GatewayStartBody = GatewayStartBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> GatewaySnapshotOut:
-        mp = (body.master_password or "") or ctx.cached_master_password or ""
-        mp = (mp or "").strip()
-        pair = binance_credentials_from_env()
-        if not pair:
-            if not mp:
-                raise HTTPException(status_code=400, detail="Provide vault session or master_password, or set env keys.")
-            try:
-                pair = ctx.config.get_pair_for_active(mp)
-            except ValueError as e:
-                raise HTTPException(status_code=401, detail=str(e)) from None
-            if pair:
-                ctx.cached_master_password = mp
+        pair = _resolve_pair(ctx, body.master_password)
         if not pair:
             raise HTTPException(status_code=400, detail="No API credentials available")
         if ctx.gateway:
@@ -143,6 +180,47 @@ def create_app() -> FastAPI:
         ctx.gateway = gw
         ctx.state.last_error = None
         return _snapshot(ctx)
+
+    @app.post("/api/v1/bot/start", response_model=BotStatusOut)
+    async def bot_start(
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        svc = deps.get_bot()
+        pair = _resolve_pair(ctx, body.master_password)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        svc.runner.set_credentials(pair[0], pair[1])
+        try:
+            await svc.runner.start()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
+        return BotStatusOut(**svc.status_payload())
+
+    @app.post("/api/v1/bot/stop", response_model=BotStatusOut)
+    async def bot_stop() -> Any:
+        svc = deps.get_bot()
+        await svc.runner.stop()
+        return BotStatusOut(**svc.status_payload())
+
+    @app.post("/api/v1/bot/run_once", response_model=BotStatusOut)
+    async def bot_run_once(
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        svc = deps.get_bot()
+        pair = _resolve_pair(ctx, body.master_password)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        svc.runner.set_credentials(pair[0], pair[1])
+        try:
+            rep = await svc.runner.run_once()
+            svc.mark_run_once(rep, error=None)
+        except Exception as e:
+            msg = sanitize_log_message(str(e))
+            svc.mark_run_once({}, error=msg)
+            raise HTTPException(status_code=502, detail=msg) from None
+        return BotStatusOut(**svc.status_payload())
 
     @app.post("/api/v1/gateway/stop")
     async def gateway_stop(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
@@ -176,3 +254,20 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         ws_connected=bool(ctx.state.connected),
         selected_symbol=ctx.state.selected_symbol,
     )
+
+
+def _resolve_pair(ctx: AppContext, master_password: str | None) -> tuple[str, str] | None:
+    mp = (master_password or "") or ctx.cached_master_password or ""
+    mp = (mp or "").strip()
+    pair = binance_credentials_from_env()
+    if pair:
+        return pair
+    if not mp:
+        return None
+    try:
+        pair = ctx.config.get_pair_for_active(mp)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from None
+    if pair:
+        ctx.cached_master_password = mp
+    return pair

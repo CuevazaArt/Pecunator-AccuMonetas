@@ -30,3 +30,41 @@ class GatewaySnapshotOut(BaseModel):
     balances_total_assets_in_response: int
     ws_connected: bool
     selected_symbol: str
+
+
+class BotConfigBody(BaseModel):
+    symbol: str = Field(default="XRPUSDT", min_length=5, max_length=32)
+    loop_interval_sec: int = Field(default=450, ge=1, le=86400)
+    quote_order_qty: str = Field(default="8")
+    profit_factor: str = Field(default="0.05")
+    margin_drop_factor: str = Field(default="0.004")
+    qty_decimals: int = Field(default=8, ge=0, le=18)
+    price_decimals: int = Field(default=4, ge=0, le=18)
+    simulated: bool = True
+    trading_enabled: bool = False
+
+
+class BotConfigOut(BaseModel):
+    preset_id: str
+    symbol: str
+    loop_interval_sec: int
+    quote_order_qty: str
+    profit_factor: str
+    margin_drop_factor: str
+    qty_decimals: int
+    price_decimals: int
+    simulated: bool
+    trading_enabled: bool
+    mode: str
+
+
+class BotStatusOut(BaseModel):
+    running: bool
+    preset_id: str
+    symbol: str
+    simulated: bool
+    trading_enabled: bool
+    loop_interval_sec: int
+    last_cycle_ts: Optional[str]
+    last_error: Optional[str]
+    last_report: dict[str, Any]
