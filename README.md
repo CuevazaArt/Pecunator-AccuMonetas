@@ -17,6 +17,8 @@ This repository is **desktop-first**: there is **no browser dashboard**.
 3. Abrir `desktop_shell/` en el IDE Flutter y ejecutar (p. ej. `flutter run -d windows`).
 4. Producción Windows: `flutter build windows` y ejecutar `desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe`.
 
+**Limpiar caché y recompilar la UI:** cierra la app (`pecunator_desktop.exe`) para liberar DLLs; en `desktop_shell/` ejecuta `flutter clean`, luego `flutter pub get` y `flutter build windows` (o `flutter run -d windows`). Datos del hub en SQLite: `runtime/data/dorothy_hub.sqlite` (elimínalo solo si quieres resetear logs/config del hub; haz copia antes).
+
 Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
 ## Motor Python (HTTP API)
@@ -27,6 +29,16 @@ Por defecto **`python main.py`** levanta la API en **http://127.0.0.1:8765** (aj
 - Solo stub de log (sin servidor): `PECUNATOR_ENGINE_STUB=1 python main.py`
 
 Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).
+
+- **Límites de API / WebSocket y cumplimiento (referencia actualizable):** [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md)
+
+### Credenciales desde `exampleJV/`
+
+El ejemplo histórico usa `exampleJV/config.py` (ver `config.example.py`). Para arrancar el motor inyectando esas claves al proceso (sin imprimirlas):
+
+`python scripts/run_engine_with_examplejv.py`
+
+Las mismas variables pueden definirse a mano: `PECUNATOR_BINANCE_API_KEY`, `PECUNATOR_BINANCE_API_SECRET`.
 
 ## API surface (current)
 
@@ -57,6 +69,8 @@ Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/
 
 Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibility.
 
-## Git
+## Documentación
 
-[`docs/git-cursor-github.md`](docs/git-cursor-github.md)
+- [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
+- [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md) — límites Binance REST/WebSocket y checklist  
+- [`docs/git-cursor-github.md`](docs/git-cursor-github.md) — Git / Cursor / GitHub  

@@ -79,6 +79,8 @@ class _BotControlPageState extends State<BotControlPage> {
 
   bool _loading = false;
   String _lastError = '-';
+  bool _gatewayRunning = false;
+  bool _gatewayWsConnected = false;
   String _activeCredential = 'none · -';
   String _activeCredentialId = '';
   List<Map<String, dynamic>> _hubBots = <Map<String, dynamic>>[];
@@ -251,6 +253,14 @@ class _BotControlPageState extends State<BotControlPage> {
     });
     for (final id in _expandedBots) {
       await _refreshHubLogs(id);
+    }
+    try {
+      final snap = await _api.gatewaySnapshot();
+      _gatewayRunning = snap['gateway_running'] == true;
+      _gatewayWsConnected = snap['ws_connected'] == true;
+    } catch (_) {
+      _gatewayRunning = false;
+      _gatewayWsConnected = false;
     }
   }
 
@@ -632,14 +642,15 @@ class _BotControlPageState extends State<BotControlPage> {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            FilledButton.tonal(
+                            FilledButton.icon(
                               onPressed: _loading
                                   ? null
                                   : () async {
                                       await _addCredential();
                                       setModal(() {});
                                     },
-                              child: const Text('Nuevo'),
+                              icon: const Icon(Icons.save_outlined, size: 18),
+                              label: const Text('Guardar'),
                             ),
                           ],
                         ),
@@ -652,16 +663,6 @@ class _BotControlPageState extends State<BotControlPage> {
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('Cerrar'),
-                ),
-                IconButton(
-                  tooltip: 'Start gateway',
-                  onPressed: _loading ? null : _startGateway,
-                  icon: const Icon(Icons.cloud_upload),
-                ),
-                IconButton(
-                  tooltip: 'Stop gateway',
-                  onPressed: _loading ? null : _stopGateway,
-                  icon: const Icon(Icons.cloud_off),
                 ),
               ],
             );
@@ -1041,6 +1042,32 @@ class _BotControlPageState extends State<BotControlPage> {
             onPressed: _loading ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Center(
+              child: Text(
+                'GW ${_gatewayRunning ? "ON" : "OFF"}'
+                '${_gatewayWsConnected ? " · WS" : ""}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: _gatewayRunning
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _startGateway,
+            tooltip: 'Iniciar gateway Binance',
+            icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _stopGateway,
+            tooltip: 'Detener gateway',
+            icon: const Icon(Icons.cloud_off_outlined, size: 18),
           ),
           IconButton(
             onPressed: _loading ? null : _openSqliteInfo,

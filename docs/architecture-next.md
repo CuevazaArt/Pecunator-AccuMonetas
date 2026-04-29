@@ -53,6 +53,10 @@ flowchart LR
 | 2 | ✅ FastAPI facade in `runtime/api/` wired with Flutter `http` client. |
 | 3 | ✅ Flutter screens integrated for vault, hub instances, and logs. |
 
+## Binance limits & compliance
+
+Operational reference (Spanish): [`binance-api-and-compliance.md`](binance-api-and-compliance.md). Update when Binance changes REST/WebSocket policies or Pecunator polling defaults (`PECUNATOR_ACCOUNT_POLL_SEC`, etc.).
+
 ## Renaming `runtime` → `engine`
 
 Optional follow-up once API and imports are stabilized.

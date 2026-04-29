@@ -16,5 +16,7 @@ runtime/data/documents/*
 !runtime/data/documents/.gitkeep
 .idea/
 .vscode/
-exampleJV/
+# exampleJV: track scripts/templates; keep real keys local-only
+exampleJV/config.py
+exampleJV/.env
 Dorothy7.0/
