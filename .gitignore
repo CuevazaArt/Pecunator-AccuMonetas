@@ -16,3 +16,7 @@ runtime/data/documents/*
 .vscode/
 .claude/
 Dorothy7.0/
+exampleJV/
+exampleJV_enhanced/
+examples/**/config.py
+examples/**/.env

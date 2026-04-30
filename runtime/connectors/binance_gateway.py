@@ -68,6 +68,8 @@ class BinanceGateway:
         self._poll_task: Optional[asyncio.Task[Any]] = None
         self._stop = asyncio.Event()
         self._poll_cycle = 0
+        self._last_time_sync_monotonic = 0.0
+        self._time_sync_interval_sec = 90.0
         self._logged_account_rest_snapshot = False
         self._ticker_prices: dict[str, Decimal] = {}
         self._equity_rolling = EquityRollingWindow(sample_window=equity_avg_window_samples())
@@ -234,6 +236,12 @@ class BinanceGateway:
             self._client.timestamp_offset = offset_ms
         except Exception:
             pass
+        self.state.binance_server_time_ms = server_ms
+        self.state.binance_local_time_ms_at_sync = local_ms
+        self.state.binance_offset_ms = offset_ms
+        self.state.binance_time_synced_at_utc = dt.datetime.now(
+            dt.timezone.utc
+        ).isoformat()
         msg = (
             f"time sync: local={local_ms} server={server_ms} offset_ms={offset_ms}"
         )
@@ -392,6 +400,19 @@ class BinanceGateway:
                 self._poll_cycle += 1
                 if stride <= 1 or (self._poll_cycle - 1) % stride == 0:
                     await self.fetch_my_trades(self.state.selected_symbol)
+                now_mono = time.monotonic()
+                if (
+                    self._last_time_sync_monotonic <= 0
+                    or (now_mono - self._last_time_sync_monotonic)
+                    >= self._time_sync_interval_sec
+                ):
+                    try:
+                        await self.sync_time()
+                    except Exception as e:
+                        self._emit_log(
+                            f"time sync: {sanitize_log_message(str(e))}"
+                        )
+                    self._last_time_sync_monotonic = now_mono
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -404,6 +425,7 @@ class BinanceGateway:
     async def start(self) -> None:
         self._stop.clear()
         self._poll_cycle = 0
+        self._last_time_sync_monotonic = 0.0
         self._logged_account_rest_snapshot = False
         self._ticker_prices = {}
         poll_sec = account_poll_interval_sec()

@@ -1,6 +1,6 @@
 # Bootstrap Flutter desktop app under desktop_shell/ (requires Flutter SDK).
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $shell = Join-Path $root 'desktop_shell'
 
 function Test-Flutter {
@@ -9,7 +9,7 @@ function Test-Flutter {
 
 if (-not (Test-Flutter)) {
     Write-Host "Flutter CLI not found. Install from https://docs.flutter.dev/get-started/install/windows" -ForegroundColor Yellow
-    Write-Host "Then add Flutter to PATH and run: .\scripts\init_flutter_desktop.ps1" -ForegroundColor Yellow
+    Write-Host "Then add Flutter to PATH and run: .\scripts\ui\init_flutter_desktop.ps1" -ForegroundColor Yellow
     exit 1
 }
 
@@ -21,8 +21,6 @@ if (Test-Path $pubspec) {
     flutter pub get
     exit 0
 }
-
-# Scaffold into folder (Flutter creates the directory).
 
 Push-Location $root
 try {

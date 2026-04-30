@@ -1,6 +1,6 @@
 # Creates "PecunatorCore.lnk" on the user Desktop (engine + UI launcher).
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $launcher = Join-Path $PSScriptRoot 'PecunatorDesktopLauncher.ps1'
 if (-not (Test-Path $launcher)) {
     Write-Error "Missing: $launcher"

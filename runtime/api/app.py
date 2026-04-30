@@ -1003,6 +1003,14 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         selected_symbol=ctx.state.selected_symbol,
         used_weight_1m=getattr(ctx.state, "api_weight_used_1m", None),
         weight_limit_1m=api_weight_limit_1m_display(),
+        binance_server_time_ms=getattr(ctx.state, "binance_server_time_ms", None),
+        binance_local_time_ms_at_sync=getattr(
+            ctx.state, "binance_local_time_ms_at_sync", None
+        ),
+        binance_offset_ms=getattr(ctx.state, "binance_offset_ms", None),
+        binance_time_synced_at_utc=getattr(
+            ctx.state, "binance_time_synced_at_utc", None
+        ),
     )
     try:
         from runtime.core.rest_usage_log import get_rest_usage_log
@@ -2426,6 +2434,14 @@ async def _sync_binance_time(
     bot = deps.get_bot()
     if ctx.gateway:
         payload = await ctx.gateway.sync_time()
+        ctx.state.binance_server_time_ms = int(payload.get("server_time_ms", 0) or 0)
+        ctx.state.binance_local_time_ms_at_sync = int(
+            payload.get("local_time_ms", 0) or 0
+        )
+        ctx.state.binance_offset_ms = int(payload.get("offset_ms", 0) or 0)
+        ctx.state.binance_time_synced_at_utc = datetime.now(
+            timezone.utc
+        ).isoformat()
         if bot.runner.running:
             try:
                 await bot.runner.sync_time()
@@ -2453,6 +2469,12 @@ async def _sync_binance_time(
                 await bot.runner.sync_time()
             except Exception:
                 pass
+        ctx.state.binance_server_time_ms = server_ms
+        ctx.state.binance_local_time_ms_at_sync = local_ms
+        ctx.state.binance_offset_ms = offset_ms
+        ctx.state.binance_time_synced_at_utc = datetime.now(
+            timezone.utc
+        ).isoformat()
         return {
             "source": "one_shot",
             "local_time_ms": local_ms,

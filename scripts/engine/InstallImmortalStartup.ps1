@@ -1,7 +1,7 @@
 # Install startup shortcut so Pecunator launcher runs after Windows logon.
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
-$launcher = Join-Path $root 'scripts\PecunatorDesktopLauncher.ps1'
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$launcher = Join-Path $root 'scripts\ui\PecunatorDesktopLauncher.ps1'
 if (-not (Test-Path $launcher)) {
     throw "Missing launcher script: $launcher"
 }

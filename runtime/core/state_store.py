@@ -29,6 +29,11 @@ class StateStore:
     connected: bool = False
     # Last X-MBX-USED-WEIGHT-1M from python-binance after a REST call (IP-scoped).
     api_weight_used_1m: Optional[int] = None
+    # Last Binance clock sync values (for UI display/diagnostics).
+    binance_server_time_ms: Optional[int] = None
+    binance_local_time_ms_at_sync: Optional[int] = None
+    binance_offset_ms: Optional[int] = None
+    binance_time_synced_at_utc: Optional[str] = None
 
     def reset_market(self) -> None:
         self.ticker = {}

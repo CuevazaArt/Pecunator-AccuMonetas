@@ -12,6 +12,9 @@ Updated: 2026-04-29
   - `ops-protocols/`
   - `sandbox-rest/`
   - `rest-weight-monitor/`
+- `examples/`
+  - `dorothy7.0-reference/`
+  - `enhanced/`
 
 ## Runtime domain layout
 
@@ -21,6 +24,12 @@ Updated: 2026-04-29
 - `runtime/api/` – API façade and service orchestration
 - `runtime/core/` – shared primitives/state/settings/storage
 - `runtime/connectors/` – Binance and market connectors
+
+## Script layout
+
+- `scripts/ui/` – Flutter run/build helpers, launcher, desktop shortcut setup
+- `scripts/engine/` – engine start/stop/watchdog and startup-autostart helper
+- `scripts/data/` – data snapshots and offline collectors
 
 ## Compatibility note
 

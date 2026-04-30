@@ -26,7 +26,8 @@ PecunatorCore/
 ├── runtime/             # Python engine
 ├── bots/                # Root bot module index (one folder per bot)
 ├── tools/               # Root tool module index (one folder per operational tool)
-├── desktop_shell/       # Flutter desktop (run scripts/init_flutter_desktop.ps1)
+├── desktop_shell/       # Flutter desktop (run scripts/ui/init_flutter_desktop.ps1)
+├── examples/            # Reference-only historical examples (not runtime)
 ├── docs/
 └── scripts/
 ```
@@ -87,7 +88,7 @@ flowchart LR
 | Phase | Action |
 |-------|--------|
 | 0 | Web stack removed; Flutter + engine API is the plan. |
-| 1 | Flutter SDK; `scripts/init_flutter_desktop.ps1` → `desktop_shell/`. |
+| 1 | Flutter SDK; `scripts/ui/init_flutter_desktop.ps1` → `desktop_shell/`. |
 | 2 | ✅ FastAPI facade in `runtime/api/` wired with Flutter `http` client. |
 | 3 | ✅ Flutter screens integrated for vault, hub instances, and logs. |
 
@@ -100,3 +101,13 @@ Dated `exchangeInfo.rateLimits` JSON snapshots: [`binance-limits-snapshots/`](bi
 ## Renaming `runtime` → `engine`
 
 Optional follow-up once API and imports are stabilized.
+
+## `main` vs `runtime` (conventional split)
+
+- Root `main.py` stays as a **thin bootstrap** only (`from runtime.main import main`), useful for `python main.py`.
+- `runtime/` is the **actual engine package**:
+  - startup lifecycle (`runtime/main.py`),
+  - API façades (`runtime/api/`),
+  - connectors (`runtime/connectors/`),
+  - domain/state (`runtime/core/`, `runtime/modules/`).
+- This split is intentionally scalable: CLI/bootstrap can evolve independently while runtime remains testable/importable as a package (`python -m runtime`).

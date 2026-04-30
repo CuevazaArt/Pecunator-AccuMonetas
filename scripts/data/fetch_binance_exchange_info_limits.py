@@ -11,7 +11,7 @@ URL = "https://api.binance.com/api/v3/exchangeInfo"
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parent.parent.parent
     out_dir = root / "docs" / "binance-limits-snapshots"
     out_dir.mkdir(parents=True, exist_ok=True)
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")

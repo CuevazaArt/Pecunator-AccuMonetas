@@ -12,7 +12,7 @@ Documento de **consulta** para PecunatorCore. Los límites y políticas **cambia
 Capturas fechadas del endpoint público Spot (solo `rateLimits` + metadatos) para **análisis histórico**:
 
 - Carpeta: [`binance-limits-snapshots/`](binance-limits-snapshots/)
-- Script: [`scripts/fetch_binance_exchange_info_limits.py`](../scripts/fetch_binance_exchange_info_limits.py)
+- Script: [`scripts/data/fetch_binance_exchange_info_limits.py`](../scripts/data/fetch_binance_exchange_info_limits.py)
 
 ---
 
@@ -73,7 +73,7 @@ Según el documento de streams en el repositorio público de Binance (comprueba 
 |------|----------------------------|
 | **Polling REST** | Ajusta `PECUNATOR_ACCOUNT_POLL_SEC` en `runtime/core/settings.py` si ves 429 o latencia excesiva. |
 | **Credenciales** | Usa el **vault** cifrado (`runtime/data/`) o variables de entorno; no incrustes claves en Flutter ni en repos. |
-| **Arranque motor** | Ejecutar `scripts/run_engine.ps1` o `python main.py`; las credenciales se resuelven por entorno o cofre local cifrado. |
+| **Arranque motor** | Ejecutar `scripts/engine/run_engine.ps1` o `python main.py`; las credenciales se resuelven por entorno o cofre local cifrado. |
 | **Órdenes / bots** | Respeta filtros de símbolo (`PRICE_FILTER`, `LOT_SIZE`, notional mínimo); errores de precisión son responsabilidad de la estrategia, no de Binance “flexibilizar” reglas. |
 
 ---

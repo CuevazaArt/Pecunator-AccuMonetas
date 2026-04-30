@@ -5,18 +5,16 @@ This repository is **desktop-first**: there is **no browser dashboard**.
 
 ## Directiva de trabajo
 
-| Ámbito | Idioma |
-|--------|--------|
-| Este IDE, conversación y coordinación entre nosotros | **Español latino**, por defecto |
-| Código fuente, nombres de símbolos, comentarios en código, mensajes de commit orientados al repositorio, y demás artefactos de implementación | **Inglés** |
+- Este IDE, conversación y coordinación entre nosotros: **Español latino**, por defecto.
+- Código fuente, nombres de símbolos, comentarios en código, mensajes de commit orientados al repositorio, y demás artefactos de implementación: **Inglés**.
 
 ## Flutter desktop (UI)
 
 1. Instalar [Flutter SDK (Windows)](https://docs.flutter.dev/get-started/install/windows).
-2. En la raíz del repo: `powershell -ExecutionPolicy Bypass -File scripts/init_flutter_desktop.ps1`
+2. En la raíz del repo: `powershell -ExecutionPolicy Bypass -File scripts/ui/init_flutter_desktop.ps1`
 3. Abrir `desktop_shell/` en el IDE Flutter y ejecutar (p. ej. `flutter run -d windows`).
-   - Atajo (PATH recargado + `flutter run`): `powershell -ExecutionPolicy Bypass -File scripts/run_dashboard.ps1`, o doble clic en `scripts/run_dashboard.cmd`.
-   - Acceso rápido en el escritorio (motor + app): `powershell -ExecutionPolicy Bypass -File scripts/InstallDesktopShortcut.ps1` crea **`PecunatorCore.lnk`**; el lanzador está en `scripts/PecunatorDesktopLauncher.ps1`.
+   - Atajo (PATH recargado + `flutter run`): `powershell -ExecutionPolicy Bypass -File scripts/ui/run_dashboard.ps1`, o doble clic en `scripts/ui/run_dashboard.cmd`.
+   - Acceso rápido en el escritorio (motor + app): `powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1` crea **`PecunatorCore.lnk`**; el lanzador está en `scripts/ui/PecunatorDesktopLauncher.ps1`.
 4. Producción Windows: `flutter build windows` y ejecutar `desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe`.
 
 **Limpiar caché y recompilar la UI:** cierra la app (`pecunator_desktop.exe`) para liberar DLLs; en `desktop_shell/` ejecuta `flutter clean`, luego `flutter pub get` y `flutter build windows` (o `flutter run -d windows`). Datos del hub en SQLite: `runtime/data/dorothy_hub.sqlite` (elimínalo solo si quieres resetear logs/config del hub; haz copia antes).
@@ -25,12 +23,12 @@ Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
 ## Motor Python (HTTP API)
 
-Por defecto **`python main.py`** levanta la API en **http://127.0.0.1:8765** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de “peso REST” en la UI con el límite de referencia de `exchangeInfo`.
+Por defecto **`python main.py`** levanta la API en **[`http://127.0.0.1:8765`](http://127.0.0.1:8765)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de “peso REST” en la UI con el límite de referencia de `exchangeInfo`.
 
-- Atajo PowerShell (venv + arranque directo): **`powershell -ExecutionPolicy Bypass -File scripts/run_engine.ps1`**.
-- Supervisor inmortal del motor (reinicia si el proceso cae): **`powershell -ExecutionPolicy Bypass -File scripts/run_engine_immortal.ps1`**.
-- Si el puerto **8765** queda ocupado por un proceso viejo: **`scripts/stop_engine_port.ps1`** antes de volver a arrancar.
-- OpenAPI: http://127.0.0.1:8765/docs  
+- Atajo PowerShell (venv + arranque directo): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1`**.
+- Supervisor inmortal del motor (reinicia si el proceso cae): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1`**.
+- Si el puerto **8765** queda ocupado por un proceso viejo: **`scripts/engine/stop_engine_port.ps1`** antes de volver a arrancar.
+- OpenAPI: [`http://127.0.0.1:8765/docs`](http://127.0.0.1:8765/docs)  
 - Solo stub de log (sin servidor): `PECUNATOR_ENGINE_STUB=1 python main.py`
 
 Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).
@@ -46,6 +44,7 @@ Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/
   - `tools/sandbox-rest/`
   - `tools/rest-weight-monitor/`
 - `runtime/modules/` consolida módulos Python de dominio para bots y herramientas.
+- `examples/` consolida referencias históricas/no funcionales (no participa del runtime productivo).
 
 - **Límites de API / WebSocket y cumplimiento (referencia actualizable):** [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md)
 
@@ -64,7 +63,7 @@ Recomendación operativa: usar una sola fuente activa por sesión para evitar me
 - Si una instancia estaba marcada para correr, el motor intenta **reanudarla automáticamente** al iniciar y también cuando detecta caídas (reintentos periódicos con credenciales disponibles).
 - Si hay desconexiones o excepciones transitorias, Dorothy aplica **reintentos con backoff** y recrea cliente para recuperar sesión de red.
 - Para retomar trabajo tras reinicio de Windows, instala autoarranque:
-  - `powershell -ExecutionPolicy Bypass -File scripts/InstallImmortalStartup.ps1`
+  - `powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1`
 
 ### Cofre (`credentials.enc`)
 
@@ -107,6 +106,7 @@ Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibi
 - La verificación oficial se ejecuta en **GitHub Actions** (`.github/workflows/`).
 - Evitamos depender de test suites locales para validar merges a `main/develop`.
 - Cualquier cambio en runtime/UI/workflows debe actualizar `docs/CHANGELOG.md`.
+- El repositorio incluye escaneo automático de secretos en CI (`secret-scan.yml`) para prevenir exposición accidental.
 
 ## Documentación
 
@@ -114,6 +114,7 @@ Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibi
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — bitácora disciplinada de arquitectura/UI/API  
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
 - [`docs/repo-modules-map.md`](docs/repo-modules-map.md) — mapa modular de carpetas y ownership
+- [`docs/main-runtime-boundary.md`](docs/main-runtime-boundary.md) — rol de `main` vs `runtime` y diseño escalable
 - [`bots/README.md`](bots/README.md) — índice modular de bots en raíz
 - [`tools/README.md`](tools/README.md) — índice modular de herramientas en raíz
 - [`docs/bots/Dorothy-manual.md`](docs/bots/Dorothy-manual.md) — guía operativa Dorothy + riesgo + métricas

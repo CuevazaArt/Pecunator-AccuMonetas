@@ -30,6 +30,35 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 ## 2026-04-29
 
 ### Added
+- Carpeta `examples/` como punto único para referencias históricas no funcionales (fusión de propósito de `exampleJV` + `exampleJV_enhanced`).
+- Documento arquitectónico `docs/main-runtime-boundary.md` con responsabilidades explícitas de `main` y `runtime` para escalar.
+
+### Changed
+- Scripts reorganizados por dominio:
+  - `scripts/ui/` (dashboard, launcher, atajos de escritorio)
+  - `scripts/engine/` (arranque/parada/supervisor del motor)
+  - `scripts/data/` (snapshots operativos como `exchangeInfo`)
+- Documentación actualizada a las nuevas rutas de scripts y al uso de `examples/`.
+
+### Operational impact
+- Menor fricción para mantenimiento al separar responsabilidades operativas por carpeta.
+- Menos riesgo de mezclar código productivo con ejemplos de referencia.
+
+## 2026-04-29
+
+### Added
+- Nuevo workflow de seguridad `.github/workflows/secret-scan.yml` (Gitleaks) para detectar secretos en pushes/PR hacia ramas principales.
+
+### Changed
+- Scripts de arranque `scripts/engine/run_engine.ps1` y `scripts/engine/run_engine_immortal.ps1` endurecidos con fallback a `python` del sistema cuando no existe `.venv`.
+
+### Operational impact
+- Menor riesgo de fuga de credenciales en el repositorio.
+- Menor fragilidad operativa al iniciar motor en equipos sin entorno virtual activado.
+
+## 2026-04-29
+
+### Added
 - Estructura modular explícita por dominio:
   - `runtime/modules/bots/`
   - `runtime/modules/tools/`

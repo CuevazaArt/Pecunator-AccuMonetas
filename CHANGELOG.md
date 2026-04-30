@@ -12,8 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added background immortal supervisor for hub bots: if a bot is marked desired-running and stops (exceptions/disconnects/process restart), the service retries start automatically when credentials/network are available.
 - Improved Dorothy loop resilience: transient failures now trigger client re-creation plus retry backoff (`bot:retry_in ...`) instead of waiting a full long cycle.
 - Added scripts for operational resilience:
-  - `scripts/run_engine_immortal.ps1` (engine watchdog / auto-restart)
-  - `scripts/InstallImmortalStartup.ps1` (Windows startup shortcut)
+  - `scripts/engine/run_engine_immortal.ps1` (engine watchdog / auto-restart)
+  - `scripts/engine/InstallImmortalStartup.ps1` (Windows startup shortcut)
 
 ### Account equity monitor
 

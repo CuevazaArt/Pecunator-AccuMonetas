@@ -56,6 +56,22 @@ class GatewaySnapshotOut(BaseModel):
         default=6000,
         description="Display cap; default from PECUNATOR_API_WEIGHT_LIMIT_1M or 6000",
     )
+    binance_server_time_ms: Optional[int] = Field(
+        default=None,
+        description="Last server time obtained from Binance (/api/v3/time)",
+    )
+    binance_local_time_ms_at_sync: Optional[int] = Field(
+        default=None,
+        description="Local epoch ms captured when server time was last synced",
+    )
+    binance_offset_ms: Optional[int] = Field(
+        default=None,
+        description="server_time_ms - local_time_ms_at_sync",
+    )
+    binance_time_synced_at_utc: Optional[str] = Field(
+        default=None,
+        description="UTC timestamp when last Binance clock sync finished",
+    )
 
 
 class BotConfigBody(BaseModel):

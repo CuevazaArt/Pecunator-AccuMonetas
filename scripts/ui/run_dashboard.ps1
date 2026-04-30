@@ -1,6 +1,6 @@
 # Run Flutter desktop shell (reloads PATH + resolves flutter.bat when `flutter` is missing).
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 # Prefer project-pinned Flutter SDK on Desktop (avoids shadowing by other flutter.exe on PATH).
 $desktopFlutterBin = Join-Path $env:USERPROFILE 'Desktop\flutter_windows_3.41.8-stable\flutter\bin'
 if (Test-Path (Join-Path $desktopFlutterBin 'flutter.bat')) {

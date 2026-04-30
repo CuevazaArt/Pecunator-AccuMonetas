@@ -350,6 +350,19 @@ class _BotControlPageState extends State<BotControlPage> {
       } else {
         _apiWeightLimit = int.tryParse('$wl') ?? 6000;
       }
+      final serverMs = snap['binance_server_time_ms'];
+      final localSyncMs = snap['binance_local_time_ms_at_sync'];
+      if (serverMs is num && localSyncMs is num) {
+        _binanceSrvUtc = DateTime.fromMillisecondsSinceEpoch(
+          serverMs.toInt(),
+          isUtc: true,
+        );
+        _binanceSrvObservedUtc = DateTime.fromMillisecondsSinceEpoch(
+          localSyncMs.toInt(),
+          isUtc: true,
+        );
+        _tickBinanceClock();
+      }
     } catch (_) {
       _gatewayRunning = false;
       _gatewayWsConnected = false;
@@ -890,6 +903,10 @@ class _BotControlPageState extends State<BotControlPage> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent.withValues(alpha: 0.18),
+              foregroundColor: Colors.redAccent,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Sí, modo LIVE'),
           ),
@@ -1460,6 +1477,10 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
           const SizedBox(width: 8),
           FilledButton.tonal(
+            style: FilledButton.styleFrom(
+              backgroundColor: accent.withValues(alpha: 0.18),
+              foregroundColor: accent,
+            ),
             onPressed: _loading ? null : onRun,
             child: const Text('Ejecutar'),
           ),
@@ -1511,22 +1532,14 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cloud, size: 16, color: _gatewayTrafficColor()),
-                  const SizedBox(width: 4),
-                  Text(
-                    'GW ${_gatewayRunning ? "ON" : "OFF"}'
-                    '${_gatewayWsConnected ? " · WS" : ""}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      color: _gatewayTrafficColor(),
-                    ),
-                  ),
-                ],
+            child: Tooltip(
+              message:
+                  'Gateway ${_gatewayRunning ? "ON" : "OFF"}'
+                  '${_gatewayWsConnected ? " · WS" : ""}',
+              child: Icon(
+                Icons.circle,
+                size: 10,
+                color: _gatewayTrafficColor(),
               ),
             ),
           ),
@@ -2066,6 +2079,8 @@ class _BotControlPageState extends State<BotControlPage> {
                           style: const TextStyle(fontSize: 12),
                         ),
                         value: (b['simulated'] ?? true) == true,
+                        activeThumbColor: Colors.redAccent,
+                        activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
                         onChanged: _loading
                             ? null
                             : (wantSim) async {
