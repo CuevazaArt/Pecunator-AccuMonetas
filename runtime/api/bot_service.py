@@ -13,7 +13,7 @@ import threading
 import uuid
 from typing import Any, Callable, Optional
 
-from runtime.bot.dorothy import DorothyConfig, DorothyRunner
+from runtime.modules.bots.dorothy import DorothyConfig, DorothyRunner
 
 
 @dataclass
@@ -75,9 +75,62 @@ class BotService:
                         qty_decimals INTEGER NOT NULL,
                         price_decimals INTEGER NOT NULL,
                         note TEXT NOT NULL,
+                        max_drawdown_pct TEXT NOT NULL DEFAULT '0.20',
+                        stop_loss_pct TEXT NOT NULL DEFAULT '0.10',
+                        metrics_interval_cycles INTEGER NOT NULL DEFAULT 5,
                         simulated INTEGER NOT NULL,
                         trading_enabled INTEGER NOT NULL,
                         desired_running INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+                try:
+                    conn.execute("ALTER TABLE dorothy_instances ADD COLUMN max_drawdown_pct TEXT NOT NULL DEFAULT '0.20'")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE dorothy_instances ADD COLUMN stop_loss_pct TEXT NOT NULL DEFAULT '0.10'")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE dorothy_instances ADD COLUMN metrics_interval_cycles INTEGER NOT NULL DEFAULT 5")
+                except Exception:
+                    pass
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS dorothy_runtime_state (
+                        bot_id TEXT PRIMARY KEY,
+                        peak_equity_usdt TEXT,
+                        max_drawdown_seen TEXT,
+                        cycle_count INTEGER NOT NULL DEFAULT 0,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS dorothy_equity_snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts_utc TEXT NOT NULL,
+                        bot_id TEXT NOT NULL,
+                        equity_usdt TEXT NOT NULL,
+                        capital_usdt TEXT,
+                        drawdown_pct TEXT,
+                        peak_equity_usdt TEXT,
+                        trading_blocked INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS dorothy_metrics_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts_utc TEXT NOT NULL,
+                        bot_id TEXT NOT NULL,
+                        sharpe TEXT,
+                        win_rate TEXT,
+                        max_drawdown TEXT,
+                        samples INTEGER NOT NULL DEFAULT 0
                     )
                     """
                 )
@@ -96,7 +149,7 @@ class BotService:
                     """
                     SELECT bot_id, tag, created_at, symbol, loop_interval_sec,
                            quote_order_qty, profit_factor, margin_drop_factor,
-                           qty_decimals, price_decimals, note,
+                           qty_decimals, price_decimals, note, max_drawdown_pct, stop_loss_pct, metrics_interval_cycles,
                            simulated, trading_enabled, desired_running
                     FROM dorothy_instances
                     ORDER BY created_at ASC
@@ -119,6 +172,9 @@ class BotService:
                 qty_decimals=int(row["qty_decimals"]),
                 price_decimals=int(row["price_decimals"]),
                 note=str(row["note"] or ""),
+                max_drawdown_pct=Decimal(str(row["max_drawdown_pct"] or "0.20")),
+                stop_loss_pct=Decimal(str(row["stop_loss_pct"] or "0.10")),
+                metrics_interval_cycles=int(row["metrics_interval_cycles"] or 5),
                 simulated=bool(int(row["simulated"])),
                 trading_enabled=bool(int(row["trading_enabled"])),
             )
@@ -127,6 +183,13 @@ class BotService:
                 self._runner_log_sink(bot_id),
                 self._runner_event_sink(bot_id),
             )
+            st = self._load_runtime_state(bot_id)
+            if st is not None:
+                runner.restore_risk_state(
+                    peak_equity_usdt=st.get("peak_equity_usdt"),
+                    max_drawdown_seen=st.get("max_drawdown_seen"),
+                    cycle_count=st.get("cycle_count"),
+                )
             runner.apply_config(cfg)
             rec = _BotRecord(
                 bot_id=bot_id,
@@ -151,9 +214,9 @@ class BotService:
                     INSERT INTO dorothy_instances (
                         bot_id, tag, created_at, symbol, loop_interval_sec,
                         quote_order_qty, profit_factor, margin_drop_factor,
-                        qty_decimals, price_decimals, note,
+                        qty_decimals, price_decimals, note, max_drawdown_pct, stop_loss_pct, metrics_interval_cycles,
                         simulated, trading_enabled, desired_running
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(bot_id) DO UPDATE SET
                         tag=excluded.tag,
                         created_at=excluded.created_at,
@@ -165,6 +228,9 @@ class BotService:
                         qty_decimals=excluded.qty_decimals,
                         price_decimals=excluded.price_decimals,
                         note=excluded.note,
+                        max_drawdown_pct=excluded.max_drawdown_pct,
+                        stop_loss_pct=excluded.stop_loss_pct,
+                        metrics_interval_cycles=excluded.metrics_interval_cycles,
                         simulated=excluded.simulated,
                         trading_enabled=excluded.trading_enabled,
                         desired_running=excluded.desired_running
@@ -181,6 +247,9 @@ class BotService:
                         int(cfg.qty_decimals),
                         int(cfg.price_decimals),
                         str(cfg.note or ""),
+                        str(cfg.max_drawdown_pct),
+                        str(cfg.stop_loss_pct),
+                        int(cfg.metrics_interval_cycles),
                         1 if cfg.simulated else 0,
                         1 if cfg.trading_enabled else 0,
                         1 if rec.desired_running else 0,
@@ -232,6 +301,105 @@ class BotService:
             finally:
                 conn.close()
 
+    def _load_runtime_state(self, bot_id: str) -> Optional[dict[str, Any]]:
+        if self._db_path is None:
+            return None
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                row = conn.execute(
+                    """
+                    SELECT peak_equity_usdt, max_drawdown_seen, cycle_count
+                    FROM dorothy_runtime_state
+                    WHERE bot_id = ?
+                    """,
+                    (bot_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+        if row is None:
+            return None
+        return {
+            "peak_equity_usdt": row["peak_equity_usdt"],
+            "max_drawdown_seen": row["max_drawdown_seen"],
+            "cycle_count": int(row["cycle_count"] or 0),
+        }
+
+    def _persist_equity_snapshot(self, bot_id: str, payload: dict[str, Any]) -> None:
+        if self._db_path is None:
+            return
+        ts = dt.datetime.now(dt.timezone.utc).isoformat()
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO dorothy_equity_snapshots (
+                        ts_utc, bot_id, equity_usdt, capital_usdt, drawdown_pct, peak_equity_usdt, trading_blocked
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        ts,
+                        bot_id,
+                        str(payload.get("equity_usdt", "0")),
+                        str(payload.get("capital_usdt", "0")),
+                        str(payload.get("drawdown_pct", "0")),
+                        str(payload.get("peak_equity_usdt", "0")),
+                        1 if payload.get("trading_blocked") else 0,
+                    ),
+                )
+                row = conn.execute(
+                    "SELECT cycle_count FROM dorothy_runtime_state WHERE bot_id = ?",
+                    (bot_id,),
+                ).fetchone()
+                cycle_count = int(row[0]) if row is not None and row[0] is not None else 0
+                conn.execute(
+                    """
+                    INSERT INTO dorothy_runtime_state (bot_id, peak_equity_usdt, max_drawdown_seen, cycle_count, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(bot_id) DO UPDATE SET
+                        peak_equity_usdt=excluded.peak_equity_usdt,
+                        max_drawdown_seen=excluded.max_drawdown_seen,
+                        cycle_count=excluded.cycle_count,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        bot_id,
+                        str(payload.get("peak_equity_usdt", "0")),
+                        str(payload.get("drawdown_pct", "0")),
+                        cycle_count + 1,
+                        ts,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def _persist_metrics(self, bot_id: str, payload: dict[str, Any]) -> None:
+        if self._db_path is None:
+            return
+        with self._db_lock:
+            conn = sqlite3.connect(str(self._db_path))
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO dorothy_metrics_log (ts_utc, bot_id, sharpe, win_rate, max_drawdown, samples)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        dt.datetime.now(dt.timezone.utc).isoformat(),
+                        bot_id,
+                        str(payload.get("sharpe", "0")),
+                        str(payload.get("win_rate", "0")),
+                        str(payload.get("max_drawdown", "0")),
+                        int(payload.get("samples", 0) or 0),
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     def _runner_log_sink(self, bot_id: str) -> Callable[[str], None]:
         def _sink(msg: str) -> None:
             rec = self._bots.get(bot_id)
@@ -248,6 +416,11 @@ class BotService:
             rec = self._bots.get(bot_id)
             tag = rec.tag if rec is not None else "-"
             self._write_log(bot_id, tag, level or "INFO", msg, payload)
+            if isinstance(payload, dict):
+                if msg == "bot:equity_snapshot":
+                    self._persist_equity_snapshot(bot_id, payload)
+                elif msg == "bot:metrics":
+                    self._persist_metrics(bot_id, payload)
 
         return _sink
 
@@ -270,6 +443,9 @@ class BotService:
             "qty_decimals": cfg.qty_decimals,
             "price_decimals": cfg.price_decimals,
             "note": cfg.note,
+            "max_drawdown_pct": str(cfg.max_drawdown_pct),
+            "stop_loss_pct": str(cfg.stop_loss_pct),
+            "metrics_interval_cycles": cfg.metrics_interval_cycles,
             "last_cycle_ts": rec.runner.last_cycle_ts,
             "last_error": rec.runner.last_error,
             "last_report": rec.runner.last_report,
@@ -299,6 +475,9 @@ class BotService:
         qty_decimals: int = 8,
         price_decimals: int = 4,
         note: str = "",
+        max_drawdown_pct: str = "0.20",
+        stop_loss_pct: str = "0.10",
+        metrics_interval_cycles: int = 5,
         simulated: bool = True,
         trading_enabled: bool = False,
     ) -> dict[str, Any]:
@@ -315,6 +494,9 @@ class BotService:
             qty_decimals=qty_decimals,
             price_decimals=price_decimals,
             note=note,
+            max_drawdown_pct=Decimal(str(max_drawdown_pct)),
+            stop_loss_pct=Decimal(str(stop_loss_pct)),
+            metrics_interval_cycles=int(metrics_interval_cycles),
             simulated=simulated,
             trading_enabled=trading_enabled,
         )
@@ -374,6 +556,9 @@ class BotService:
         qty_decimals: Optional[int] = None,
         price_decimals: Optional[int] = None,
         note: Optional[str] = None,
+        max_drawdown_pct: Optional[str] = None,
+        stop_loss_pct: Optional[str] = None,
+        metrics_interval_cycles: Optional[int] = None,
         simulated: Optional[bool] = None,
         trading_enabled: Optional[bool] = None,
     ) -> dict[str, Any]:
@@ -397,6 +582,12 @@ class BotService:
             cfg.price_decimals = price_decimals
         if note is not None:
             cfg.note = note
+        if max_drawdown_pct is not None:
+            cfg.max_drawdown_pct = Decimal(str(max_drawdown_pct))
+        if stop_loss_pct is not None:
+            cfg.stop_loss_pct = Decimal(str(stop_loss_pct))
+        if metrics_interval_cycles is not None:
+            cfg.metrics_interval_cycles = int(metrics_interval_cycles)
         if simulated is not None:
             cfg.simulated = simulated
         if trading_enabled is not None:

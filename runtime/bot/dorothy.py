@@ -31,7 +31,7 @@ def _q(x: Decimal, places: int) -> Decimal:
 
 @dataclass
 class DorothyConfig:
-    # Preset B (from exampleJV semantics), with safe mode defaults.
+    # Preset B with safe mode defaults.
     preset_id: str = "B"
     symbol: str = "XRPUSDT"
     loop_interval_sec: int = 450
@@ -41,6 +41,10 @@ class DorothyConfig:
     qty_decimals: int = 8
     price_decimals: int = 4
     note: str = ""
+    # [MEJORA] Proteccion de riesgo configurable.
+    max_drawdown_pct: Decimal = Decimal("0.20")
+    stop_loss_pct: Decimal = Decimal("0.10")
+    metrics_interval_cycles: int = 5
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -53,12 +57,17 @@ class DorothyConfig:
         self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
         self.price_decimals = max(0, min(int(self.price_decimals), 18))
         self.note = (self.note or "").strip()[:20]
+        self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
+        self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
+        self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
         d["quote_order_qty"] = str(self.quote_order_qty)
         d["profit_factor"] = str(self.profit_factor)
         d["margin_drop_factor"] = str(self.margin_drop_factor)
+        d["max_drawdown_pct"] = str(self.max_drawdown_pct)
+        d["stop_loss_pct"] = str(self.stop_loss_pct)
         d["mode"] = "SIMULATED" if self.simulated else "LIVE"
         return d
 
@@ -82,6 +91,12 @@ class DorothyRunner:
         self._api_secret: Optional[str] = None
         self._client: Optional[Client] = None
         self._error_streak = 0
+        # [MEJORA] Estado persistible por eventos (SQLite en servicios hub).
+        self._peak_equity_usdt: Optional[Decimal] = None
+        self._last_equity_usdt: Optional[Decimal] = None
+        self._max_drawdown_seen: Decimal = Decimal("0")
+        self._equity_returns: list[Decimal] = []
+        self._cycle_count = 0
 
     def _emit(
         self,
@@ -135,6 +150,101 @@ class DorothyRunner:
     async def _to_thread(self, fn: Callable[[], Any]) -> Any:
         return await asyncio.to_thread(fn)
 
+    def restore_risk_state(
+        self,
+        *,
+        peak_equity_usdt: Optional[str] = None,
+        max_drawdown_seen: Optional[str] = None,
+        cycle_count: Optional[int] = None,
+    ) -> None:
+        if peak_equity_usdt is not None:
+            v = _dec(peak_equity_usdt, "0")
+            self._peak_equity_usdt = v if v > 0 else None
+        if max_drawdown_seen is not None:
+            self._max_drawdown_seen = max(Decimal("0"), _dec(max_drawdown_seen, "0"))
+        if cycle_count is not None:
+            self._cycle_count = max(0, int(cycle_count))
+
+    async def _compute_equity_usdt(self, client: Client, base_asset: str = "USDT") -> tuple[Decimal, Decimal]:
+        account = await self._to_thread(client.get_account)
+        tickers = await self._to_thread(client.get_all_tickers)
+        prices: dict[str, Decimal] = {}
+        if isinstance(tickers, list):
+            for t in tickers:
+                if isinstance(t, dict):
+                    prices[str(t.get("symbol", "")).upper()] = _dec(t.get("price", "0"), "0")
+        equity = Decimal("0")
+        base_free = Decimal("0")
+        balances = account.get("balances", []) if isinstance(account, dict) else []
+        if isinstance(balances, list):
+            for b in balances:
+                if not isinstance(b, dict):
+                    continue
+                asset = str(b.get("asset", "")).upper()
+                free = _dec(b.get("free", "0"), "0")
+                locked = _dec(b.get("locked", "0"), "0")
+                total = free + locked
+                if total <= 0:
+                    continue
+                if asset == base_asset:
+                    equity += total
+                    base_free = free
+                    continue
+                px = prices.get(f"{asset}{base_asset}")
+                if px and px > 0:
+                    equity += total * px
+        return equity, base_free
+
+    def _register_equity(self, equity: Decimal) -> tuple[Decimal, bool]:
+        if self._peak_equity_usdt is None or equity > self._peak_equity_usdt:
+            self._peak_equity_usdt = equity
+        peak = self._peak_equity_usdt or equity
+        dd = Decimal("0")
+        if peak > 0:
+            dd = (peak - equity) / peak
+        if dd > self._max_drawdown_seen:
+            self._max_drawdown_seen = dd
+        if self._equity_returns:
+            prev = self._equity_returns[-1]
+            _ = prev
+        blocked = dd > self.config.max_drawdown_pct
+        return dd, blocked
+
+    def _record_return(self, prev_equity: Optional[Decimal], equity: Decimal) -> None:
+        if prev_equity is None or prev_equity <= 0:
+            return
+        r = (equity - prev_equity) / prev_equity
+        self._equity_returns.append(r)
+        if len(self._equity_returns) > 500:
+            self._equity_returns = self._equity_returns[-500:]
+
+    def _compute_metrics(self) -> dict[str, Any]:
+        rs = self._equity_returns
+        n = len(rs)
+        if n == 0:
+            return {
+                "sharpe": "0",
+                "win_rate": "0",
+                "max_drawdown": str(self._max_drawdown_seen),
+                "samples": 0,
+            }
+        wins = sum(1 for r in rs if r > 0)
+        mean = sum(rs, Decimal("0")) / Decimal(n)
+        var = sum((r - mean) * (r - mean) for r in rs) / Decimal(n)
+        std = var.sqrt() if var > 0 else Decimal("0")
+        sharpe = (mean / std) * Decimal(n).sqrt() if std > 0 else Decimal("0")
+        return {
+            "sharpe": str(sharpe),
+            "win_rate": str(Decimal(wins) / Decimal(n)),
+            "max_drawdown": str(self._max_drawdown_seen),
+            "samples": n,
+        }
+
+    def _maybe_emit_metrics(self) -> None:
+        self._cycle_count += 1
+        if self._cycle_count % self.config.metrics_interval_cycles == 0:
+            self._emit("SYSTEM", "bot:metrics", self._compute_metrics())
+
     async def run_once(self) -> dict[str, Any]:
         c = self.config
         c.normalize()
@@ -144,6 +254,22 @@ class DorothyRunner:
             )
         client = self._ensure_client()
         symbol = c.symbol
+        prev_equity = self._last_equity_usdt
+        equity, capital = await self._compute_equity_usdt(client)
+        drawdown, trading_blocked = self._register_equity(equity)
+        self._record_return(prev_equity, equity)
+        self._last_equity_usdt = equity
+        self._emit(
+            "SYSTEM",
+            "bot:equity_snapshot",
+            {
+                "equity_usdt": str(equity),
+                "capital_usdt": str(capital),
+                "peak_equity_usdt": str(self._peak_equity_usdt or equity),
+                "drawdown_pct": str(drawdown),
+                "trading_blocked": trading_blocked,
+            },
+        )
 
         open_orders = await self._to_thread(lambda: client.get_open_orders(symbol=symbol))
         if not isinstance(open_orders, list):
@@ -169,6 +295,51 @@ class DorothyRunner:
             {"symbol": symbol, "response": ticker},
         )
         market_price = _dec(ticker.get("price", "0"), "0")
+        if lowest_sell is not None and c.stop_loss_pct > 0:
+            anchor_sell_price = _dec(lowest_sell.get("price", "0"), "0")
+            implied_buy = anchor_sell_price / (Decimal("1") + c.profit_factor) if c.profit_factor >= 0 else anchor_sell_price
+            stop_price = implied_buy * (Decimal("1") - c.stop_loss_pct)
+            if market_price <= stop_price:
+                stop_payload: dict[str, Any] = {
+                    "symbol": symbol,
+                    "anchor_sell_price": str(anchor_sell_price),
+                    "implied_buy_price": str(implied_buy),
+                    "stop_price": str(stop_price),
+                    "market_price": str(market_price),
+                }
+                if c.simulated:
+                    stop_payload["execution"] = "SIMULATED"
+                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+                else:
+                    oid = lowest_sell.get("orderId")
+                    qty = _dec(lowest_sell.get("origQty", "0"), "0")
+                    if oid is not None:
+                        cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
+                        self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
+                    if qty > 0:
+                        sold = await self._to_thread(
+                            lambda q=qty: client.create_order(
+                                symbol=symbol,
+                                side=client.SIDE_SELL,
+                                type=client.ORDER_TYPE_MARKET,
+                                quantity=str(_q(q, c.qty_decimals)),
+                            )
+                        )
+                        self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
+                    stop_payload["execution"] = "LIVE"
+                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+                stop_report = {
+                    "preset_id": c.preset_id,
+                    "symbol": symbol,
+                    "simulated": c.simulated,
+                    "trading_enabled": c.trading_enabled,
+                    "decision": "STOP_LOSS",
+                    "market_price": str(market_price),
+                    "stop_price": str(stop_price),
+                    "loop_interval_sec": c.loop_interval_sec,
+                }
+                self._maybe_emit_metrics()
+                return stop_report
         should_buy = False
         threshold = None
         if lowest_sell is not None:
@@ -191,7 +362,15 @@ class DorothyRunner:
             "sell_anchor_price": str(_dec(lowest_sell.get("price", "0"), "0")) if lowest_sell else None,
             "loop_interval_sec": c.loop_interval_sec,
         }
+        if trading_blocked:
+            report["decision"] = "WAIT_DRAWDOWN_GUARD"
+            report["trading_blocked"] = True
+            report["drawdown_pct"] = str(drawdown)
+            self._emit("WARNING", "bot:drawdown_guard_active", {"report": report})
+            self._maybe_emit_metrics()
+            return report
         if not should_buy:
+            self._maybe_emit_metrics()
             return report
 
         est_buy = market_price if market_price > 0 else Decimal("1")
@@ -206,6 +385,7 @@ class DorothyRunner:
             report["execution"] = "SIMULATED"
             report["message"] = "Dry run only; no orders sent."
             self._emit("INFO", "bot:decision", {"report": report})
+            self._maybe_emit_metrics()
             return report
 
         buy = await self._to_thread(
@@ -253,6 +433,7 @@ class DorothyRunner:
         report["filled_buy_price"] = str(buy_price)
         report["placed_sell_price"] = str(sell_price)
         self._emit("INFO", "bot:decision", {"report": report})
+        self._maybe_emit_metrics()
         return report
 
     async def sync_time(self) -> dict[str, Any]:

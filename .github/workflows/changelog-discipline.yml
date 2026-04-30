@@ -1,0 +1,46 @@
+name: Changelog Discipline
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  enforce-doc-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify docs changelog updated with code changes
+        shell: bash
+        run: |
+          BASE_REF="${{ github.base_ref }}"
+          if [ -z "$BASE_REF" ]; then
+            BASE_REF="main"
+          fi
+          git fetch origin "$BASE_REF" --depth=1
+          CHANGED="$(git diff --name-only "origin/$BASE_REF"...HEAD)"
+          echo "$CHANGED"
+
+          CODE_TOUCHED=0
+          CHANGELOG_TOUCHED=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [[ "$file" == runtime/* || "$file" == desktop_shell/* || "$file" == .github/workflows/* ]]; then
+              CODE_TOUCHED=1
+            fi
+            if [[ "$file" == docs/CHANGELOG.md ]]; then
+              CHANGELOG_TOUCHED=1
+            fi
+          done <<< "$CHANGED"
+
+          if [ "$CODE_TOUCHED" -eq 1 ] && [ "$CHANGELOG_TOUCHED" -eq 0 ]; then
+            echo "❌ Code/workflow changes detected without docs/CHANGELOG.md update."
+            exit 1
+          fi
+
+          echo "✅ Changelog discipline check passed."

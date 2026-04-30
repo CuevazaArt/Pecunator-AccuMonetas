@@ -1,6 +1,7 @@
 name: Python Tests (Dorothy Bot)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'refactor/**'
@@ -49,11 +50,11 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check runtime/ --select=E,W,F || true
+          ruff check runtime/ --select=E,W,F
 
       - name: Type check with mypy
         run: |
-          mypy runtime/bot/dorothy.py --ignore-missing-imports || true
+          mypy runtime/modules/bots/dorothy.py --ignore-missing-imports
 
       - name: Run pytest
         run: |

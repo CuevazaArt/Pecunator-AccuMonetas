@@ -51,8 +51,8 @@
 |----------|----------|---------|
 | `GITHUB_WORKFLOW.md` | `docs/` | Multi-office collaboration guide |
 | `DEVELOPMENT_GUIDE.md` | Root | Quick start for developers |
-| `REFACTOR_SUMMARY.md` | Root | Overview of changes |
-| `REFACTOR_ARCHITECTURE.md` | `docs/` | Design deep-dive |
+| `docs/CHANGELOG.md` | `docs/` | Operational architecture history |
+| `docs/architecture-next.md` | `docs/` | Design deep-dive |
 | `VALIDATION_CHECKLIST.md` | Root | Testing instructions |
 
 ### 4. ✅ Remote Configuration
@@ -373,7 +373,7 @@ Root:
 - 📖 Workflows: `docs/GITHUB_WORKFLOW.md`
 - 🚀 Getting started: `DEVELOPMENT_GUIDE.md`
 - 📋 Testing: `VALIDATION_CHECKLIST.md`
-- 🏗️ Architecture: `docs/REFACTOR_ARCHITECTURE.md`
+- 🏗️ Architecture: `docs/architecture-next.md`
 
 ---
 

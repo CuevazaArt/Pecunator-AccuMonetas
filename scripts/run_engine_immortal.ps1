@@ -12,7 +12,7 @@ while ($true) {
     }
     try {
         & (Join-Path $root '.venv\Scripts\Activate.ps1')
-        python (Join-Path $root 'scripts\run_engine_with_examplejv.py')
+        python (Join-Path $root 'main.py')
     } catch {
         Write-Warning "Engine supervisor caught exception: $_"
     }

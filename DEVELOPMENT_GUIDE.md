@@ -331,8 +331,8 @@ git push --force-with-lease origin feature/your-branch
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `REFACTOR_SUMMARY.md` | Overview of changes | ✅ Read this first |
-| `REFACTOR_ARCHITECTURE.md` | Design deep-dive | ✅ Reference |
+| `docs/CHANGELOG.md` | Overview of changes | ✅ Read this first |
+| `docs/architecture-next.md` | Design deep-dive | ✅ Reference |
 | `VALIDATION_CHECKLIST.md` | Testing steps | ✅ Follow for QA |
 | `docs/GITHUB_WORKFLOW.md` | Collaboration guide | ✅ For multi-office setup |
 | `requirements-dev.txt` | Python dependencies | ✅ Keep updated |
