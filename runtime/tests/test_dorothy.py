@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from runtime.bot.dorothy import DorothyConfig, DorothyRunner
+from runtime.modules.bots.dorothy import DorothyConfig, DorothyRunner
 
 
 class TestDorothyConfig:
@@ -212,7 +212,7 @@ class TestDorothyDecimalHandling:
 
     def test_quantize_down(self):
         """Test downward quantization for order quantities."""
-        from runtime.bot.dorothy import _q
+        from runtime.modules.bots.dorothy import _q
 
         # 8.567 with 2 decimal places should become 8.56 (not 8.57)
         result = _q(Decimal("8.567"), places=2)
@@ -220,14 +220,14 @@ class TestDorothyDecimalHandling:
 
     def test_quantize_zero_places(self):
         """Test quantization with zero decimal places."""
-        from runtime.bot.dorothy import _q
+        from runtime.modules.bots.dorothy import _q
 
         result = _q(Decimal("8.9"), places=0)
         assert result == Decimal("8")
 
     def test_decimal_conversion_from_string(self):
         """Test _dec() handles string to Decimal conversion."""
-        from runtime.bot.dorothy import _dec
+        from runtime.modules.bots.dorothy import _dec
 
         assert _dec("8.5") == Decimal("8.5")
         assert _dec("0") == Decimal("0")
@@ -237,7 +237,7 @@ class TestDorothyDecimalHandling:
 
     def test_decimal_conversion_with_custom_default(self):
         """Test _dec() with custom default value."""
-        from runtime.bot.dorothy import _dec
+        from runtime.modules.bots.dorothy import _dec
 
         result = _dec("invalid", default="10")
         assert result == Decimal("10")

@@ -326,7 +326,7 @@ gh pr create --base main --head refactor/stable-ui-and-tests \
 - Error handling & retry logic
 - Full documentation
 
-See: https://github.com/Cuevaza/PecunatorCore/blob/refactor/stable-ui-and-tests/REFACTOR_SUMMARY.md
+See: https://github.com/Cuevaza/PecunatorCore/blob/main/docs/architecture-next.md
 "
 
 # Share PR link with approver

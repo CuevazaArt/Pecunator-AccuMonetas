@@ -1,4 +1,4 @@
-"""Dorothy-style trading bot primitives (exampleJV-inspired)."""
+"""Dorothy-style trading bot primitives."""
 
 from __future__ import annotations
 

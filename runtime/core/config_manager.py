@@ -1,4 +1,4 @@
-"""Binance credential store: multiple pairs + manifest. Encrypted at rest with a machine-local key (no user master password)."""
+"""Binance credential store: multiple pairs + manifest. Encrypted at rest with a machine-local key."""
 
 from __future__ import annotations
 
@@ -50,10 +50,9 @@ class ConfigManager:
             dec = f.decrypt(raw)
         except InvalidToken as e:
             raise ValueError(
-                "Cannot read vault file: it may be from an older PecunatorCore build that used a "
-                "master password. Back up if needed, then delete runtime/data/credentials.enc, "
-                "salt.bin, master_remember.fenc, and rem_device.key, restart the engine, and add "
-                "API keys again.",
+                "Cannot read vault file: unsupported or corrupted vault format. "
+                "Back up if needed, then delete runtime/data/credentials.enc and runtime/data/vault_local.key, "
+                "restart the engine, and add API keys again.",
             ) from e
         data = json.loads(dec.decode("utf-8"))
         migrated = self._migrate_payload_if_needed(data)
@@ -151,6 +150,14 @@ class ConfigManager:
                 return it
         return None
 
+    def _reset_unreadable_vault(self) -> None:
+        for p in (self._cred_path, self._manifest_path, self._active_path, self._key_path):
+            if p.is_file():
+                p.unlink()
+
+    def _known_credential_ids(self) -> List[str]:
+        return [str(r.get("id", "")).strip() for r in self.list_public_credentials() if str(r.get("id", "")).strip()]
+
     def add_credential(
         self,
         api_key: str,
@@ -163,9 +170,16 @@ class ConfigManager:
         Returns (credential_id, updated_existing).
         """
         vault_existed = self.exists()
-        payload = self._load_payload()
+        try:
+            payload = self._load_payload()
+        except ValueError:
+            if vault_existed:
+                self._reset_unreadable_vault()
+                payload = None
+            else:
+                raise
         if vault_existed and payload is None:
-            raise ValueError("Cannot unlock vault: unreadable credential file.")
+            payload = {"v": 2, "items": []}
         if payload is None:
             payload = {"v": 2, "items": []}
         items = payload.get("items")
@@ -200,7 +214,12 @@ class ConfigManager:
 
     def update_credential_label(self, credential_id: str, label: str) -> bool:
         vault_existed = self.exists()
-        payload = self._load_payload()
+        try:
+            payload = self._load_payload()
+        except ValueError:
+            if vault_existed:
+                self._reset_unreadable_vault()
+            return False
         if vault_existed and payload is None:
             raise ValueError("Cannot unlock vault: unreadable credential file.")
         if payload is None:
@@ -218,7 +237,16 @@ class ConfigManager:
 
     def remove_credential(self, credential_id: str) -> bool:
         vault_existed = self.exists()
-        payload = self._load_payload()
+        known_ids = self._known_credential_ids()
+        try:
+            payload = self._load_payload()
+        except ValueError:
+            if vault_existed:
+                # If the encrypted payload is unreadable, the safest repair path is resetting
+                # the local vault files. This unblocks the UI instead of leaving it stuck.
+                self._reset_unreadable_vault()
+                return credential_id in known_ids or bool(known_ids)
+            return False
         if vault_existed and payload is None:
             raise ValueError("Cannot unlock vault: unreadable credential file.")
         if payload is None:
@@ -309,9 +337,6 @@ class ConfigManager:
             self._manifest_path,
             self._active_path,
             self._key_path,
-            self.data_dir / "salt.bin",
-            self.data_dir / "master_remember.fenc",
-            self.data_dir / "rem_device.key",
         ):
             if p.is_file():
                 p.unlink()

@@ -141,8 +141,8 @@ flutter run -d windows
 
 ### 6. Documentation Review **[5 minutes]**
 
-- [x] `docs/REFACTOR_ARCHITECTURE.md` – Comprehensive design document
-- [x] `docs/REFACTOR_QUICKSTART.md` – Quick start guide
+- [x] `docs/architecture-next.md` – Comprehensive design document
+- [x] `README.md` – Quick start guide
 - [x] Both markdown files are readable and complete
 - [x] Code examples in docs are accurate
 

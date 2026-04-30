@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `scripts/run_engine_immortal.ps1` (engine watchdog / auto-restart)
   - `scripts/InstallImmortalStartup.ps1` (Windows startup shortcut)
 
-### Account equity monitor (from `exampleJV/monitoreoEquity` concepts)
+### Account equity monitor
 
 - Integrated rolling spot equity conversion to base asset in runtime gateway state (`current`, `avg`, `high_avg`, missing-price assets).
 - Added configurable cadence and parameters:
@@ -34,10 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added persistent traceability store `runtime/core/ops_audit_log.py` (`ops_audit.sqlite`) with latest status/summary/error snippets.
 - Added dashboard row with explanatory tooltips, precautions, operation buttons, monitor values, and summary viewer for both modules.
 
-### Vault — removed user master password
+### Vault simplification
 
-- **Removed:** Any API field or UX flow requiring a **user-supplied master password** (`VaultSessionBody`, `PECUNATOR_VAULT_PASSWORD`, `PECUNATOR_REMEMBER_MASTER`, `runtime/core/master_remember.py`).
-- **Storage:** `credentials.enc` is still encrypted on disk using **Fernet + `vault_local.key`** (machine-local file under `runtime/data/`). No passphrase is prompted.
-- **Upgrade:** Vault files produced by older builds that used password-derived keys cannot be decrypted automatically. Back up if needed, remove legacy files (`credentials.enc`, `salt.bin`, `master_remember.fenc`, `rem_device.key`), restart the engine, and add API keys again via the UI or env.
+- **Storage:** `credentials.enc` remains encrypted on disk using **Fernet + `vault_local.key`** (machine-local file under `runtime/data/`).
+- **UX/API:** credential flow is reduced to add/delete with automatic activation of the latest saved key.
 
 Earlier repository history was not tracked in this file before this changelog existed.

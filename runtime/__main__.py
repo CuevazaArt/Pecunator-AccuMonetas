@@ -1,4 +1,4 @@
-"""Allow `python -m runtime` (engine stub; no HTTP server)."""
+"""Allow `python -m runtime` (same engine entrypoint as root `main.py`)."""
 
 from __future__ import annotations
 

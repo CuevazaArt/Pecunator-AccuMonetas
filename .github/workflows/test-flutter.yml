@@ -1,6 +1,7 @@
 name: Flutter Tests (Refactored UI)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'refactor/**'
@@ -37,12 +38,12 @@ jobs:
         working-directory: desktop_shell
         run: |
           flutter pub get
-          flutter analyze lib/ || echo "⚠️ Analysis issues found (non-blocking)"
+          flutter analyze lib/
 
       - name: Format check
         working-directory: desktop_shell
         run: |
-          dart format lib/ --set-exit-if-changed --dry-run || echo "⚠️ Format issues found"
+          dart format lib/ --set-exit-if-changed --dry-run
 
       - name: Run Dart tests
         working-directory: desktop_shell

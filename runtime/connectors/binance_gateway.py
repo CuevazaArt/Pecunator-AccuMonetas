@@ -8,6 +8,7 @@ import json
 import logging
 import time
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import websockets
@@ -22,6 +23,7 @@ from runtime.core.equity import (
 )
 from runtime.core.event_bus import EventBus
 from runtime.core.security_util import sanitize_log_message
+from runtime.core.rest_usage_log import RestUsageLog, get_rest_usage_log
 from runtime.core.settings import (
     account_poll_interval_sec,
     equity_avg_window_samples,
@@ -54,6 +56,7 @@ class BinanceGateway:
         bus: EventBus,
         state: StateStore,
         log: Callable[[str], None],
+        data_dir: Path | None = None,
     ) -> None:
         self.api_key = api_key
         self.api_secret = api_secret
@@ -68,9 +71,17 @@ class BinanceGateway:
         self._logged_account_rest_snapshot = False
         self._ticker_prices: dict[str, Decimal] = {}
         self._equity_rolling = EquityRollingWindow(sample_window=equity_avg_window_samples())
+        self._rest_usage_log: Optional[RestUsageLog] = (
+            get_rest_usage_log(data_dir) if data_dir else None
+        )
 
-    def _capture_rest_weight_from_client(self) -> None:
-        """Read X-MBX-USED-WEIGHT-1M from python-binance last response (same as exampleJV/monitorPesos)."""
+    def _capture_rest_weight_from_client(
+        self,
+        *,
+        action: str,
+        note: str | None = None,
+    ) -> None:
+        """Read X-MBX-USED-WEIGHT-1M from python-binance last response."""
         if self._client is None:
             return
         try:
@@ -84,7 +95,15 @@ class BinanceGateway:
                     raw = v
                     break
             if raw is not None:
-                self.state.api_weight_used_1m = int(float(raw))
+                used = int(float(raw))
+                self.state.api_weight_used_1m = used
+                if self._rest_usage_log is not None:
+                    self._rest_usage_log.record_event(
+                        source="gateway",
+                        action=action,
+                        used_weight_1m=used,
+                        note=note,
+                    )
         except (TypeError, ValueError, AttributeError):
             pass
 
@@ -149,7 +168,7 @@ class BinanceGateway:
         ]
         self.bus.publish("account.balances", self.state.balances)
         self.state.last_error = None
-        self._capture_rest_weight_from_client()
+        self._capture_rest_weight_from_client(action="fetch_account:get_account")
 
         _msg = (
             "GET /api/v3/account: "
@@ -169,6 +188,10 @@ class BinanceGateway:
         else:
             _LOG.debug("%s", _msg)
 
+    async def refresh_rest_weight(self) -> None:
+        """Deprecated: avoid extra ping calls for weight reads."""
+        return
+
     async def refresh_equity(self, *, force_tickers: bool = False, base_asset: str | None = None) -> None:
         if self._client is None:
             return
@@ -176,7 +199,7 @@ class BinanceGateway:
             try:
                 raw_tickers = await self._to_thread(lambda: self._client.get_all_tickers())
                 self._ticker_prices = build_ticker_price_map(raw_tickers)
-                self._capture_rest_weight_from_client()
+                self._capture_rest_weight_from_client(action="refresh_equity:get_all_tickers")
             except BinanceAPIException as e:
                 self._emit_log(f"equity:ticker {self._api_error_summary(e)}")
                 return
@@ -215,6 +238,7 @@ class BinanceGateway:
             f"time sync: local={local_ms} server={server_ms} offset_ms={offset_ms}"
         )
         self._emit_log(msg)
+        self._capture_rest_weight_from_client(action="sync_time:get_server_time")
         return {
             "local_time_ms": local_ms,
             "server_time_ms": server_ms,
@@ -239,7 +263,7 @@ class BinanceGateway:
         self.state.open_orders = orders
         self.bus.publish("account.open_orders", self.state.open_orders)
         self.state.last_error = None
-        self._capture_rest_weight_from_client()
+        self._capture_rest_weight_from_client(action="fetch_open_orders:get_open_orders")
 
     async def fetch_my_trades(self, symbol: str, limit: int = 20) -> None:
         if self._client is None:
@@ -264,7 +288,9 @@ class BinanceGateway:
         self.state.my_trades = list(reversed(raw if isinstance(raw, list) else []))
         self.bus.publish("account.my_trades", self.state.my_trades)
         self.state.last_error = None
-        self._capture_rest_weight_from_client()
+        self._capture_rest_weight_from_client(
+            action=f"fetch_my_trades:get_my_trades:{sym}"
+        )
 
     async def fetch_book_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
         if self._client is None:
@@ -274,7 +300,11 @@ class BinanceGateway:
         except ValueError:
             return None
         try:
-            return await self._to_thread(lambda: self._client.get_orderbook_ticker(symbol=sym))
+            out = await self._to_thread(lambda: self._client.get_orderbook_ticker(symbol=sym))
+            self._capture_rest_weight_from_client(
+                action=f"fetch_book_ticker:get_orderbook_ticker:{sym}"
+            )
+            return out
         except (BinanceAPIException, OSError):
             return None
 

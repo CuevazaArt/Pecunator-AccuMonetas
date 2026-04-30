@@ -1,4 +1,4 @@
-/// HTTP client with retry logic, timeouts, and error classification.
+// HTTP client with retry logic, timeouts, and error classification.
 
 import 'dart:async';
 import 'dart:convert';
@@ -27,9 +27,8 @@ class RobustHttpClient {
   RobustHttpClient({
     required this.baseUrl,
     http.Client? httpClient,
-    HttpClientConfig config = const HttpClientConfig(),
-  })  : _inner = httpClient ?? http.Client(),
-        config = config;
+    this.config = const HttpClientConfig(),
+  }) : _inner = httpClient ?? http.Client();
 
   /// Perform GET request with retry and error handling.
   Future<Map<String, dynamic>> get(
@@ -90,6 +89,46 @@ class RobustHttpClient {
           headers: headers,
         ),
       );
+
+  /// Perform arbitrary HTTP request with retry and error handling.
+  Future<Map<String, dynamic>> request(
+    String method,
+    String endpoint, {
+    Map<String, String>? headers,
+    dynamic body,
+  }) {
+    final m = method.trim().toUpperCase();
+    final url = Uri.parse('$baseUrl$endpoint');
+    switch (m) {
+      case 'GET':
+        return _requestWithRetry(() => _inner.get(url, headers: headers));
+      case 'POST':
+        return _requestWithRetry(
+          () => _inner.post(
+            url,
+            headers: _mergeHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          ),
+        );
+      case 'PATCH':
+        return _requestWithRetry(
+          () => _inner.patch(
+            url,
+            headers: _mergeHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          ),
+        );
+      case 'DELETE':
+        return _requestWithRetry(
+          () => _inner.delete(
+            url,
+            headers: _mergeHeaders(headers),
+          ),
+        );
+      default:
+        throw ValidationException(message: 'Método HTTP no soportado: $method');
+    }
+  }
 
   /// Internal: retry logic with exponential backoff.
   Future<Map<String, dynamic>> _requestWithRetry(

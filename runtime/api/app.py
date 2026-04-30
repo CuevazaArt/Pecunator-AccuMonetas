@@ -1,11 +1,16 @@
-"""FastAPI application: vault session, gateway lifecycle, read-only snapshot."""
+"""FastAPI application: credential vault, gateway lifecycle, and operations API."""
 
 from __future__ import annotations
 
 import asyncio
+import ast
+import json
 import logging
+import sqlite3
+import threading
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from typing import Any
 
@@ -27,11 +32,20 @@ from runtime.api.schemas import (
     HubBotOut,
     HubBotsOut,
     HubBotUpdateBody,
+    MashaBotCreateBody,
+    MashaBotLogsOut,
+    MashaBotOut,
+    MashaBotsOut,
+    MashaBotUpdateBody,
     TerminalExecBody,
     TerminalExecOut,
+    ThusneldaBotCreateBody,
+    ThusneldaBotLogsOut,
+    ThusneldaBotOut,
+    ThusneldaBotsOut,
+    ThusneldaBotUpdateBody,
     TimeSyncBody,
     TimeSyncOut,
-    VaultCredentialDeleteBody,
     VaultCredentialLabelBody,
     VaultCredentialUpsertBody,
     VaultStatusOut,
@@ -42,12 +56,16 @@ from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_b
 from runtime.core.ops_audit_log import get_ops_audit_log
 from runtime.core.security_util import sanitize_log_message
 from runtime.core.settings import (
+    account_poll_interval_sec,
     api_bind_host_for_cors_regex,
     api_weight_limit_1m_display,
     binance_credentials_from_env,
+    equity_poll_stride,
+    my_trades_poll_stride,
 )
 
 _LOG = logging.getLogger("pecunator.api")
+_SANDBOX_DB_LOCK = threading.Lock()
 
 
 def _mask_pk(pk: str) -> str:
@@ -65,13 +83,23 @@ async def _lifespan(app: FastAPI):
     deps.init_context()
     ctx = deps.get_ctx()
     bot = deps.get_bot()
+    masha = deps.get_masha()
+    thusnelda = deps.get_thusnelda()
     bot.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
+    masha.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
+    thusnelda.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
     await _autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
     bot = deps.get_bot()
+    masha = deps.get_masha()
+    thusnelda = deps.get_thusnelda()
     await bot.stop_immortality()
+    await masha.stop_immortality()
+    await thusnelda.stop_immortality()
     await bot.stop_all()
+    await masha.stop_all()
+    await thusnelda.stop_all()
     if ctx and ctx.gateway:
         try:
             await ctx.gateway.stop()
@@ -93,7 +121,7 @@ async def _autostart_gateway_if_possible(ctx: AppContext) -> None:
     if not pair:
         _LOG.info("Gateway auto-start skipped: no credentials resolved")
         return
-    gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line)
+    gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line, ctx.config.data_dir)
     try:
         await gw.start()
         await gw.sync_time()
@@ -138,7 +166,6 @@ def create_app() -> FastAPI:
             vault_file_exists=ctx.config.exists(),
             credential_rows=len(pubs),
             active_credential_id=ctx.config.get_active_credential_id(),
-            session_cached=False,
         )
 
     @app.get("/api/v1/vault/credentials")
@@ -170,11 +197,15 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=401, detail=str(e)) from None
         pubs = ctx.config.list_public_credentials()
         row = next((p for p in pubs if p.get("id") == cid), None)
+        ctx.active_api_key_hint = _mask_pk(body.api_key)
+        ctx.active_api_key_last4 = _pk_last4(body.api_key)
+        ctx.active_api_key_source = "vault"
         return {
             "id": cid,
             "updated_existing": bool(updated),
             "label": (row or {}).get("label", body.label or ""),
         }
+        
 
     @app.patch("/api/v1/vault/credentials/{credential_id}")
     async def vault_credentials_update_label(
@@ -187,31 +218,31 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Credential not found")
         return {"updated": True}
 
-    @app.post("/api/v1/vault/credentials/{credential_id}/activate")
-    async def vault_credentials_activate(
-        credential_id: str,
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        pubs = ctx.config.list_public_credentials()
-        exists = any(str(p.get("id")) == credential_id for p in pubs)
-        if not exists:
-            raise HTTPException(status_code=404, detail="Credential not found")
-        ctx.config.set_active_credential_id(credential_id)
-        return {"active": True, "active_credential_id": credential_id}
-
-    @app.post("/api/v1/vault/credentials/{credential_id}/delete")
+    @app.delete("/api/v1/vault/credentials/{credential_id}")
     async def vault_credentials_delete(
         credential_id: str,
-        body: VaultCredentialDeleteBody = VaultCredentialDeleteBody(),
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> dict[str, Any]:
+        prev_active = ctx.config.get_active_credential_id()
         try:
             ok = ctx.config.remove_credential(credential_id)
         except ValueError as e:
             raise HTTPException(status_code=401, detail=str(e)) from None
         if not ok:
             raise HTTPException(status_code=404, detail="Credential not found")
+        if prev_active == credential_id:
+            # Avoid stale "runtime" active credential after deleting the active vault row.
+            ctx.active_api_key_hint = None
+            ctx.active_api_key_last4 = None
+            ctx.active_api_key_source = None
         return {"deleted": True}
+
+    @app.post("/api/v1/vault/credentials/{credential_id}/delete")
+    async def vault_credentials_delete_compat(
+        credential_id: str,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        return await vault_credentials_delete(credential_id, ctx)
 
     @app.get("/api/v1/credentials/active", response_model=ActiveCredentialOut)
     async def active_credential(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
@@ -219,6 +250,14 @@ def create_app() -> FastAPI:
         pubs = ctx.config.list_public_credentials()
         active_pub = next((p for p in pubs if p.get("id") == active_id), None)
         active_label = (active_pub or {}).get("label", "") or None
+        if (
+            ctx.active_api_key_source == "vault"
+            and active_id
+            and active_pub is None
+        ):
+            ctx.active_api_key_hint = None
+            ctx.active_api_key_last4 = None
+            ctx.active_api_key_source = None
         if ctx.active_api_key_hint:
             return ActiveCredentialOut(
                 source=ctx.active_api_key_source or "runtime",
@@ -261,7 +300,7 @@ def create_app() -> FastAPI:
         return [
             {
                 "preset_id": "B",
-                "name": "Dorothy7 preset B (exampleJV)",
+                "name": "Dorothy7 preset B",
                 "symbol": "XRPUSDT",
                 "loop_interval_sec": 450,
                 "quote_order_qty": "8",
@@ -319,6 +358,9 @@ def create_app() -> FastAPI:
                 qty_decimals=body.qty_decimals,
                 price_decimals=body.price_decimals,
                 note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
                 simulated=body.simulated,
                 trading_enabled=body.trading_enabled,
             )
@@ -341,6 +383,9 @@ def create_app() -> FastAPI:
                 qty_decimals=body.qty_decimals,
                 price_decimals=body.price_decimals,
                 note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
                 simulated=body.simulated,
                 trading_enabled=body.trading_enabled,
             )
@@ -409,6 +454,260 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Bot not found") from None
         return HubBotLogsOut(logs=rows)
 
+    @app.get("/api/v1/masha/bots", response_model=MashaBotsOut)
+    async def masha_bots_list() -> Any:
+        return MashaBotsOut(bots=[MashaBotOut(**row) for row in deps.get_masha().list_instances()])
+
+    @app.post("/api/v1/masha/bots", response_model=MashaBotOut)
+    async def masha_bots_create(body: MashaBotCreateBody) -> Any:
+        svc = deps.get_masha()
+        try:
+            row = svc.create_instance(
+                bot_id=body.bot_id,
+                tag=body.tag,
+                symbol=body.symbol,
+                base_asset=body.base_asset,
+                quote_asset=body.quote_asset,
+                loop_interval_sec=body.loop_interval_sec,
+                quote_min_free_to_operate=body.quote_min_free_to_operate,
+                buy_qty_base=body.buy_qty_base,
+                profit_factor=body.profit_factor,
+                timeframe_w=body.timeframe_w,
+                periods_w=body.periods_w,
+                mm_periods_w=body.mm_periods_w,
+                margin_low_w=body.margin_low_w,
+                timeframe_h=body.timeframe_h,
+                periods_h=body.periods_h,
+                mm_periods_h=body.mm_periods_h,
+                margin_low_h=body.margin_low_h,
+                qty_decimals=body.qty_decimals,
+                price_decimals=body.price_decimals,
+                note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
+                simulated=body.simulated,
+                trading_enabled=body.trading_enabled,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
+        return MashaBotOut(**row)
+
+    @app.patch("/api/v1/masha/bots/{bot_id}", response_model=MashaBotOut)
+    async def masha_bots_update(bot_id: str, body: MashaBotUpdateBody) -> Any:
+        svc = deps.get_masha()
+        try:
+            row = svc.update_instance(
+                bot_id,
+                tag=body.tag,
+                symbol=body.symbol,
+                base_asset=body.base_asset,
+                quote_asset=body.quote_asset,
+                loop_interval_sec=body.loop_interval_sec,
+                quote_min_free_to_operate=body.quote_min_free_to_operate,
+                buy_qty_base=body.buy_qty_base,
+                profit_factor=body.profit_factor,
+                timeframe_w=body.timeframe_w,
+                periods_w=body.periods_w,
+                mm_periods_w=body.mm_periods_w,
+                margin_low_w=body.margin_low_w,
+                timeframe_h=body.timeframe_h,
+                periods_h=body.periods_h,
+                mm_periods_h=body.mm_periods_h,
+                margin_low_h=body.margin_low_h,
+                qty_decimals=body.qty_decimals,
+                price_decimals=body.price_decimals,
+                note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
+                simulated=body.simulated,
+                trading_enabled=body.trading_enabled,
+            )
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
+        return MashaBotOut(**row)
+
+    @app.delete("/api/v1/masha/bots/{bot_id}")
+    async def masha_bots_delete(bot_id: str) -> dict[str, bool]:
+        svc = deps.get_masha()
+        try:
+            await svc.delete_instance(bot_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return {"deleted": True}
+
+    @app.post("/api/v1/masha/bots/{bot_id}/start", response_model=MashaBotOut)
+    async def masha_bots_start(
+        bot_id: str,
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        try:
+            row = await deps.get_masha().start_instance(bot_id, pair[0], pair[1])
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
+        return MashaBotOut(**row)
+
+    @app.post("/api/v1/masha/bots/{bot_id}/stop", response_model=MashaBotOut)
+    async def masha_bots_stop(bot_id: str) -> Any:
+        try:
+            row = await deps.get_masha().stop_instance(bot_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return MashaBotOut(**row)
+
+    @app.post("/api/v1/masha/bots/{bot_id}/run_once", response_model=MashaBotOut)
+    async def masha_bots_run_once(
+        bot_id: str,
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        try:
+            row = await deps.get_masha().run_once_instance(bot_id, pair[0], pair[1])
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
+        return MashaBotOut(**row)
+
+    @app.get("/api/v1/masha/bots/{bot_id}/logs", response_model=MashaBotLogsOut)
+    async def masha_bots_logs(bot_id: str, limit: int = 200) -> Any:
+        try:
+            rows = deps.get_masha().get_logs(bot_id, limit=limit)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return MashaBotLogsOut(logs=rows)
+
+    @app.get("/api/v1/thusnelda/bots", response_model=ThusneldaBotsOut)
+    async def thusnelda_bots_list() -> Any:
+        return ThusneldaBotsOut(
+            bots=[ThusneldaBotOut(**row) for row in deps.get_thusnelda().list_instances()]
+        )
+
+    @app.post("/api/v1/thusnelda/bots", response_model=ThusneldaBotOut)
+    async def thusnelda_bots_create(body: ThusneldaBotCreateBody) -> Any:
+        svc = deps.get_thusnelda()
+        try:
+            row = svc.create_instance(
+                bot_id=body.bot_id,
+                tag=body.tag,
+                symbols_csv=body.symbols_csv,
+                loop_interval_sec=body.loop_interval_sec,
+                between_symbol_sec=body.between_symbol_sec,
+                quote_order_qty_modulo=body.quote_order_qty_modulo,
+                factor_multiplication=body.factor_multiplication,
+                meta_equity_usdt=body.meta_equity_usdt,
+                reference_ts_iso=body.reference_ts_iso,
+                qty_decimals=body.qty_decimals,
+                note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
+                simulated=body.simulated,
+                trading_enabled=body.trading_enabled,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
+        return ThusneldaBotOut(**row)
+
+    @app.patch("/api/v1/thusnelda/bots/{bot_id}", response_model=ThusneldaBotOut)
+    async def thusnelda_bots_update(bot_id: str, body: ThusneldaBotUpdateBody) -> Any:
+        svc = deps.get_thusnelda()
+        try:
+            row = svc.update_instance(
+                bot_id,
+                tag=body.tag,
+                symbols_csv=body.symbols_csv,
+                loop_interval_sec=body.loop_interval_sec,
+                between_symbol_sec=body.between_symbol_sec,
+                quote_order_qty_modulo=body.quote_order_qty_modulo,
+                factor_multiplication=body.factor_multiplication,
+                meta_equity_usdt=body.meta_equity_usdt,
+                reference_ts_iso=body.reference_ts_iso,
+                qty_decimals=body.qty_decimals,
+                note=body.note,
+                max_drawdown_pct=body.max_drawdown_pct,
+                stop_loss_pct=body.stop_loss_pct,
+                metrics_interval_cycles=body.metrics_interval_cycles,
+                simulated=body.simulated,
+                trading_enabled=body.trading_enabled,
+            )
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
+        return ThusneldaBotOut(**row)
+
+    @app.delete("/api/v1/thusnelda/bots/{bot_id}")
+    async def thusnelda_bots_delete(bot_id: str) -> dict[str, bool]:
+        svc = deps.get_thusnelda()
+        try:
+            await svc.delete_instance(bot_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return {"deleted": True}
+
+    @app.post("/api/v1/thusnelda/bots/{bot_id}/start", response_model=ThusneldaBotOut)
+    async def thusnelda_bots_start(
+        bot_id: str,
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        try:
+            row = await deps.get_thusnelda().start_instance(bot_id, pair[0], pair[1])
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
+        return ThusneldaBotOut(**row)
+
+    @app.post("/api/v1/thusnelda/bots/{bot_id}/stop", response_model=ThusneldaBotOut)
+    async def thusnelda_bots_stop(bot_id: str) -> Any:
+        try:
+            row = await deps.get_thusnelda().stop_instance(bot_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return ThusneldaBotOut(**row)
+
+    @app.post("/api/v1/thusnelda/bots/{bot_id}/run_once", response_model=ThusneldaBotOut)
+    async def thusnelda_bots_run_once(
+        bot_id: str,
+        body: GatewayStartBody = GatewayStartBody(),
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> Any:
+        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
+        if not pair:
+            raise HTTPException(status_code=400, detail="No API credentials available")
+        try:
+            row = await deps.get_thusnelda().run_once_instance(bot_id, pair[0], pair[1])
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
+        return ThusneldaBotOut(**row)
+
+    @app.get("/api/v1/thusnelda/bots/{bot_id}/logs", response_model=ThusneldaBotLogsOut)
+    async def thusnelda_bots_logs(bot_id: str, limit: int = 200) -> Any:
+        try:
+            rows = deps.get_thusnelda().get_logs(bot_id, limit=limit)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Bot not found") from None
+        return ThusneldaBotLogsOut(logs=rows)
+
     @app.post("/api/v1/terminal/execute", response_model=TerminalExecOut)
     async def terminal_execute(
         body: TerminalExecBody,
@@ -425,22 +724,6 @@ def create_app() -> FastAPI:
         payload = await _sync_binance_time(ctx, body.api_key, body.api_secret)
         return TimeSyncOut(ok=True, **payload)
 
-    @app.post("/api/v1/vault/session")
-    async def vault_session(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, bool]:
-        if not ctx.config.exists():
-            raise HTTPException(status_code=400, detail="No vault file; add credentials first.")
-        try:
-            pair = ctx.config.get_pair_for_active()
-        except ValueError as e:
-            raise HTTPException(status_code=401, detail=str(e)) from None
-        if not pair:
-            raise HTTPException(status_code=401, detail="Vault empty or unreadable")
-        return {"unlocked": True}
-
-    @app.delete("/api/v1/vault/session")
-    async def vault_session_clear() -> dict[str, bool]:
-        return {"unlocked": False}
-
     @app.post("/api/v1/gateway/start")
     async def gateway_start(
         body: GatewayStartBody = GatewayStartBody(),
@@ -453,7 +736,7 @@ def create_app() -> FastAPI:
             await ctx.gateway.stop()
             ctx.gateway = None
         ak, sec = pair
-        gw = BinanceGateway(ak, sec, ctx.bus, ctx.state, ctx.log_line)
+        gw = BinanceGateway(ak, sec, ctx.bus, ctx.state, ctx.log_line, ctx.config.data_dir)
         try:
             await gw.start()
             await gw.sync_time()
@@ -541,6 +824,40 @@ def create_app() -> FastAPI:
         rows = get_rest_usage_log(ctx.config.data_dir).list_samples(limit=limit)
         return {"items": rows}
 
+    @app.get("/api/v1/usage/rest-weight/events")
+    async def usage_rest_weight_events(
+        limit: int = 300,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        from runtime.core.rest_usage_log import get_rest_usage_log
+
+        rows = get_rest_usage_log(ctx.config.data_dir).list_events(limit=limit)
+        return {"items": rows}
+
+    @app.get("/api/v1/usage/rest-weight/report")
+    async def usage_rest_weight_report(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
+        from runtime.core.rest_usage_log import get_rest_usage_log
+
+        usage = get_rest_usage_log(ctx.config.data_dir)
+        return {
+            "now": {
+                "used_weight_1m": getattr(ctx.state, "api_weight_used_1m", None),
+                "weight_limit_1m": api_weight_limit_1m_display(),
+            },
+            "polling_config": {
+                "account_poll_sec": account_poll_interval_sec(),
+                "my_trades_stride": my_trades_poll_stride(),
+                "equity_stride": equity_poll_stride(),
+            },
+            "estimated_calls_per_min": _rest_weight_estimate_report(),
+            "top_actions": usage.summary_by_action(limit=5000)[:25],
+            "notes": [
+                "X-MBX-USED-WEIGHT-1M is IP-scoped and cumulative in a rolling 1-minute window.",
+                "Totals include calls from this engine and any other process sharing the same outbound IP.",
+                "A window reset can make per-call deltas unavailable for a sample.",
+            ],
+        }
+
     @app.get("/api/v1/account/wallets")
     async def account_wallets(
         base_asset: str = "USDT",
@@ -554,7 +871,12 @@ def create_app() -> FastAPI:
         return {
             "close_protocol": audit.last("close_protocol"),
             "red_button": audit.last("red_button"),
+            "cancel_limit_orders_cleanup": audit.last("cancel_limit_orders_cleanup"),
+            "cancel_stop_orders_cleanup": audit.last("cancel_stop_orders_cleanup"),
+            "cancel_all_orders_cleanup": audit.last("cancel_all_orders_cleanup"),
             "hub_stats": deps.get_bot().hub_stats(),
+            "masha_hub_stats": deps.get_masha().hub_stats(),
+            "thusnelda_hub_stats": deps.get_thusnelda().hub_stats(),
         }
 
     @app.post("/api/v1/ops/protocol/close")
@@ -585,6 +907,87 @@ def create_app() -> FastAPI:
         )
         return {"record": rec, "summary": summary}
 
+    @app.post("/api/v1/ops/orders/cleanup/limit")
+    async def ops_cleanup_limit_orders(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        summary = await _execute_order_cleanup(
+            ctx,
+            base_asset=base_asset,
+            mode="limit",
+        )
+        rec = get_ops_audit_log(ctx.config.data_dir).record(
+            op_name="cancel_limit_orders_cleanup",
+            status=str(summary.get("status", "unknown")),
+            summary=summary,
+            error=str(summary.get("error", "")).strip() or None,
+        )
+        return {"record": rec, "summary": summary}
+
+    @app.post("/api/v1/ops/orders/cleanup/stop")
+    async def ops_cleanup_stop_orders(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        summary = await _execute_order_cleanup(
+            ctx,
+            base_asset=base_asset,
+            mode="stop",
+        )
+        rec = get_ops_audit_log(ctx.config.data_dir).record(
+            op_name="cancel_stop_orders_cleanup",
+            status=str(summary.get("status", "unknown")),
+            summary=summary,
+            error=str(summary.get("error", "")).strip() or None,
+        )
+        return {"record": rec, "summary": summary}
+
+    @app.post("/api/v1/ops/orders/cleanup/all")
+    async def ops_cleanup_all_orders(
+        base_asset: str = "USDT",
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        summary = await _execute_order_cleanup(
+            ctx,
+            base_asset=base_asset,
+            mode="all",
+        )
+        rec = get_ops_audit_log(ctx.config.data_dir).record(
+            op_name="cancel_all_orders_cleanup",
+            status=str(summary.get("status", "unknown")),
+            summary=summary,
+            error=str(summary.get("error", "")).strip() or None,
+        )
+        return {"record": rec, "summary": summary}
+
+    @app.post("/api/v1/sandbox/curated/save")
+    async def sandbox_curated_save(
+        payload: dict[str, Any],
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        rec = _sandbox_curated_save(ctx, payload)
+        return {"saved": True, "record": rec}
+
+    @app.get("/api/v1/sandbox/curated/list")
+    async def sandbox_curated_list(
+        limit: int = 50,
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        rows = _sandbox_curated_list(ctx, limit=limit)
+        return {"items": rows}
+
+    @app.get("/api/v1/sandbox/rest/catalog")
+    async def sandbox_rest_catalog() -> dict[str, Any]:
+        return {"items": _sandbox_rest_catalog()}
+
+    @app.post("/api/v1/sandbox/rest/query")
+    async def sandbox_rest_query(
+        body: dict[str, Any],
+        ctx: AppContext = Depends(deps.get_ctx),
+    ) -> dict[str, Any]:
+        return await _sandbox_rest_query(ctx, body)
+
     return app
 
 
@@ -603,7 +1006,6 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
     )
     try:
         from runtime.core.rest_usage_log import get_rest_usage_log
-        from runtime.core.settings import account_poll_interval_sec
 
         st = deps.get_bot().hub_stats()
         get_rest_usage_log(ctx.config.data_dir).maybe_record(
@@ -618,6 +1020,77 @@ def _snapshot(ctx: AppContext) -> GatewaySnapshotOut:
     except Exception:
         pass
     return out
+
+
+def _rest_weight_estimate_report() -> dict[str, Any]:
+    poll_sec = account_poll_interval_sec()
+    cycles_per_min = 0.0
+    if poll_sec > 0:
+        cycles_per_min = 60.0 / poll_sec
+    trades_stride = max(1, my_trades_poll_stride())
+    eq_stride = max(1, equity_poll_stride())
+    return {
+        "cycles_per_min": round(cycles_per_min, 3),
+        "gateway_actions": [
+            {
+                "action": "fetch_account:get_account",
+                "frequency_per_min": round(cycles_per_min, 3),
+                "notes": "executed once every poll cycle",
+            },
+            {
+                "action": "fetch_open_orders:get_open_orders",
+                "frequency_per_min": round(cycles_per_min, 3),
+                "notes": "executed once every poll cycle",
+            },
+            {
+                "action": "fetch_my_trades:get_my_trades:*",
+                "frequency_per_min": round(cycles_per_min / trades_stride, 3),
+                "notes": "controlled by PECUNATOR_MY_TRADES_POLL_STRIDE",
+            },
+            {
+                "action": "refresh_equity:get_all_tickers",
+                "frequency_per_min": round(cycles_per_min / eq_stride, 3),
+                "notes": "controlled by PECUNATOR_EQUITY_POLL_STRIDE",
+            },
+            {
+                "action": "sync_time:get_server_time",
+                "frequency_per_min": "event-driven",
+                "notes": "manual sync, startup, or retry paths",
+            },
+        ],
+    }
+
+
+def _audit_weight_from_client(
+    ctx: AppContext,
+    client: Client,
+    *,
+    source: str,
+    action: str,
+    note: str | None = None,
+) -> None:
+    try:
+        resp = getattr(client, "response", None)
+        headers = getattr(resp, "headers", None) or {}
+        raw = None
+        for k, v in headers.items():
+            if str(k).upper() == "X-MBX-USED-WEIGHT-1M":
+                raw = v
+                break
+        if raw is None:
+            return
+        used = int(float(raw))
+        ctx.state.api_weight_used_1m = used
+        from runtime.core.rest_usage_log import get_rest_usage_log
+
+        get_rest_usage_log(ctx.config.data_dir).record_event(
+            source=source,
+            action=action,
+            used_weight_1m=used,
+            note=note,
+        )
+    except Exception:
+        pass
 
 
 def _to_decimal_str(value: Any) -> str:
@@ -663,7 +1136,22 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
     earn_rows: list[dict[str, Any]] = []
     external_rows: list[dict[str, Any]] = []
     try:
-        account = await asyncio.to_thread(client.get_account)
+        try:
+            await _sandbox_sync_timestamp(
+                client,
+                ctx=ctx,
+                source="wallets",
+                action="sync_time:get_server_time",
+            )
+        except Exception:
+            pass
+        account = await _sandbox_signed_call_with_time_retry(
+            client,
+            client.get_account,
+            ctx=ctx,
+            source="wallets",
+            action="wallets:get_account",
+        )
         raw_balances = account.get("balances", []) if isinstance(account, dict) else []
         if not isinstance(raw_balances, list):
             raw_balances = []
@@ -682,7 +1170,13 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
 
         if hasattr(client, "futures_account_balance"):
             try:
-                fut = await asyncio.to_thread(client.futures_account_balance)
+                fut = await _sandbox_signed_call_with_time_retry(
+                    client,
+                    client.futures_account_balance,
+                    ctx=ctx,
+                    source="wallets",
+                    action="wallets:futures_account_balance",
+                )
                 if isinstance(fut, list):
                     for r in fut:
                         asset = str((r or {}).get("asset", "")).upper()
@@ -705,7 +1199,13 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
 
         if hasattr(client, "get_funding_wallet"):
             try:
-                ext = await asyncio.to_thread(client.get_funding_wallet)
+                ext = await _sandbox_signed_call_with_time_retry(
+                    client,
+                    client.get_funding_wallet,
+                    ctx=ctx,
+                    source="wallets",
+                    action="wallets:get_funding_wallet",
+                )
                 if isinstance(ext, list):
                     for r in ext:
                         asset = str((r or {}).get("asset", "")).upper()
@@ -732,6 +1232,12 @@ async def _fetch_wallet_buckets(ctx: AppContext, base_asset: str = "USDT") -> di
         equity: dict[str, Any] = {}
         try:
             tickers = await asyncio.to_thread(client.get_all_tickers)
+            _audit_weight_from_client(
+                ctx,
+                client,
+                source="wallets",
+                action="wallets:get_all_tickers",
+            )
             px = build_ticker_price_map(tickers)
             equity = compute_spot_equity_in_base(spot_rows, px, base_asset=base)
         except Exception as e:
@@ -851,6 +1357,7 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
     client = Client(pair[0], pair[1], requests_params={"timeout": 20})
     try:
         orders = await asyncio.to_thread(client.get_open_orders)
+        _audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_open_orders")
         if not isinstance(orders, list):
             orders = []
         summary["open_orders_seen"] = len(orders)
@@ -865,13 +1372,21 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
                 continue
             try:
                 await asyncio.to_thread(client.cancel_order, symbol=sym, orderId=oid)
+                _audit_weight_from_client(
+                    ctx,
+                    client,
+                    source="ops",
+                    action=f"close_protocol:cancel_order:{sym}",
+                )
                 summary["limit_orders_canceled"] += 1
             except Exception as e:
                 summary["cancel_errors"].append(f"{sym}#{oid}: {sanitize_log_message(str(e))}")
 
         account = await asyncio.to_thread(client.get_account)
+        _audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_account")
         balances = account.get("balances", []) if isinstance(account, dict) else []
         tickers = await asyncio.to_thread(client.get_all_tickers)
+        _audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_all_tickers")
         px_map = build_ticker_price_map(tickers if isinstance(tickers, list) else [])
         summary["equity_snapshot"] = compute_spot_equity_in_base(
             balances if isinstance(balances, list) else [],
@@ -938,11 +1453,13 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
     client = Client(pair[0], pair[1], requests_params={"timeout": 20})
     try:
         account = await asyncio.to_thread(client.get_account)
+        _audit_weight_from_client(ctx, client, source="ops", action="red_button:get_account")
         balances = account.get("balances", []) if isinstance(account, dict) else []
         if not isinstance(balances, list):
             balances = []
 
         exch = await asyncio.to_thread(client.get_exchange_info)
+        _audit_weight_from_client(ctx, client, source="ops", action="red_button:get_exchange_info")
         symbols = {}
         if isinstance(exch, dict):
             raw_symbols = exch.get("symbols", [])
@@ -973,6 +1490,12 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
 
             try:
                 open_orders = await asyncio.to_thread(client.get_open_orders, symbol=symbol)
+                _audit_weight_from_client(
+                    ctx,
+                    client,
+                    source="ops",
+                    action=f"red_button:get_open_orders:{symbol}",
+                )
                 if isinstance(open_orders, list):
                     for order in open_orders:
                         if not isinstance(order, dict):
@@ -981,6 +1504,12 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
                         if oid is None:
                             continue
                         await asyncio.to_thread(client.cancel_order, symbol=symbol, orderId=oid)
+                        _audit_weight_from_client(
+                            ctx,
+                            client,
+                            source="ops",
+                            action=f"red_button:cancel_order:{symbol}",
+                        )
                         summary["orders_canceled"] += 1
             except Exception as e:
                 summary["sell_errors"].append(f"{asset}: cancel orders {sanitize_log_message(str(e))}")
@@ -993,6 +1522,12 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
 
             try:
                 await asyncio.to_thread(client.order_market_sell, symbol=symbol, quantity=str(qty))
+                _audit_weight_from_client(
+                    ctx,
+                    client,
+                    source="ops",
+                    action=f"red_button:order_market_sell:{symbol}",
+                )
                 summary["assets_sold"] += 1
                 summary["log_lines"].append(f"Sold {qty} {asset} -> {base} using {symbol}.")
             except Exception as e:
@@ -1016,6 +1551,590 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
 
     summary["elapsed_sec"] = round(time.time() - started_at, 3)
     return summary
+
+
+def _is_stop_order_type(order_type: str) -> bool:
+    t = (order_type or "").strip().upper()
+    return t in {
+        "STOP_LOSS",
+        "STOP_LOSS_LIMIT",
+        "TAKE_PROFIT",
+        "TAKE_PROFIT_LIMIT",
+        "STOP",
+        "STOP_MARKET",
+        "TAKE_PROFIT_MARKET",
+    }
+
+
+def _matches_cleanup_mode(order_type: str, mode: str) -> bool:
+    m = (mode or "").strip().lower()
+    t = (order_type or "").strip().upper()
+    if m == "all":
+        return True
+    if m == "limit":
+        return t == "LIMIT"
+    if m == "stop":
+        return _is_stop_order_type(t)
+    return False
+
+
+async def _execute_order_cleanup(
+    ctx: AppContext,
+    base_asset: str = "USDT",
+    mode: str = "all",
+) -> dict[str, Any]:
+    started_at = time.time()
+    base = (base_asset or "USDT").strip().upper() or "USDT"
+    mode_norm = (mode or "all").strip().lower()
+    if mode_norm not in {"limit", "stop", "all"}:
+        mode_norm = "all"
+    summary: dict[str, Any] = {
+        "protocol": f"cancel_{mode_norm}_orders_cleanup",
+        "base_asset": base,
+        "mode": mode_norm,
+        "status": "ok",
+        "stopped_dorothy_instances": 0,
+        "stop_errors": [],
+        "symbols_scanned": 0,
+        "open_orders_seen": 0,
+        "orders_canceled": 0,
+        "cancel_errors": [],
+        "scan_errors": [],
+        "log_lines": [],
+    }
+    pair = _resolve_pair(ctx)
+    if not pair:
+        summary["status"] = "failed"
+        summary["error"] = "No API credentials available"
+        summary["log_lines"].append("No API credentials available.")
+        return summary
+
+    stopped, stop_errors = await _stop_dorothy_for_protocol()
+    summary["stopped_dorothy_instances"] = stopped
+    summary["stop_errors"] = stop_errors
+    summary["log_lines"].append(f"Dorothy instances stopped before cleanup: {stopped}.")
+    if stop_errors:
+        summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
+
+    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    try:
+        orders_to_eval: list[dict[str, Any]] = []
+        if mode_norm == "all":
+            account_orders = await asyncio.to_thread(client.get_open_orders)
+            _audit_weight_from_client(ctx, client, source="ops", action="cleanup:get_open_orders")
+            if isinstance(account_orders, list):
+                orders_to_eval = [o for o in account_orders if isinstance(o, dict)]
+        else:
+            # deleteAllOrdersLimit semantics: iterate funded spot assets and inspect ASSET+BASE symbol.
+            account = await asyncio.to_thread(client.get_account)
+            _audit_weight_from_client(ctx, client, source="ops", action="cleanup:get_account")
+            balances = account.get("balances", []) if isinstance(account, dict) else []
+            if not isinstance(balances, list):
+                balances = []
+            symbols: list[str] = []
+            for row in balances:
+                if not isinstance(row, dict):
+                    continue
+                asset = str(row.get("asset", "")).upper()
+                if not asset or asset == base:
+                    continue
+                try:
+                    free = Decimal(str(row.get("free", "0") or "0"))
+                    locked = Decimal(str(row.get("locked", "0") or "0"))
+                except (InvalidOperation, ValueError, TypeError):
+                    continue
+                if (free + locked) <= 0:
+                    continue
+                symbols.append(f"{asset}{base}")
+            dedup = sorted(set(symbols))
+            summary["symbols_scanned"] = len(dedup)
+            for sym in dedup:
+                try:
+                    sym_orders = await asyncio.to_thread(client.get_open_orders, symbol=sym)
+                    _audit_weight_from_client(
+                        ctx,
+                        client,
+                        source="ops",
+                        action=f"cleanup:get_open_orders:{sym}",
+                    )
+                except Exception as e:
+                    summary["scan_errors"].append(f"{sym}: {sanitize_log_message(str(e))}")
+                    continue
+                if not isinstance(sym_orders, list):
+                    continue
+                for o in sym_orders:
+                    if isinstance(o, dict):
+                        orders_to_eval.append(o)
+
+        summary["open_orders_seen"] = len(orders_to_eval)
+        for order in orders_to_eval:
+            order_type = str(order.get("type", "")).upper()
+            if not _matches_cleanup_mode(order_type, mode_norm):
+                continue
+            sym = str(order.get("symbol", "")).upper()
+            oid = order.get("orderId")
+            if not sym or oid is None:
+                continue
+            try:
+                await asyncio.to_thread(client.cancel_order, symbol=sym, orderId=oid)
+                _audit_weight_from_client(
+                    ctx,
+                    client,
+                    source="ops",
+                    action=f"cleanup:cancel_order:{sym}",
+                )
+                summary["orders_canceled"] += 1
+            except Exception as e:
+                summary["cancel_errors"].append(f"{sym}#{oid}: {sanitize_log_message(str(e))}")
+
+        if summary["stop_errors"] or summary["scan_errors"] or summary["cancel_errors"]:
+            summary["status"] = "partial"
+        summary["log_lines"].append(
+            f"Cleanup mode={mode_norm}: seen={summary['open_orders_seen']}, canceled={summary['orders_canceled']}."
+        )
+    except BinanceAPIException as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Binance API error: {summary['error']}")
+    except Exception as e:
+        summary["status"] = "failed"
+        summary["error"] = sanitize_log_message(str(e))
+        summary["log_lines"].append(f"Unexpected error: {summary['error']}")
+    finally:
+        try:
+            await asyncio.to_thread(client.close_connection)
+        except Exception:
+            pass
+
+    summary["elapsed_sec"] = round(time.time() - started_at, 3)
+    return summary
+
+
+def _sandbox_db_path(ctx: AppContext):
+    return ctx.config.data_dir / "sandbox_curated.sqlite"
+
+
+def _sandbox_db_init(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sandbox_curated_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts_utc TEXT NOT NULL,
+            method TEXT NOT NULL,
+            endpoint TEXT NOT NULL,
+            request_json TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            curated_json TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+
+
+def _sandbox_curated_save(ctx: AppContext, payload: dict[str, Any]) -> dict[str, Any]:
+    method = str(payload.get("method", "GET")).strip().upper() or "GET"
+    endpoint = str(payload.get("endpoint", "")).strip()
+    if not endpoint.startswith("/"):
+        raise HTTPException(status_code=400, detail="endpoint must start with '/'")
+    request_obj = payload.get("request", {})
+    response_obj = payload.get("response", {})
+    curated_obj = payload.get("curated", {})
+    ts_utc = datetime.now(timezone.utc).isoformat()
+    db_path = _sandbox_db_path(ctx)
+    with _SANDBOX_DB_LOCK:
+        conn = sqlite3.connect(db_path)
+        try:
+            _sandbox_db_init(conn)
+            cur = conn.execute(
+                """
+                INSERT INTO sandbox_curated_records
+                (ts_utc, method, endpoint, request_json, response_json, curated_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ts_utc,
+                    method,
+                    endpoint,
+                    json.dumps(request_obj, ensure_ascii=True),
+                    json.dumps(response_obj, ensure_ascii=True),
+                    json.dumps(curated_obj, ensure_ascii=True),
+                ),
+            )
+            conn.commit()
+            row_id = int(cur.lastrowid or 0)
+        finally:
+            conn.close()
+    return {
+        "id": row_id,
+        "ts_utc": ts_utc,
+        "method": method,
+        "endpoint": endpoint,
+        "db_path": str(db_path),
+    }
+
+
+def _sandbox_curated_list(ctx: AppContext, limit: int = 50) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit or 50), 500))
+    db_path = _sandbox_db_path(ctx)
+    with _SANDBOX_DB_LOCK:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            _sandbox_db_init(conn)
+            rows = conn.execute(
+                """
+                SELECT id, ts_utc, method, endpoint, request_json, response_json, curated_json
+                FROM sandbox_curated_records
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "id": int(row["id"]),
+                "ts_utc": str(row["ts_utc"]),
+                "method": str(row["method"]),
+                "endpoint": str(row["endpoint"]),
+                "request": json.loads(str(row["request_json"]) or "{}"),
+                "response": json.loads(str(row["response_json"]) or "{}"),
+                "curated": json.loads(str(row["curated_json"]) or "{}"),
+            }
+        )
+    return out
+
+
+def _sandbox_rest_catalog() -> list[dict[str, Any]]:
+    return [
+        {
+            "query_id": "exchange_info",
+            "title": "Exchange Info",
+            "description": "client.get_exchange_info()",
+            "requires_credentials": False,
+            "args": ["symbol (optional)"],
+        },
+        {
+            "query_id": "server_time",
+            "title": "Server Time",
+            "description": "client.get_server_time()",
+            "requires_credentials": False,
+            "args": [],
+        },
+        {
+            "query_id": "account",
+            "title": "Spot Account",
+            "description": "client.get_account()",
+            "requires_credentials": True,
+            "args": [],
+        },
+        {
+            "query_id": "open_orders",
+            "title": "Open Orders",
+            "description": "client.get_open_orders(symbol?)",
+            "requires_credentials": True,
+            "args": ["symbol (optional)"],
+        },
+        {
+            "query_id": "my_trades",
+            "title": "My Trades",
+            "description": "client.get_my_trades(symbol, limit)",
+            "requires_credentials": True,
+            "args": ["symbol (required)", "limit (optional, default 50)"],
+        },
+        {
+            "query_id": "orderbook_ticker",
+            "title": "Orderbook Ticker",
+            "description": "client.get_orderbook_ticker(symbol)",
+            "requires_credentials": False,
+            "args": ["symbol (required)"],
+        },
+    ]
+
+
+def _sandbox_curate_json(response: Any) -> dict[str, Any]:
+    def _preview(v: Any) -> str:
+        t = str(v)
+        return t if len(t) <= 140 else f"{t[:137]}..."
+
+    def _kv_rows(obj: Any, max_items: int = 30) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        if isinstance(obj, dict):
+            for i, (k, v) in enumerate(obj.items()):
+                if i >= max_items:
+                    break
+                rows.append(
+                    {
+                        "key": str(k),
+                        "type": type(v).__name__,
+                        "value_preview": _preview(v),
+                    }
+                )
+        return rows
+
+    if isinstance(response, dict):
+        keys = [str(k) for k in response.keys()]
+        list_fields = [k for k, v in response.items() if isinstance(v, list)]
+        map_fields = [k for k, v in response.items() if isinstance(v, dict)]
+        return {
+            "response_type": "dict",
+            "top_level_keys": keys,
+            "top_level_key_count": len(keys),
+            "list_fields": list_fields,
+            "map_fields": map_fields,
+            "key_value_preview": _kv_rows(response),
+        }
+    if isinstance(response, list):
+        first_type = type(response[0]).__name__ if response else "none"
+        first_preview = _kv_rows(response[0]) if response and isinstance(response[0], dict) else []
+        return {
+            "response_type": "list",
+            "list_size": len(response),
+            "first_item_type": first_type,
+            "first_item_key_value_preview": first_preview,
+        }
+    return {"response_type": type(response).__name__}
+
+
+def _sandbox_requires_credentials(query_id: str) -> bool:
+    return query_id in {"account", "open_orders", "my_trades"}
+
+
+async def _sandbox_sync_timestamp(
+    client: Client,
+    *,
+    ctx: AppContext | None = None,
+    source: str = "sandbox",
+    action: str = "sync_time:get_server_time",
+) -> None:
+    data = await asyncio.to_thread(client.get_server_time)
+    if ctx is not None:
+        _audit_weight_from_client(ctx, client, source=source, action=action)
+    server_ms = int((data or {}).get("serverTime", 0) or 0)
+    local_ms = int(time.time() * 1000)
+    try:
+        client.timestamp_offset = server_ms - local_ms
+    except Exception:
+        pass
+
+
+async def _sandbox_signed_call_with_time_retry(
+    client: Client,
+    fn,
+    *,
+    ctx: AppContext | None = None,
+    source: str = "sandbox",
+    action: str = "signed_call",
+) -> Any:
+    try:
+        out = await asyncio.to_thread(fn)
+        if ctx is not None:
+            _audit_weight_from_client(ctx, client, source=source, action=action)
+        return out
+    except BinanceAPIException as e:
+        if getattr(e, "code", None) != -1021:
+            raise
+        await _sandbox_sync_timestamp(client, ctx=ctx, source=source, action="retry_sync:get_server_time")
+        out = await asyncio.to_thread(fn)
+        if ctx is not None:
+            _audit_weight_from_client(ctx, client, source=source, action=f"{action}:retry_after_sync")
+        return out
+
+
+async def _sandbox_rest_query(ctx: AppContext, body: dict[str, Any]) -> dict[str, Any]:
+    def _parse_call_expr(call_expr: str) -> dict[str, Any]:
+        expr = (call_expr or "").strip().rstrip(";")
+        if not expr:
+            raise HTTPException(status_code=400, detail="call is required")
+        try:
+            tree = ast.parse(expr, mode="eval")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid call syntax: {sanitize_log_message(str(e))}") from None
+        call = tree.body
+        if not isinstance(call, ast.Call):
+            raise HTTPException(status_code=400, detail="call must be a function call expression")
+        fn = call.func
+        method = ""
+        if isinstance(fn, ast.Attribute):
+            method = str(fn.attr)
+        elif isinstance(fn, ast.Name):
+            method = str(fn.id)
+        method = method.strip()
+        method_map = {
+            "get_exchange_info": "exchange_info",
+            "get_server_time": "server_time",
+            "get_account": "account",
+            "get_open_orders": "open_orders",
+            "get_my_trades": "my_trades",
+            "get_orderbook_ticker": "orderbook_ticker",
+        }
+        query_id = method_map.get(method)
+        if not query_id:
+            raise HTTPException(status_code=400, detail=f"Unsupported python-binance method: {method}")
+
+        def _literal(node: ast.AST) -> Any:
+            if isinstance(node, ast.Constant):
+                return node.value
+            raise HTTPException(status_code=400, detail="Only literal args are supported in call expression")
+
+        kwargs: dict[str, Any] = {}
+        for kw in call.keywords:
+            if kw.arg is None:
+                raise HTTPException(status_code=400, detail="Unsupported **kwargs in call expression")
+            kwargs[str(kw.arg)] = _literal(kw.value)
+        args = [_literal(a) for a in call.args]
+
+        out: dict[str, Any] = {"query_id": query_id, "parsed_method": method}
+        symbol = kwargs.get("symbol")
+        if symbol is None and args:
+            if query_id in {"open_orders", "my_trades", "orderbook_ticker"}:
+                symbol = args[0]
+        if symbol is not None:
+            out["symbol"] = str(symbol).strip().upper()
+        if "limit" in kwargs:
+            out["limit"] = kwargs["limit"]
+        return out
+
+    query_id = str((body or {}).get("query_id", "")).strip().lower()
+    call_expr = str((body or {}).get("call", "")).strip()
+    parsed_call: dict[str, Any] = {}
+    if call_expr:
+        parsed_call = _parse_call_expr(call_expr)
+        if not query_id:
+            query_id = str(parsed_call.get("query_id", "")).strip().lower()
+    if not query_id:
+        raise HTTPException(status_code=400, detail="query_id or call is required")
+    catalog_ids = {row["query_id"] for row in _sandbox_rest_catalog()}
+    if query_id not in catalog_ids:
+        raise HTTPException(status_code=400, detail=f"Unsupported query_id: {query_id}")
+
+    symbol = str((body or {}).get("symbol", "") or parsed_call.get("symbol", "")).strip().upper()
+    limit_raw = (body or {}).get("limit", parsed_call.get("limit", 50))
+    try:
+        limit = max(1, min(int(limit_raw), 1000))
+    except Exception:
+        limit = 50
+
+    requires_credentials = _sandbox_requires_credentials(query_id)
+    pair = _resolve_pair(ctx) if requires_credentials else None
+    if requires_credentials and not pair:
+        raise HTTPException(status_code=400, detail="No API credentials available")
+
+    client = Client(
+        pair[0] if pair else "",
+        pair[1] if pair else "",
+        requests_params={"timeout": 20},
+    )
+    try:
+        if requires_credentials:
+            await _sandbox_sync_timestamp(
+                client,
+                ctx=ctx,
+                source="sandbox",
+                action="sandbox:sync_time:get_server_time",
+            )
+
+        if query_id == "exchange_info":
+            response = await asyncio.to_thread(client.get_exchange_info)
+            _audit_weight_from_client(
+                ctx,
+                client,
+                source="sandbox",
+                action="sandbox:get_exchange_info",
+            )
+            if symbol and isinstance(response, dict):
+                rows = response.get("symbols", [])
+                if isinstance(rows, list):
+                    response = {
+                        **response,
+                        "symbols": [r for r in rows if str((r or {}).get("symbol", "")).upper() == symbol],
+                    }
+        elif query_id == "server_time":
+            response = await asyncio.to_thread(client.get_server_time)
+            _audit_weight_from_client(
+                ctx,
+                client,
+                source="sandbox",
+                action="sandbox:get_server_time",
+            )
+        elif query_id == "account":
+            response = await _sandbox_signed_call_with_time_retry(
+                client,
+                client.get_account,
+                ctx=ctx,
+                source="sandbox",
+                action="sandbox:get_account",
+            )
+        elif query_id == "open_orders":
+            if symbol:
+                response = await _sandbox_signed_call_with_time_retry(
+                    client,
+                    lambda: client.get_open_orders(symbol=symbol),
+                    ctx=ctx,
+                    source="sandbox",
+                    action=f"sandbox:get_open_orders:{symbol}",
+                )
+            else:
+                response = await _sandbox_signed_call_with_time_retry(
+                    client,
+                    client.get_open_orders,
+                    ctx=ctx,
+                    source="sandbox",
+                    action="sandbox:get_open_orders",
+                )
+        elif query_id == "my_trades":
+            if not symbol:
+                raise HTTPException(status_code=400, detail="symbol is required for my_trades")
+            response = await _sandbox_signed_call_with_time_retry(
+                client,
+                lambda: client.get_my_trades(symbol=symbol, limit=limit),
+                ctx=ctx,
+                source="sandbox",
+                action=f"sandbox:get_my_trades:{symbol}",
+            )
+        elif query_id == "orderbook_ticker":
+            if not symbol:
+                raise HTTPException(status_code=400, detail="symbol is required for orderbook_ticker")
+            response = await asyncio.to_thread(client.get_orderbook_ticker, symbol=symbol)
+            _audit_weight_from_client(
+                ctx,
+                client,
+                source="sandbox",
+                action=f"sandbox:get_orderbook_ticker:{symbol}",
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported query_id: {query_id}")
+
+        curated = _sandbox_curate_json(response)
+        return {
+            "query_id": query_id,
+            "call": call_expr or None,
+            "used_credentials": requires_credentials,
+            "args": {"symbol": symbol or None, "limit": limit},
+            "response": response,
+            "curated": curated,
+            "ts_utc": datetime.now(timezone.utc).isoformat(),
+        }
+    except HTTPException:
+        raise
+    except BinanceAPIException as e:
+        raise HTTPException(
+            status_code=502,
+            detail=sanitize_log_message(str(e)),
+        ) from None
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=sanitize_log_message(str(e)),
+        ) from None
+    finally:
+        try:
+            await asyncio.to_thread(client.close_connection)
+        except Exception:
+            pass
 
 
 def _resolve_pair(
@@ -1066,10 +2185,9 @@ async def _execute_terminal_command(
             "  health\n"
             "  time sync\n"
             "  vault status\n"
-            "  vault unlock (noop check)\n"
             "  gateway start|stop|snapshot|fetch\n"
             "  bot status|start|stop|run_once\n"
-            "  ops status|close|red_button\n"
+            "  ops status|close|red_button|cleanup_limit|cleanup_stop|cleanup_all\n"
             "  account\n"
             "  balances\n"
             "  open_orders\n"
@@ -1091,7 +2209,7 @@ async def _execute_terminal_command(
 
     if key == "vault":
         if not rest:
-            return "usage: vault status | vault unlock"
+            return "usage: vault status"
         sub = rest[0].lower()
         if sub == "status":
             pubs = ctx.config.list_public_credentials()
@@ -1099,15 +2217,7 @@ async def _execute_terminal_command(
                 f"vault_exists={ctx.config.exists()} rows={len(pubs)} "
                 f"active={ctx.config.get_active_credential_id() or '-'}"
             )
-        if sub == "unlock":
-            try:
-                pair = ctx.config.get_pair_for_active()
-            except ValueError as e:
-                return sanitize_log_message(str(e))
-            if not pair:
-                return "vault readable but no credential rows"
-            return "vault ok"
-        return "usage: vault status | vault unlock"
+        return "usage: vault status"
 
     if key == "gateway":
         if not rest:
@@ -1120,7 +2230,7 @@ async def _execute_terminal_command(
             if ctx.gateway:
                 await ctx.gateway.stop()
                 ctx.gateway = None
-            gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line)
+            gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line, ctx.config.data_dir)
             try:
                 await gw.start()
                 await gw.sync_time()
@@ -1186,7 +2296,7 @@ async def _execute_terminal_command(
 
     if key == "ops":
         if not rest:
-            return "usage: ops status|close|red_button"
+            return "usage: ops status|close|red_button|cleanup_limit|cleanup_stop|cleanup_all"
         sub = rest[0].lower()
         if sub == "status":
             audit = get_ops_audit_log(ctx.config.data_dir)
@@ -1214,7 +2324,34 @@ async def _execute_terminal_command(
                 error=str(rep.get("error", "")).strip() or None,
             )
             return f"red button: {rep.get('status', '-')}"
-        return "usage: ops status|close|red_button"
+        if sub == "cleanup_limit":
+            rep = await _execute_order_cleanup(ctx, mode="limit")
+            get_ops_audit_log(ctx.config.data_dir).record(
+                op_name="cancel_limit_orders_cleanup",
+                status=str(rep.get("status", "unknown")),
+                summary=rep,
+                error=str(rep.get("error", "")).strip() or None,
+            )
+            return f"cleanup limit: {rep.get('status', '-')}"
+        if sub == "cleanup_stop":
+            rep = await _execute_order_cleanup(ctx, mode="stop")
+            get_ops_audit_log(ctx.config.data_dir).record(
+                op_name="cancel_stop_orders_cleanup",
+                status=str(rep.get("status", "unknown")),
+                summary=rep,
+                error=str(rep.get("error", "")).strip() or None,
+            )
+            return f"cleanup stop: {rep.get('status', '-')}"
+        if sub == "cleanup_all":
+            rep = await _execute_order_cleanup(ctx, mode="all")
+            get_ops_audit_log(ctx.config.data_dir).record(
+                op_name="cancel_all_orders_cleanup",
+                status=str(rep.get("status", "unknown")),
+                summary=rep,
+                error=str(rep.get("error", "")).strip() or None,
+            )
+            return f"cleanup all: {rep.get('status', '-')}"
+        return "usage: ops status|close|red_button|cleanup_limit|cleanup_stop|cleanup_all"
 
     if key == "account":
         if not ctx.gateway:
@@ -1303,6 +2440,7 @@ async def _sync_binance_time(
     client = Client(pair[0], pair[1], requests_params={"timeout": 10})
     try:
         data = await asyncio.to_thread(client.get_server_time)
+        _audit_weight_from_client(ctx, client, source="time_sync", action="time_sync:get_server_time")
         server_ms = int(data.get("serverTime", 0) or 0)
         local_ms = int(time.time() * 1000)
         offset_ms = server_ms - local_ms

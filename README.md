@@ -27,7 +27,7 @@ Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
 Por defecto **`python main.py`** levanta la API en **http://127.0.0.1:8765** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de “peso REST” en la UI con el límite de referencia de `exchangeInfo`.
 
-- Atajo PowerShell (venv + mismo cargador que `run_engine_with_examplejv.py`): **`powershell -ExecutionPolicy Bypass -File scripts/run_engine.ps1`**.
+- Atajo PowerShell (venv + arranque directo): **`powershell -ExecutionPolicy Bypass -File scripts/run_engine.ps1`**.
 - Supervisor inmortal del motor (reinicia si el proceso cae): **`powershell -ExecutionPolicy Bypass -File scripts/run_engine_immortal.ps1`**.
 - Si el puerto **8765** queda ocupado por un proceso viejo: **`scripts/stop_engine_port.ps1`** antes de volver a arrancar.
 - OpenAPI: http://127.0.0.1:8765/docs  
@@ -35,17 +35,28 @@ Por defecto **`python main.py`** levanta la API en **http://127.0.0.1:8765** (aj
 
 Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).
 
+### Estructura modular del repo (raíz)
+
+- `bots/` contiene un folder dedicado por bot activo:
+  - `bots/dorothy/`
+  - `bots/masha/`
+  - `bots/thusnelda/`
+- `tools/` contiene un folder dedicado por herramienta operativa:
+  - `tools/ops-protocols/`
+  - `tools/sandbox-rest/`
+  - `tools/rest-weight-monitor/`
+- `runtime/modules/` consolida módulos Python de dominio para bots y herramientas.
+
 - **Límites de API / WebSocket y cumplimiento (referencia actualizable):** [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md)
 
-### Credenciales desde `exampleJV/`
+### Credenciales del motor
 
-El ejemplo histórico usa `exampleJV/config.py` (ver `config.example.py`). Para arrancar el motor inyectando esas claves al proceso (sin imprimirlas):
+El motor toma credenciales desde:
 
-`python scripts/run_engine_with_examplejv.py`
+1. Variables de entorno `PECUNATOR_BINANCE_API_KEY` / `PECUNATOR_BINANCE_API_SECRET`.
+2. Cofre local cifrado (`runtime/data/credentials.enc`) gestionado desde la UI Flutter.
 
-Las mismas variables pueden definirse a mano: `PECUNATOR_BINANCE_API_KEY`, `PECUNATOR_BINANCE_API_SECRET`.
-
-**Aviso (desarrollo actual):** para esta fase de trabajo, el motor debe arrancarse con **`scripts/run_engine_with_examplejv.py`** cuando exista `exampleJV/config.py`, de modo que gateway, sync de tiempo y Dorothy usen las mismas credenciales que el ejemplo local. La UI Flutter puede seguir usando el cofre para claves duplicadas; evita mezclar claves distintas entre motor y `config.py` sin querer.
+Recomendación operativa: usar una sola fuente activa por sesión para evitar mezclar cuentas sin querer.
 
 ### Mecanismo de inmortalidad (hub Dorothy)
 
@@ -57,9 +68,7 @@ Las mismas variables pueden definirse a mano: `PECUNATOR_BINANCE_API_KEY`, `PECU
 
 ### Cofre (`credentials.enc`)
 
-Las credenciales Binance se guardan en **`runtime/data/credentials.enc`** cifradas con **Fernet** usando la clave **`vault_local.key`** en la misma carpeta (sin contraseña maestra pedida al usuario). Solo hacen falta **API key** y **secret** en la UI o por variables de entorno del motor.
-
-Si venías de una versión anterior con cofre derivado de contraseña maestra, ese archivo ya no es legible: haz copia si la necesitas, borra los ficheros antiguos del directorio de datos y vuelve a registrar las claves. Ver [`CHANGELOG.md`](CHANGELOG.md).
+Las credenciales Binance se guardan en **`runtime/data/credentials.enc`** cifradas con **Fernet** usando la clave **`vault_local.key`** en la misma carpeta. Solo hacen falta **API key** y **secret** en la UI o por variables de entorno del motor.
 
 ## API surface (current)
 
@@ -68,8 +77,7 @@ Si venías de una versión anterior con cofre derivado de contraseña maestra, e
   - `GET /api/v1/vault/credentials`
   - `POST /api/v1/vault/credentials`
   - `PATCH /api/v1/vault/credentials/{credential_id}`
-  - `POST /api/v1/vault/credentials/{credential_id}/activate`
-  - `POST /api/v1/vault/credentials/{credential_id}/delete`
+  - `DELETE /api/v1/vault/credentials/{credential_id}`
   - `GET /api/v1/credentials/active`
 - Gateway Binance:
   - `POST /api/v1/gateway/start`
@@ -94,11 +102,25 @@ Si venías de una versión anterior con cofre derivado de contraseña maestra, e
 
 Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibility.
 
+## Política de tests
+
+- La verificación oficial se ejecuta en **GitHub Actions** (`.github/workflows/`).
+- Evitamos depender de test suites locales para validar merges a `main/develop`.
+- Cualquier cambio en runtime/UI/workflows debe actualizar `docs/CHANGELOG.md`.
+
 ## Documentación
 
-- [`CHANGELOG.md`](CHANGELOG.md) — cambios relevantes y políticas (p. ej. cofre / contraseña maestra)  
+- [`CHANGELOG.md`](CHANGELOG.md) — cambios relevantes  
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — bitácora disciplinada de arquitectura/UI/API  
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
+- [`docs/repo-modules-map.md`](docs/repo-modules-map.md) — mapa modular de carpetas y ownership
+- [`bots/README.md`](bots/README.md) — índice modular de bots en raíz
+- [`tools/README.md`](tools/README.md) — índice modular de herramientas en raíz
+- [`docs/bots/Dorothy-manual.md`](docs/bots/Dorothy-manual.md) — guía operativa Dorothy + riesgo + métricas
+- [`docs/bots/Masha-manual.md`](docs/bots/Masha-manual.md) — guía operativa Masha + riesgo + métricas
+- [`docs/bots/Thusnelda-manual.md`](docs/bots/Thusnelda-manual.md) — guía operativa Thusnelda + riesgo + métricas
 - [`docs/syncfusion-charts-integration.md`](docs/syncfusion-charts-integration.md) — plan para integrar `syncfusion_flutter_charts` (equity/REST timeline)  
 - [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md) — límites Binance REST/WebSocket y checklist  
+- [`docs/rest-weight-audit.md`](docs/rest-weight-audit.md) — auditoría de consumo REST por fuente/acción  
 - [`docs/binance-limits-snapshots/`](docs/binance-limits-snapshots/) — snapshots fechados de `exchangeInfo.rateLimits`  
 - [`docs/git-cursor-github.md`](docs/git-cursor-github.md) — Git / Cursor / GitHub  
