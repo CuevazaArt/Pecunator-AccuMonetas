@@ -85,9 +85,10 @@ async def _lifespan(app: FastAPI):
     bot = deps.get_bot()
     masha = deps.get_masha()
     thusnelda = deps.get_thusnelda()
-    bot.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
-    masha.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
-    thusnelda.start_immortality(lambda: _resolve_pair(ctx), interval_sec=5.0)
+    credential_resolver = lambda: _resolve_pair(ctx)  # noqa: E731
+    bot.start_immortality(credential_resolver, interval_sec=5.0)
+    masha.start_immortality(credential_resolver, interval_sec=5.0)
+    thusnelda.start_immortality(credential_resolver, interval_sec=5.0)
     await _autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
@@ -158,6 +159,25 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         ctx = deps.get_ctx()
         return {"status": "ok", "data_dir": str(ctx.config.data_dir)}
+
+    @app.get("/health/deep")
+    async def health_deep() -> dict[str, Any]:
+        ctx = deps.get_ctx()
+        bot = deps.get_bot()
+        masha = deps.get_masha()
+        thusnelda = deps.get_thusnelda()
+        gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
+        return {
+            "status": "ok",
+            "gateway_connected": gw_ok,
+            "gateway_last_error": ctx.state.last_error,
+            "hubs": {
+                "dorothy": bot.hub_stats(),
+                "masha": masha.hub_stats(),
+                "thusnelda": thusnelda.hub_stats(),
+            },
+            "data_dir": str(ctx.config.data_dir),
+        }
 
     @app.get("/api/v1/vault/status", response_model=VaultStatusOut)
     async def vault_status(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
