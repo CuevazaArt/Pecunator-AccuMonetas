@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/histogram_storage.dart';
+import '../services/history_scraper.dart';
+import '../services/vision_scraper.dart';
 
 class LibraryManagerPage extends StatefulWidget {
   const LibraryManagerPage({super.key});
@@ -15,10 +17,24 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
   final _searchCtrl = TextEditingController();
   bool _loading = true;
 
+  void _onVisionStateChanged() {
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    VisionScraperService.instance.isRunningNotifier.addListener(_onVisionStateChanged);
+    VisionScraperService.instance.statusNotifier.addListener(_onVisionStateChanged);
     _loadStats();
+  }
+
+  @override
+  void dispose() {
+    VisionScraperService.instance.isRunningNotifier.removeListener(_onVisionStateChanged);
+    VisionScraperService.instance.statusNotifier.removeListener(_onVisionStateChanged);
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadStats() async {
@@ -40,11 +56,6 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
 
   int _getIntervalMinutes(String interval) {
     if (interval.endsWith('m')) return int.tryParse(interval.replaceAll('m', '')) ?? 1;
@@ -93,6 +104,32 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
         title: const Text('Biblioteca Histórica SQLite'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.menu_book),
+            tooltip: 'Manual de Biblioteca',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Manual: Biblioteca SQLite', style: TextStyle(color: Colors.greenAccent)),
+                  content: const SingleChildScrollView(
+                    child: Text(
+                      'Objetivo Estratégico:\n'
+                      'Mantener un registro local hiper-veloz y gratuito de todo el comportamiento de precios.\n\n'
+                      'Tácticas de Recolección:\n'
+                      '1. Sincronización en Caliente (REST API): El Scraper de la Barra Superior mantiene vivas las velas actuales (minuto a minuto) utilizando la API regular.\n'
+                      '2. Ingesta Masiva (Cold Sync): El botón de "Ingesta Masiva" descarga archivos ZIP públicos de Binance con meses completos de datos históricos. No gasta créditos API.\n\n'
+                      'Mantenimiento:\n'
+                      'Usa esta biblioteca para evaluar vacíos (Gaps) y presiona el botón Refresh para auditar la integridad de la base de datos.',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Entendido')),
+                  ],
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refrescar índice',
             onPressed: _loadStats,
@@ -101,6 +138,7 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
       ),
       body: Column(
         children: [
+          _buildVisionControlPanel(),
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -196,6 +234,62 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
                       ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVisionControlPanel() {
+    final isRunning = VisionScraperService.instance.isRunningNotifier.value;
+    final status = VisionScraperService.instance.statusNotifier.value;
+    
+    return Card(
+      margin: const EdgeInsets.all(12),
+      color: Colors.blueGrey.withOpacity(0.2),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ingesta Masiva de Histórico (data.binance.vision)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Descarga archivos ZIP mensuales sin consumir la API REST. Ideal para poblar años de datos rápidamente.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  icon: isRunning ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
+                  label: Text(isRunning ? 'Abortar Sincronización' : 'Sincronizar (Último Mes)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isRunning ? Colors.red.withOpacity(0.3) : Colors.green.withOpacity(0.3),
+                  ),
+                  onPressed: () {
+                    if (isRunning) {
+                      VisionScraperService.instance.stop();
+                    } else {
+                      final symbols = HistoryScraperService.instance.symbols;
+                      VisionScraperService.instance.startColdSync(symbols, ['1m', '1h', '4h', '1d']);
+                    }
+                  },
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: TextStyle(color: isRunning ? Colors.amberAccent : Colors.grey, fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

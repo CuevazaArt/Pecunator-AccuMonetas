@@ -7,6 +7,8 @@ import 'api_client.dart';
 import 'services/history_scraper.dart';
 import 'widgets/market_monitor.dart';
 import 'widgets/library_manager.dart';
+import 'widgets/earn_manager.dart';
+import 'widgets/carry_trade.dart';
 
 String _plainNum(dynamic value, {int maxDecimals = 12}) {
   if (value == null) return '0';
@@ -1325,6 +1327,14 @@ class _BotControlPageState extends State<BotControlPage> {
     setState(() => _currentIndex = 5);
   }
 
+  Future<void> _openEarnPage() async {
+    setState(() => _currentIndex = 7);
+  }
+
+  Future<void> _openCarryTradePage() async {
+    setState(() => _currentIndex = 8);
+  }
+
   Map<String, String> _draftFor(Map<String, dynamic> bot) {
     final botId = (bot['bot_id'] ?? '').toString();
     final d = _draftByBotId.putIfAbsent(botId, () {
@@ -1544,6 +1554,16 @@ class _BotControlPageState extends State<BotControlPage> {
             icon: const Icon(Icons.science_outlined, size: 18),
           ),
           IconButton(
+            onPressed: _loading ? null : _openEarnPage,
+            tooltip: 'Rendimiento Pasivo (Earn Manager)',
+            icon: const Icon(Icons.savings_outlined, size: 18),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _openCarryTradePage,
+            tooltip: 'Carry Trade (Arbitraje)',
+            icon: const Icon(Icons.currency_exchange, size: 18),
+          ),
+          IconButton(
             onPressed: _loading ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
@@ -1654,6 +1674,8 @@ class _BotControlPageState extends State<BotControlPage> {
         MashaHubPage(engineBase: _engineBase),
         ThusneldaHubPage(engineBase: _engineBase),
         ApiSandboxPage(engineBase: _engineBase),
+        const EarnManagerPage(),
+        const CarryTradePage(),
       ][_currentIndex],
     );
   }

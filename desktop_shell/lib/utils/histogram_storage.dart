@@ -102,6 +102,21 @@ class HistogramStorage {
     return candles;
   }
 
+  /// Retrieve existing YYYY-MM months to identify gaps.
+  Future<Set<String>> getExistingMonths(String symbol, String interval) async {
+    await _init();
+    final db = sqlite3.open(_dbPath!);
+    final result = db.select('''
+      SELECT DISTINCT substr(ts_utc, 1, 7) as month_str
+      FROM histogram_candles
+      WHERE symbol = ? AND interval = ?
+    ''', [symbol, interval]);
+    
+    final months = result.map((row) => row['month_str'] as String).toSet();
+    db.dispose();
+    return months;
+  }
+
   /// Retrieve summary statistics for all symbols and intervals
   Future<List<Map<String, dynamic>>> getLibraryStats() async {
     await _init();

@@ -48,6 +48,7 @@ dependencies:
   path_provider: ^2.1.0
   sqlite3: ^2.4.2
   sqlite3_flutter_libs: ^0.5.24
+  archive: ^3.6.1
   # webview_windows: ^0.4.0
 
 dev_dependencies:
