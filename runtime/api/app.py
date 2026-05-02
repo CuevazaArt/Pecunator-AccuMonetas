@@ -85,16 +85,28 @@ async def _lifespan(app: FastAPI):
     bot = deps.get_bot()
     masha = deps.get_masha()
     thusnelda = deps.get_thusnelda()
+    earn = deps.get_earn()
     credential_resolver = lambda: _resolve_pair(ctx)  # noqa: E731
     bot.start_immortality(credential_resolver, interval_sec=5.0)
     masha.start_immortality(credential_resolver, interval_sec=5.0)
     thusnelda.start_immortality(credential_resolver, interval_sec=5.0)
+    
+    # Setup Binance Client resolver for Earn
+    def _client_resolver():
+        pk, sk = _resolve_pair(deps.get_ctx())
+        if pk and sk:
+            return Client(pk, sk)
+        return None
+        
+    earn.start_background_sync(_client_resolver, interval_sec=28800)
     await _autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
     bot = deps.get_bot()
     masha = deps.get_masha()
     thusnelda = deps.get_thusnelda()
+    earn = deps.get_earn()
+    await earn.stop_background_sync()
     await bot.stop_immortality()
     await masha.stop_immortality()
     await thusnelda.stop_immortality()
@@ -1007,6 +1019,22 @@ def create_app() -> FastAPI:
         ctx: AppContext = Depends(deps.get_ctx),
     ) -> dict[str, Any]:
         return await _sandbox_rest_query(ctx, body)
+
+    @app.get("/api/v1/earn/history/{symbol}")
+    async def get_earn_history(symbol: str) -> dict[str, Any]:
+        earn = deps.get_earn()
+        return {"items": earn.get_history(symbol)}
+
+    @app.post("/api/v1/earn/sync")
+    async def force_earn_sync() -> dict[str, Any]:
+        earn = deps.get_earn()
+        def _client_resolver():
+            pk, sk = _resolve_pair(deps.get_ctx())
+            if pk and sk:
+                return Client(pk, sk)
+            return None
+        res = await earn.force_sync(_client_resolver)
+        return res
 
     return app
 

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; background-color: #1a1a1c; overflow: hidden; }
+        #tvchart { position: absolute; width: 100%; height: 100%; }
+    </style>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div id="tvchart"></div>
+    <script>
+        var chart = LightweightCharts.createChart(document.getElementById('tvchart'), {
+            layout: {
+                background: { type: 'solid', color: '#1a1a1c' },
+                textColor: '#d1d4dc',
+            },
+            grid: {
+                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+            },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            timeScale: { timeVisible: true, secondsVisible: false },
+        });
+
+        var candlestickSeries = chart.addCandlestickSeries({
+            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+            wickUpColor: '#26a69a', wickDownColor: '#ef5350'
+        });
+
+        var volumeSeries = chart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: { type: 'volume' },
+            priceScaleId: '', // set as an overlay
+            scaleMargins: { top: 0.8, bottom: 0 },
+        });
+
+        // Functions called from Dart
+        function setChartData(dataStr) {
+            try {
+                var data = JSON.parse(dataStr);
+                candlestickSeries.setData(data);
+                volumeSeries.setData(data.map(d => ({
+                    time: d.time,
+                    value: d.value,
+                    color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                })));
+                chart.timeScale().fitContent();
+            } catch (e) { console.error('Data parsing error', e); }
+        }
+
+        function updateChart(dataStr) {
+            try {
+                var d = JSON.parse(dataStr);
+                candlestickSeries.update(d);
+                volumeSeries.update({
+                    time: d.time,
+                    value: d.value,
+                    color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                });
+            } catch (e) { console.error('Update parsing error', e); }
+        }
+
+        window.addEventListener('resize', () => {
+            chart.applyOptions({ width: document.body.clientWidth, height: document.body.clientHeight });
+        });
+    </script>
+</body>
+</html>

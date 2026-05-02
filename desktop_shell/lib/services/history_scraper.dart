@@ -21,15 +21,19 @@ class HistoryScraperService {
   final ValueNotifier<int> concurrencyNotifier = ValueNotifier<int>(1);
   final ValueNotifier<int> delayMsNotifier = ValueNotifier<int>(1000);
 
-  // Prioritized symbols by market dominance (top 10 to prevent model overload)
+  // Prioritized symbols by market dominance (top 50)
   final List<String> symbols = [
     'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
     'DOGEUSDT', 'ADAUSDT', 'TRXUSDT', 'AVAXUSDT', 'DOTUSDT',
-    // Next 20 by market dominance
     'LINKUSDT', 'TONUSDT', 'SHIBUSDT', 'LTCUSDT', 'BCHUSDT',
     'NEARUSDT', 'APTUSDT', 'ICPUSDT', 'UNIUSDT', 'XLMUSDT',
     'INJUSDT', 'ARBUSDT', 'OPUSDT', 'RENDERUSDT', 'FILUSDT',
-    'MNTUSDT', 'ETCUSDT', 'HBARUSDT', 'VETUSDT', 'PEPEUSDT'
+    'MNTUSDT', 'ETCUSDT', 'HBARUSDT', 'VETUSDT', 'PEPEUSDT',
+    // Next 20 symbols for intensive testing
+    'STXUSDT', 'TAOUSDT', 'FETUSDT', 'IMXUSDT', 'SUIUSDT',
+    'GRTUSDT', 'RNDRUSDT', 'WIFUSDT', 'THETAUSDT', 'SEIUSDT',
+    'AAVEUSDT', 'EGLDUSDT', 'QNTUSDT', 'MKRUSDT', 'FLOKIUSDT',
+    'TIAUSDT', 'FTMUSDT', 'SANDUSDT', 'GALAUSDT', 'CHZUSDT'
   ];
 
   // Prioritized intervals (standard highest to 1m)

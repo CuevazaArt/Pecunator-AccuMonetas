@@ -115,6 +115,7 @@ class _BotControlPageState extends State<BotControlPage> {
   Timer? _clockTimer;
   String _clockText = '--:--:--';
   String _opsBaseAsset = 'USDT';
+  int _currentIndex = 0;
 
   EngineApi get _api => EngineApi(_engineBase);
 
@@ -1289,19 +1290,15 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 
   Future<void> _openMarketMonitorPage() async {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MarketMonitorPage(api: _api),
-      ),
-    );
+    setState(() => _currentIndex = 1);
   }
 
   Future<void> _openLibraryManagerPage() async {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const LibraryManagerPage(),
-      ),
-    );
+    setState(() => _currentIndex = 3);
+  }
+
+  Future<void> _openDorothyHubPage() async {
+    setState(() => _currentIndex = 0);
   }
 
   Future<void> _openDorothyGuide() async {
@@ -1313,40 +1310,19 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 
   Future<void> _openSpotAccountPage() async {
-    final symbols = _hubBots
-        .map((b) => (b['symbol'] ?? '').toString())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            SpotAccountPage(engineBase: _engineBase, activeSymbols: symbols),
-      ),
-    );
+    setState(() => _currentIndex = 2);
   }
 
   Future<void> _openSandboxPage() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ApiSandboxPage(engineBase: _engineBase),
-      ),
-    );
+    setState(() => _currentIndex = 6);
   }
 
   Future<void> _openMashaPage() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => MashaHubPage(engineBase: _engineBase),
-      ),
-    );
+    setState(() => _currentIndex = 4);
   }
 
   Future<void> _openThusneldaPage() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ThusneldaHubPage(engineBase: _engineBase),
-      ),
-    );
+    setState(() => _currentIndex = 5);
   }
 
   Map<String, String> _draftFor(Map<String, dynamic> bot) {
@@ -1520,8 +1496,18 @@ class _BotControlPageState extends State<BotControlPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PecunatorCore · Dorothy Hub'),
+        title: const Text('PecunatorCore'),
+        leading: IconButton(
+          icon: const Icon(Icons.home),
+          tooltip: 'Inicio (Dorothy)',
+          onPressed: () => setState(() => _currentIndex = 0),
+        ),
         actions: [
+          IconButton(
+            onPressed: _loading ? null : _openDorothyHubPage,
+            tooltip: 'Dorothy Hub (Home)',
+            icon: const Icon(Icons.home, size: 18),
+          ),
           IconButton(
             onPressed: _loading ? null : _openDorothyGuide,
             tooltip: 'Instructivo Dorothy7.0',
@@ -1660,14 +1646,27 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_loading) const LinearProgressIndicator(),
-            if (_gatewayRunning &&
-                _apiWeightUsed != null &&
+      body: [
+        _buildDorothyView(),
+        MarketMonitorPage(api: _api),
+        SpotAccountPage(engineBase: _engineBase, activeSymbols: _hubBots.map((b) => (b['symbol'] ?? '').toString()).where((s) => s.isNotEmpty).toList()),
+        const LibraryManagerPage(),
+        MashaHubPage(engineBase: _engineBase),
+        ThusneldaHubPage(engineBase: _engineBase),
+        ApiSandboxPage(engineBase: _engineBase),
+      ][_currentIndex],
+    );
+  }
+
+  Widget _buildDorothyView() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_loading) const LinearProgressIndicator(),
+          if (_gatewayRunning &&
+              _apiWeightUsed != null &&
                 _apiWeightLimit > 0)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -2316,8 +2315,7 @@ class _BotControlPageState extends State<BotControlPage> {
             }),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 

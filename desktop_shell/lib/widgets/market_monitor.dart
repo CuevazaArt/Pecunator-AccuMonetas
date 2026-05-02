@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:candlesticks/candlesticks.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+// import 'package:webview_windows/webview_windows.dart';
 import '../api_client.dart'; // EngineApi
 import '../utils/histogram_storage.dart';
 import '../services/history_scraper.dart';
-import 'volume_histogram.dart';
+
 class MarketMonitorPage extends StatefulWidget {
   final EngineApi api;
 
@@ -23,7 +25,7 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
   
   List<Candle> _candles = [];
   bool _loading = false;
-  List<String> _availableSymbols = [];
+  Map<String, List<String>> _libraryData = {};
   bool _dynamicUpdate = true;
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSub;
@@ -43,7 +45,17 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
     final stats = await HistogramStorage.instance.getLibraryStats();
     if (mounted) {
       setState(() {
-        _availableSymbols = stats.map((e) => e['symbol'] as String).toSet().toList()..sort();
+        _libraryData.clear();
+        for (var stat in stats) {
+          final sym = stat['symbol'] as String;
+          final interval = stat['interval'] as String;
+          if (!_libraryData.containsKey(sym)) {
+            _libraryData[sym] = [];
+          }
+          if (!_libraryData[sym]!.contains(interval)) {
+            _libraryData[sym]!.add(interval);
+          }
+        }
       });
     }
   }
@@ -226,8 +238,76 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gráficos (0 Peso API)'),
+        title: const Text('Gráficos Nativos'),
         elevation: 0,
+        actions: [
+          Tooltip(
+            message: 'Gráficos Híbridos (Próximamente)',
+            child: IconButton(
+              icon: const Icon(Icons.auto_graph, color: Colors.greenAccent),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Gráficos Híbridos estarán disponibles pronto.')),
+                );
+              },
+            ),
+          ),
+          Builder(
+            builder: (context) => Tooltip(
+              message: 'Índice de Biblioteca Local',
+              child: IconButton(
+                icon: const Icon(Icons.library_books, color: Colors.orangeAccent),
+                onPressed: () {
+                  _loadAvailableSymbols(); // Reload before opening
+                  Scaffold.of(context).openEndDrawer();
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+      endDrawer: Drawer(
+        backgroundColor: Colors.grey[900],
+        child: Column(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.black45),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.storage, size: 48, color: Colors.orangeAccent),
+                    SizedBox(height: 8),
+                    Text('Índice de Biblioteca', style: TextStyle(color: Colors.orangeAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: _libraryData.keys.map((sym) {
+                  return ExpansionTile(
+                    leading: const Icon(Icons.folder, color: Colors.grey),
+                    title: Text(sym, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    children: _libraryData[sym]!.map((interval) {
+                      return ListTile(
+                        leading: const Icon(Icons.show_chart, color: Colors.greenAccent, size: 20),
+                        title: Text('Intervalo: $interval', style: const TextStyle(color: Colors.grey)),
+                        onTap: () {
+                          Navigator.pop(context); // Close drawer
+                          _symbolCtrl.text = sym;
+                          _currentInterval = interval;
+                          _applySymbol();
+                        },
+                      );
+                    }).toList(),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -269,24 +349,7 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (_availableSymbols.isNotEmpty)
-                  PopupMenuButton<String>(
-                    tooltip: 'Símbolos en Biblioteca local',
-                    icon: const Icon(Icons.library_books, color: Colors.orangeAccent),
-                    onSelected: (sym) {
-                      _symbolCtrl.text = sym;
-                      _applySymbol();
-                    },
-                    itemBuilder: (context) {
-                      return _availableSymbols.map((sym) {
-                        return PopupMenuItem<String>(
-                          value: sym,
-                          child: Text(sym, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        );
-                      }).toList();
-                    },
-                  ),
-                const SizedBox(width: 16),
+                const Spacer(),
                 const Text('Temporalidad: ', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 Container(
@@ -458,24 +521,29 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                                       ],
                                     ),
                                   ),
-                                  SizedBox(
-                                    height: 100,
-                                    child: VolumeHistogram(candles: _candles),
-                                  ),
-                                  Expanded(
-                                    child: TradingViewChartWidget(
-                                      symbol: _currentSymbol,
-                                      interval: _currentInterval,
-                                      candles: _candles,
-                                      onChangeInterval: _changeInterval,
+
+                                    Expanded(
+                                      child: TradingViewChartWidget(
+                                        symbol: _currentSymbol,
+                                        interval: _currentInterval,
+                                        candles: _candles,
+                                        orderLines: _positions.map((e) => double.parse(e['price'].toString())).toList(),
+                                        onChangeInterval: _changeInterval,
+                                      ),
                                     ),
-                                  ),
                                   Container(
                                     padding: const EdgeInsets.all(4),
                                     alignment: Alignment.center,
-                                    child: const Text(
-                                      '💡 Tips: [Arrastrar] Cruz de Cotización (Crosshair) | Usa el botón superior para agregar Medias Móviles (MM) | Construido con Candlesticks (Binance OHLC)',
-                                      style: TextStyle(color: Colors.grey, fontSize: 11),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.lightbulb_outline, color: Colors.orangeAccent, size: 14),
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          'Mantén presionado para ver los detalles de OHLCV | Gráfico Nativo Acelerado',
+                                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -582,10 +650,11 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
 /// Contenedor preparado arquitectónicamente para integrar TradingView Lightweight Charts (Tier Free).
 /// Actualmente hace 'fallback' al paquete de candlesticks existente hasta que se implemente 
 /// el WebView o el wrapper oficial de JS para Windows.
-class TradingViewChartWidget extends StatelessWidget {
+class TradingViewChartWidget extends StatefulWidget {
   final String symbol;
   final String interval;
   final List<Candle> candles;
+  final List<double> orderLines;
   final Function(String) onChangeInterval;
 
   const TradingViewChartWidget({
@@ -593,53 +662,151 @@ class TradingViewChartWidget extends StatelessWidget {
     required this.symbol,
     required this.interval,
     required this.candles,
+    required this.orderLines,
     required this.onChangeInterval,
   });
 
-  /// Transforma los datos de memoria (recopilados y actualizados por WebSocket)
-  /// al formato exacto requerido por TradingView JS: {time, open, high, low, close}
-  List<Map<String, dynamic>> get tradingViewFormatData {
-    // TV Lightweight charts espera los datos en orden cronológico (más viejo a más nuevo).
-    return candles.reversed.map((c) => {
-      'time': c.date.millisecondsSinceEpoch ~/ 1000,
-      'open': c.open,
-      'high': c.high,
-      'low': c.low,
-      'close': c.close,
-      'value': c.volume, // Usado para histogramas adjuntos en TV
-    }).toList();
-  }
+  @override
+  State<TradingViewChartWidget> createState() => _TradingViewChartWidgetState();
+}
 
+class _TradingViewChartWidgetState extends State<TradingViewChartWidget> {
   @override
   Widget build(BuildContext context) {
-    // Aquí se inyectaría el WebView o el tradingview_lightweight_charts Flutter package
-    // Ejemplo de inicialización teórica:
-    // return TVLightweightChart(data: tradingViewFormatData, symbol: symbol);
+    if (widget.candles.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
+    }
+    
+    // Convert to Candlesticks package format
+    // Candlesticks package expects the most recent candle first (index 0).
+    final reversedCandles = widget.candles.toList();
     
     return Stack(
       children: [
         Candlesticks(
-          candles: candles,
-          actions: [
-            ToolBarAction(onPressed: () => onChangeInterval('1m'), child: const Text('1m')),
-            ToolBarAction(onPressed: () => onChangeInterval('15m'), child: const Text('15m')),
-            ToolBarAction(onPressed: () => onChangeInterval('1h'), child: const Text('1h')),
-            ToolBarAction(onPressed: () => onChangeInterval('4h'), child: const Text('4h')),
-            ToolBarAction(onPressed: () => onChangeInterval('1d'), child: const Text('1d')),
-            ToolBarAction(onPressed: () => onChangeInterval('1w'), child: const Text('1w')),
-            ToolBarAction(onPressed: () => onChangeInterval('1M'), child: const Text('1M')),
-          ],
+          candles: reversedCandles,
+          onLoadMoreCandles: () async {},
         ),
-        Positioned(
-          top: 8,
-          left: 100,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: Colors.green.withOpacity(0.8), borderRadius: BorderRadius.circular(4)),
-            child: const Text('Ready for TradingView Injection', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        if (widget.orderLines.isNotEmpty)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _OrderLinesPainter(
+                  candles: reversedCandles,
+                  orderLines: widget.orderLines,
+                ),
+              ),
+            ),
           ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: _buildIntervalBar(),
         ),
       ],
     );
   }
+
+  Widget _buildIntervalBar() {
+    return Container(
+      color: Colors.black45,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          _intervalBtn('1m'),
+          _intervalBtn('15m'),
+          _intervalBtn('1h'),
+          _intervalBtn('4h'),
+          _intervalBtn('1d'),
+          _intervalBtn('1w'),
+          _intervalBtn('1M'),
+        ],
+      ),
+    );
+  }
+
+  Widget _intervalBtn(String text) {
+    final isActive = widget.interval == text;
+    return InkWell(
+      onTap: () => widget.onChangeInterval(text),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.orangeAccent.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(text, style: TextStyle(color: isActive ? Colors.orangeAccent : Colors.grey)),
+      ),
+    );
+  }
 }
+
+class _OrderLinesPainter extends CustomPainter {
+  final List<Candle> candles;
+  final List<double> orderLines;
+
+  _OrderLinesPainter({required this.candles, required this.orderLines});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (candles.isEmpty || orderLines.isEmpty) return;
+
+    // Aproximación rápida para encajar las líneas en el viewport visible de Candlesticks.
+    // Usamos las últimas 50 velas como referencia heurística de escala visible.
+    final visibleCount = candles.length > 50 ? 50 : candles.length;
+    final visibleCandles = candles.take(visibleCount).toList();
+
+    double maxVal = visibleCandles.map((c) => c.high).reduce((a, b) => a > b ? a : b);
+    double minVal = visibleCandles.map((c) => c.low).reduce((a, b) => a < b ? a : b);
+
+    if (maxVal == minVal) return;
+    
+    // Candlesticks deja un pequeño margen superior e inferior
+    final margin = (maxVal - minVal) * 0.1;
+    maxVal += margin;
+    minVal -= margin;
+
+    final paintLine = Paint()
+      ..color = Colors.blueAccent.withOpacity(0.8)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    for (final price in orderLines) {
+      if (price < minVal || price > maxVal) continue; // Out of bounds
+      
+      final y = size.height - ((price - minVal) / (maxVal - minVal)) * size.height;
+      
+      _drawDashedLine(canvas, Offset(0, y), Offset(size.width, y), paintLine);
+      
+      // Dibujar etiqueta
+      final textSpan = TextSpan(
+        text: ' ORD ${price.toStringAsFixed(4)}',
+        style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold, backgroundColor: Colors.black45),
+      );
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(size.width - textPainter.width - 60, y - 14));
+    }
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset p1, Offset p2, Paint paint) {
+    const int dashWidth = 5;
+    const int dashSpace = 5;
+    double startX = p1.dx;
+    while (startX < p2.dx) {
+      canvas.drawLine(Offset(startX, p1.dy), Offset(startX + dashWidth, p1.dy), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrderLinesPainter oldDelegate) {
+    return oldDelegate.orderLines != orderLines || oldDelegate.candles != candles;
+  }
+}
+
+
