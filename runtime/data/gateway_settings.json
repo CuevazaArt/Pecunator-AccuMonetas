@@ -1,0 +1,8 @@
+{
+  "autostart_gateway": false,
+  "poll_interval_sec": 60,
+  "equity_poll_stride": 10,
+  "my_trades_poll_stride": 5,
+  "api_fuse_threshold_pct": 80,
+  "api_fuse_cooldown_sec": 300
+}

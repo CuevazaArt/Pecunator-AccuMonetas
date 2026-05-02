@@ -122,7 +122,11 @@ async def _lifespan(app: FastAPI):
 
 
 async def _autostart_gateway_if_possible(ctx: AppContext) -> None:
+    from runtime.core.settings import gateway_autostart_enabled
     if ctx.gateway is not None:
+        return
+    if not gateway_autostart_enabled():
+        _LOG.info("Gateway auto-start DISABLED (gateway_settings.json autostart_gateway=false)")
         return
     try:
         pair = _resolve_pair(ctx)

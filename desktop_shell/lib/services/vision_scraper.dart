@@ -109,13 +109,11 @@ class VisionScraperService {
                      break; 
                    }
                 } else if (response.statusCode == 429) {
-                   final msg = '[W$workerId] LIMIT EXCEEDED (429). Pausando 5s...';
+                   final msg = '[W$workerId] FUSIBLE ACTIVADO: LIMIT EXCEEDED (429). APAGANDO MOTOR.';
                    statusNotifier.value = msg;
-                   print('[VisionScraper] WARNING: $msg');
-                   await Future.delayed(const Duration(seconds: 5));
-                   // Re-intentar el mismo mes
-                   m++; 
-                   continue;
+                   print('[VisionScraper] 🚨 $msg');
+                   _shouldStop = true; // Hard Kill-Switch
+                   break;
                 }
               } catch (e) {
                  statusNotifier.value = '[W$workerId] Error red en $symbol: $e';

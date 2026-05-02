@@ -83,7 +83,9 @@ class BinanceGateway:
         action: str,
         note: str | None = None,
     ) -> None:
-        """Read X-MBX-USED-WEIGHT-1M from python-binance last response."""
+        """Read X-MBX-USED-WEIGHT-1M from python-binance last response.
+        Also feeds the API Fuse to trigger emergency shutdown if weight is too high."""
+        from runtime.core.api_fuse import get_api_fuse
         if self._client is None:
             return
         try:
@@ -106,6 +108,9 @@ class BinanceGateway:
                         used_weight_1m=used,
                         note=note,
                     )
+                # Feed the API Fuse — trips if weight exceeds threshold.
+                fuse = get_api_fuse()
+                fuse.check_weight(used)
         except (TypeError, ValueError, AttributeError):
             pass
 
@@ -152,6 +157,10 @@ class BinanceGateway:
         except BinanceAPIException as e:
             self.state.last_error = self._api_error_summary(e)
             self._emit_log(f"account: {self.state.last_error}")
+            # Feed fuse on error code.
+            from runtime.core.api_fuse import get_api_fuse
+            code = getattr(e, 'code', 0) or 0
+            get_api_fuse().on_error_code(int(code), str(getattr(e, 'message', '')))
             return
         except OSError as e:
             self._emit_log(f"account: {sanitize_log_message(str(e))}")
@@ -389,9 +398,23 @@ class BinanceGateway:
         self.bus.publish(f"market.trades.{sym}", data)
 
     async def _poll_account_loop(self, interval: float) -> None:
+        from runtime.core.api_fuse import get_api_fuse
         stride = my_trades_poll_stride()
         eq_stride = equity_poll_stride()
         while not self._stop.is_set():
+            # ── API FUSE CHECK ──────────────────────────────────
+            fuse = get_api_fuse()
+            if fuse.is_tripped():
+                remaining = fuse.remaining_cooldown_sec()
+                self._emit_log(
+                    f"🚨 API FUSE ACTIVO: REST bloqueado por {remaining:.0f}s más"
+                )
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=min(30.0, remaining))
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            # ── Normal polling ──────────────────────────────────
             try:
                 await self.fetch_account()
                 await self.fetch_open_orders()

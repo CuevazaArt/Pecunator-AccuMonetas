@@ -1,11 +1,36 @@
-"""Process configuration from environment (no secrets defaulted here)."""
+"""Process configuration from environment + persistent JSON gateway settings.
+
+The gateway_settings.json file is the single source of truth for all
+polling cadences and safety thresholds. ALL values have safe defaults
+and hard floors to prevent IP bans.
+
+Incident Reference: 2 May 2026 — IP Ban (-1003).
+"""
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+from typing import Any, Dict
 
 _DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parent.parent / "data"
+
+_GATEWAY_SETTINGS_FILENAME = "gateway_settings.json"
+
+# Hard floors that CANNOT be overridden by the user.
+_MIN_POLL_INTERVAL_SEC = 30.0  # Never poll faster than every 30 seconds.
+_MIN_FUSE_COOLDOWN_SEC = 60    # Fuse cooldown minimum 1 minute.
+
+# Safe defaults (used if the JSON file is missing or corrupt).
+_DEFAULTS: Dict[str, Any] = {
+    "autostart_gateway": False,
+    "poll_interval_sec": 60,
+    "equity_poll_stride": 10,
+    "my_trades_poll_stride": 5,
+    "api_fuse_threshold_pct": 80,
+    "api_fuse_cooldown_sec": 300,
+}
 
 
 def data_dir() -> Path:
@@ -13,6 +38,35 @@ def data_dir() -> Path:
     if raw:
         return Path(raw).expanduser().resolve()
     return _DEFAULT_RUNTIME_DIR.resolve()
+
+
+def _gateway_settings_path() -> Path:
+    return data_dir() / _GATEWAY_SETTINGS_FILENAME
+
+
+def load_gateway_settings() -> Dict[str, Any]:
+    """Load gateway settings from persistent JSON. Returns safe defaults on any error."""
+    path = _gateway_settings_path()
+    settings = dict(_DEFAULTS)
+    if path.is_file():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                user = json.load(f)
+            if isinstance(user, dict):
+                settings.update(user)
+        except (json.JSONDecodeError, OSError, TypeError):
+            pass  # Fall back to defaults silently.
+    return settings
+
+
+def save_gateway_settings(settings: Dict[str, Any]) -> None:
+    """Persist gateway settings to JSON (immortal across restarts)."""
+    path = _gateway_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    merged = dict(_DEFAULTS)
+    merged.update(settings)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2)
 
 
 def api_bind_host() -> str:
@@ -44,17 +98,26 @@ def binance_credentials_from_env() -> tuple[str, str] | None:
     return None
 
 
+def gateway_autostart_enabled() -> bool:
+    """Should the gateway auto-start when the backend boots?
+    DEFAULT: False — the user MUST manually press ON."""
+    s = load_gateway_settings()
+    return bool(s.get("autostart_gateway", False))
+
+
 def account_poll_interval_sec() -> float:
     """
-    REST+polling cadence while the gateway runs (balances, open orders).
-    Defaults to ~1s for low latency; increase if you hit Binance REST rate limits.
+    REST+polling cadence while the gateway runs.
+    Hard floor: 30 seconds minimum. Default: 60 seconds.
+    NEVER set this below 30s or you risk IP bans.
     """
-    raw = os.environ.get("PECUNATOR_ACCOUNT_POLL_SEC", "1").strip()
+    s = load_gateway_settings()
+    raw = s.get("poll_interval_sec", 60)
     try:
         v = float(raw)
-    except ValueError:
-        return 1.0
-    return max(0.25, min(v, 300.0))
+    except (ValueError, TypeError):
+        return 60.0
+    return max(_MIN_POLL_INTERVAL_SEC, v)
 
 
 def api_weight_limit_1m_display() -> int:
@@ -70,12 +133,14 @@ def api_weight_limit_1m_display() -> int:
 
 
 def my_trades_poll_stride() -> int:
-    """How many account poll cycles between myTrades fetches (1 = every cycle). Saves weight vs tickers/orderbook counts."""
-    raw = os.environ.get("PECUNATOR_MY_TRADES_POLL_STRIDE", "1").strip()
+    """How many account poll cycles between myTrades fetches.
+    Higher values reduce REST weight. Default: 5 (every 5 cycles = every 5 minutes at 60s poll)."""
+    s = load_gateway_settings()
+    raw = s.get("my_trades_poll_stride", 5)
     try:
-        n = int(raw, 10)
-    except ValueError:
-        return 1
+        n = int(raw)
+    except (ValueError, TypeError):
+        return 5
     return max(1, min(n, 1000))
 
 
@@ -97,11 +162,35 @@ def equity_avg_window_samples() -> int:
 def equity_poll_stride() -> int:
     """
     How many account poll cycles between equity conversions (requires get_all_tickers).
-    1 = every cycle; higher values reduce REST weight.
+    Higher values reduce REST weight significantly. Default: 10.
     """
-    raw = os.environ.get("PECUNATOR_EQUITY_POLL_STRIDE", "5").strip()
+    s = load_gateway_settings()
+    raw = s.get("equity_poll_stride", 10)
     try:
-        n = int(raw, 10)
-    except ValueError:
-        return 5
+        n = int(raw)
+    except (ValueError, TypeError):
+        return 10
     return max(1, min(n, 600))
+
+
+def api_fuse_threshold_pct() -> float:
+    """Weight percentage at which the API Fuse trips. Default: 80%."""
+    s = load_gateway_settings()
+    raw = s.get("api_fuse_threshold_pct", 80)
+    try:
+        v = float(raw)
+    except (ValueError, TypeError):
+        return 80.0
+    return max(10.0, min(v, 99.0))
+
+
+def api_fuse_cooldown_sec() -> int:
+    """Seconds the fuse stays tripped after activation. Default: 300 (5 min)."""
+    s = load_gateway_settings()
+    raw = s.get("api_fuse_cooldown_sec", 300)
+    try:
+        v = int(raw)
+    except (ValueError, TypeError):
+        return 300
+    return max(_MIN_FUSE_COOLDOWN_SEC, v)
+

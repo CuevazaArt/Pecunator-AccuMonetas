@@ -278,6 +278,12 @@ class ThusneldaRunner:
         return q
 
     async def run_once(self) -> dict[str, Any]:
+        from runtime.core.api_fuse import get_api_fuse
+        fuse = get_api_fuse()
+        if fuse.is_tripped():
+            remaining = fuse.remaining_cooldown_sec()
+            self._emit("WARNING", f"API FUSE ACTIVO: ciclo omitido ({remaining:.0f}s restantes)")
+            return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
         if not c.simulated and not c.trading_enabled:
