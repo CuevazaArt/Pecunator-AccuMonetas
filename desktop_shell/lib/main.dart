@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'services/history_scraper.dart';
+import 'widgets/market_monitor.dart';
+import 'widgets/library_manager.dart';
 
 String _plainNum(dynamic value, {int maxDecimals = 12}) {
   if (value == null) return '0';
@@ -131,10 +134,13 @@ class _BotControlPageState extends State<BotControlPage> {
         setState(_tickBinanceClock);
       }
     });
+    HistoryScraperService.instance.api = _api;
+    HistoryScraperService.instance.start();
   }
 
   @override
   void dispose() {
+    HistoryScraperService.instance.stop();
     _tagCtrl.dispose();
     _symbolCtrl.dispose();
     _loopCtrl.dispose();
@@ -1282,6 +1288,22 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
+  Future<void> _openMarketMonitorPage() async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MarketMonitorPage(api: _api),
+      ),
+    );
+  }
+
+  Future<void> _openLibraryManagerPage() async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LibraryManagerPage(),
+      ),
+    );
+  }
+
   Future<void> _openDorothyGuide() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1511,6 +1533,16 @@ class _BotControlPageState extends State<BotControlPage> {
             icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
           ),
           IconButton(
+            onPressed: _loading ? null : _openMarketMonitorPage,
+            tooltip: 'Posiciones, Órdenes y Cotizaciones (0 Peso API)',
+            icon: const Icon(Icons.candlestick_chart, size: 18),
+          ),
+          IconButton(
+            onPressed: _loading ? null : _openLibraryManagerPage,
+            tooltip: 'Índice de Biblioteca Local',
+            icon: const Icon(Icons.library_books, size: 18),
+          ),
+          IconButton(
             onPressed: _loading ? null : _openMashaPage,
             tooltip: 'Hub de instancias Masha2.0',
             icon: const Icon(Icons.psychology_alt_outlined, size: 18),
@@ -1697,101 +1729,101 @@ class _BotControlPageState extends State<BotControlPage> {
                 ),
               ),
             Card(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  children: [
-                    _protocolModuleCard(
-                      title: 'Protocolo Cierre',
-                      icon: Icons.rule_folder_outlined,
-                      accent: Colors.amberAccent,
-                      description:
-                          'Cancela órdenes LIMIT abiertas y toma snapshot operativo/equity de salida.',
-                      precautions:
-                          '- Detiene Dorothy antes de ejecutar.\n'
-                          '- Úsalo para cierre controlado, no para liquidación total.\n'
-                          '- Revisa el resumen para trazabilidad.',
-                      state: _closeProtocolState,
-                      onRun: _runCloseProtocol,
-                      onViewSummary: () => _openProtocolSummaryDialog(
-                        'Resumen · Protocolo de Cierre',
-                        _closeProtocolState,
-                      ),
+              child: ExpansionTile(
+                title: const Text('Herramientas de Protocolo y Cleanup (RED BUTTON)', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.redAccent)),
+                leading: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                childrenPadding: const EdgeInsets.all(8),
+                children: [
+                  _protocolModuleCard(
+                    title: 'Protocolo Cierre',
+                    icon: Icons.rule_folder_outlined,
+                    accent: Colors.amberAccent,
+                    description:
+                        'Cancela órdenes LIMIT abiertas y toma snapshot operativo/equity de salida.',
+                    precautions:
+                        '- Detiene Dorothy antes de ejecutar.\n'
+                        '- Úsalo para cierre controlado, no para liquidación total.\n'
+                        '- Revisa el resumen para trazabilidad.',
+                    state: _closeProtocolState,
+                    onRun: _runCloseProtocol,
+                    onViewSummary: () => _openProtocolSummaryDialog(
+                      'Resumen · Protocolo de Cierre',
+                      _closeProtocolState,
                     ),
-                    const Divider(height: 1),
-                    _protocolModuleCard(
-                      title: 'RED BUTTON',
-                      icon: Icons.warning_amber_rounded,
-                      accent: Colors.redAccent,
-                      description:
-                          'Rutina de salida de emergencia: intenta convertir balances Spot al asset base vía ventas a mercado.',
-                      precautions:
-                          '- Detiene Dorothy antes de vender.\n'
-                          '- Puede fallar en activos sin par directo o por filtros LOT_SIZE.\n'
-                          '- Ejecutar solo cuando sea estrictamente necesario.',
-                      state: _redButtonState,
-                      onRun: _runRedButton,
-                      onViewSummary: () => _openProtocolSummaryDialog(
-                        'Resumen · RED BUTTON',
-                        _redButtonState,
-                      ),
+                  ),
+                  const Divider(height: 1),
+                  _protocolModuleCard(
+                    title: 'RED BUTTON',
+                    icon: Icons.warning_amber_rounded,
+                    accent: Colors.redAccent,
+                    description:
+                        'Rutina de salida de emergencia: intenta convertir balances Spot al asset base vía ventas a mercado.',
+                    precautions:
+                        '- Detiene Dorothy antes de vender.\n'
+                        '- Puede fallar en activos sin par directo o por filtros LOT_SIZE.\n'
+                        '- Ejecutar solo cuando sea estrictamente necesario.',
+                    state: _redButtonState,
+                    onRun: _runRedButton,
+                    onViewSummary: () => _openProtocolSummaryDialog(
+                      'Resumen · RED BUTTON',
+                      _redButtonState,
                     ),
-                    const Divider(height: 1),
-                    _protocolModuleCard(
-                      title: 'Cleanup LIMIT',
-                      icon: Icons.format_list_numbered,
-                      accent: Colors.lightBlueAccent,
-                      description:
-                          'Evalúa pares Spot con balance y cancela órdenes LIMIT abiertas.',
-                      precautions:
-                          '- Primero detiene instancias Dorothy activas.\n'
-                          '- No vende activos, solo limpia órdenes LIMIT.\n'
-                          '- Útil antes de relanzar estrategia con libro limpio.',
-                      state: _cleanupLimitState,
-                      onRun: _runCleanupLimitOrders,
-                      onViewSummary: () => _openProtocolSummaryDialog(
-                        'Resumen · Cleanup LIMIT',
-                        _cleanupLimitState,
-                      ),
+                  ),
+                  const Divider(height: 1),
+                  _protocolModuleCard(
+                    title: 'Cleanup LIMIT',
+                    icon: Icons.format_list_numbered,
+                    accent: Colors.lightBlueAccent,
+                    description:
+                        'Evalúa pares Spot con balance y cancela órdenes LIMIT abiertas.',
+                    precautions:
+                        '- Primero detiene instancias Dorothy activas.\n'
+                        '- No vende activos, solo limpia órdenes LIMIT.\n'
+                        '- Útil antes de relanzar estrategia con libro limpio.',
+                    state: _cleanupLimitState,
+                    onRun: _runCleanupLimitOrders,
+                    onViewSummary: () => _openProtocolSummaryDialog(
+                      'Resumen · Cleanup LIMIT',
+                      _cleanupLimitState,
                     ),
-                    const Divider(height: 1),
-                    _protocolModuleCard(
-                      title: 'Cleanup STOP',
-                      icon: Icons.pause_circle_outline,
-                      accent: Colors.orangeAccent,
-                      description:
-                          'Cancela órdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario.',
-                      precautions:
-                          '- Primero detiene instancias Dorothy activas.\n'
-                          '- Útil cuando quedan stops huérfanos.\n'
-                          '- No toca posiciones, solo órdenes abiertas tipo stop.',
-                      state: _cleanupStopState,
-                      onRun: _runCleanupStopOrders,
-                      onViewSummary: () => _openProtocolSummaryDialog(
-                        'Resumen · Cleanup STOP',
-                        _cleanupStopState,
-                      ),
+                  ),
+                  const Divider(height: 1),
+                  _protocolModuleCard(
+                    title: 'Cleanup STOP',
+                    icon: Icons.pause_circle_outline,
+                    accent: Colors.orangeAccent,
+                    description:
+                        'Cancela órdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario.',
+                    precautions:
+                        '- Primero detiene instancias Dorothy activas.\n'
+                        '- Útil cuando quedan stops huérfanos.\n'
+                        '- No toca posiciones, solo órdenes abiertas tipo stop.',
+                    state: _cleanupStopState,
+                    onRun: _runCleanupStopOrders,
+                    onViewSummary: () => _openProtocolSummaryDialog(
+                      'Resumen · Cleanup STOP',
+                      _cleanupStopState,
                     ),
-                    const Divider(height: 1),
-                    _protocolModuleCard(
-                      title: 'Cleanup TOTAL',
-                      icon: Icons.cleaning_services_outlined,
-                      accent: Colors.purpleAccent,
-                      description:
-                          'Limpieza total de órdenes: cancela toda orden abierta encontrada en la cuenta.',
-                      precautions:
-                          '- Primero detiene instancias Dorothy activas.\n'
-                          '- Es la versión más agresiva de limpieza.\n'
-                          '- Usar cuando quieras dejar libro totalmente vacío.',
-                      state: _cleanupAllState,
-                      onRun: _runCleanupAllOrders,
-                      onViewSummary: () => _openProtocolSummaryDialog(
-                        'Resumen · Cleanup TOTAL',
-                        _cleanupAllState,
-                      ),
+                  ),
+                  const Divider(height: 1),
+                  _protocolModuleCard(
+                    title: 'Cleanup TOTAL',
+                    icon: Icons.cleaning_services_outlined,
+                    accent: Colors.purpleAccent,
+                    description:
+                        'Limpieza total de órdenes: cancela toda orden abierta encontrada en la cuenta.',
+                    precautions:
+                        '- Primero detiene instancias Dorothy activas.\n'
+                        '- Es la versión más agresiva de limpieza.\n'
+                        '- Usar cuando quieras dejar libro totalmente vacío.',
+                    state: _cleanupAllState,
+                    onRun: _runCleanupAllOrders,
+                    onViewSummary: () => _openProtocolSummaryDialog(
+                      'Resumen · Cleanup TOTAL',
+                      _cleanupAllState,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Card(
@@ -3171,33 +3203,48 @@ class _MashaHubPageState extends State<MashaHubPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _f(botId, d, 'tag', 'Tag', 120), const SizedBox(width: 6),
+                            _f(botId, d, 'symbol', 'Símbolo', 120), const SizedBox(width: 6),
+                            _f(botId, d, 'base', 'Base', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'quote', 'Quote', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'loop', 'Loop s', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'minQuote', 'Min quote', 95), const SizedBox(width: 6),
+                            _f(botId, d, 'buyQty', 'Buy qty', 95), const SizedBox(width: 6),
+                            _f(botId, d, 'profit', 'Profit', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'tfW', 'TF W', 70), const SizedBox(width: 6),
+                            _f(botId, d, 'pW', 'P W', 60), const SizedBox(width: 6),
+                            _f(botId, d, 'mmW', 'MM W', 70), const SizedBox(width: 6),
+                            _f(botId, d, 'mW', 'M W', 80), const SizedBox(width: 6),
+                            _f(botId, d, 'tfH', 'TF H', 70), const SizedBox(width: 6),
+                            _f(botId, d, 'pH', 'P H', 60), const SizedBox(width: 6),
+                            _f(botId, d, 'mmH', 'MM H', 70), const SizedBox(width: 6),
+                            _f(botId, d, 'mH', 'M H', 80), const SizedBox(width: 6),
+                            _f(botId, d, 'qDec', 'QDec', 65), const SizedBox(width: 6),
+                            _f(botId, d, 'pDec', 'PDec', 65), const SizedBox(width: 6),
+                            _f(botId, d, 'note', 'Nota', 130), const SizedBox(width: 6),
+                            _f(botId, d, 'maxDd', 'maxDd', 80), const SizedBox(width: 6),
+                            _f(botId, d, 'stopLoss', 'stopLoss', 90), const SizedBox(width: 6),
+                            _f(botId, d, 'metricsEvery', 'metricsEvery', 95),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
                       child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.start,
                         children: [
-                          _f(botId, d, 'tag', 'Tag', 120),
-                          _f(botId, d, 'symbol', 'Símbolo', 120),
-                          _f(botId, d, 'base', 'Base', 85),
-                          _f(botId, d, 'quote', 'Quote', 85),
-                          _f(botId, d, 'loop', 'Loop s', 85),
-                          _f(botId, d, 'minQuote', 'Min quote', 95),
-                          _f(botId, d, 'buyQty', 'Buy qty', 95),
-                          _f(botId, d, 'profit', 'Profit', 85),
-                          _f(botId, d, 'tfW', 'TF W', 70),
-                          _f(botId, d, 'pW', 'P W', 60),
-                          _f(botId, d, 'mmW', 'MM W', 70),
-                          _f(botId, d, 'mW', 'M W', 80),
-                          _f(botId, d, 'tfH', 'TF H', 70),
-                          _f(botId, d, 'pH', 'P H', 60),
-                          _f(botId, d, 'mmH', 'MM H', 70),
-                          _f(botId, d, 'mH', 'M H', 80),
-                          _f(botId, d, 'qDec', 'QDec', 65),
-                          _f(botId, d, 'pDec', 'PDec', 65),
-                          _f(botId, d, 'note', 'Nota', 130),
-                          _f(botId, d, 'maxDd', 'maxDd', 80),
-                          _f(botId, d, 'stopLoss', 'stopLoss', 90),
-                          _f(botId, d, 'metricsEvery', 'metricsEvery', 95),
                           FilledButton.tonalIcon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: running ? Colors.green.withOpacity(0.2) : Colors.orangeAccent.withOpacity(0.2),
+                              foregroundColor: running ? Colors.greenAccent : Colors.orangeAccent,
+                            ),
                             onPressed: _loading ? null : () => _toggle(botId, running),
                             icon: Icon(
                               running ? Icons.pause_circle : Icons.play_circle,
@@ -3715,24 +3762,39 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _f(botId, d, 'tag', 'Tag', 120), const SizedBox(width: 6),
+                            _f(botId, d, 'symbols', 'Símbolos CSV', 210), const SizedBox(width: 6),
+                            _f(botId, d, 'loop', 'Loop s', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'between', 'Entre sym s', 95), const SizedBox(width: 6),
+                            _f(botId, d, 'quoteQty', 'Quote qty', 95), const SizedBox(width: 6),
+                            _f(botId, d, 'factor', 'Factor', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'meta', 'Meta USDT', 110), const SizedBox(width: 6),
+                            _f(botId, d, 'refTs', 'Referencia ISO', 180), const SizedBox(width: 6),
+                            _f(botId, d, 'qDec', 'QDec', 65), const SizedBox(width: 6),
+                            _f(botId, d, 'note', 'Nota', 130), const SizedBox(width: 6),
+                            _f(botId, d, 'maxDd', 'maxDd', 80), const SizedBox(width: 6),
+                            _f(botId, d, 'stopLoss', 'stopLoss', 90), const SizedBox(width: 6),
+                            _f(botId, d, 'metricsEvery', 'metricsEvery', 95),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
                       child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.start,
                         children: [
-                          _f(botId, d, 'tag', 'Tag', 120),
-                          _f(botId, d, 'symbols', 'Símbolos CSV', 210),
-                          _f(botId, d, 'loop', 'Loop s', 85),
-                          _f(botId, d, 'between', 'Entre sym s', 95),
-                          _f(botId, d, 'quoteQty', 'Quote qty', 95),
-                          _f(botId, d, 'factor', 'Factor', 85),
-                          _f(botId, d, 'meta', 'Meta USDT', 110),
-                          _f(botId, d, 'refTs', 'Referencia ISO', 180),
-                          _f(botId, d, 'qDec', 'QDec', 65),
-                          _f(botId, d, 'note', 'Nota', 130),
-                          _f(botId, d, 'maxDd', 'maxDd', 80),
-                          _f(botId, d, 'stopLoss', 'stopLoss', 90),
-                          _f(botId, d, 'metricsEvery', 'metricsEvery', 95),
                           FilledButton.tonalIcon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: running ? Colors.green.withOpacity(0.2) : Colors.orangeAccent.withOpacity(0.2),
+                              foregroundColor: running ? Colors.greenAccent : Colors.orangeAccent,
+                            ),
                             onPressed: _loading ? null : () => _toggle(botId, running),
                             icon: Icon(
                               running ? Icons.pause_circle : Icons.play_circle,

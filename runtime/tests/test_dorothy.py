@@ -1,10 +1,10 @@
 """Comprehensive tests for Dorothy bot cycle logic."""
 
 import asyncio
-import json
+import datetime as dt
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -99,7 +99,7 @@ class TestDorothyRunner:
         # Mock the cycle to return immediately
         runner._cycle = AsyncMock(return_value=None)
 
-        await runner.start(client=MagicMock())
+        await runner.start()
         await asyncio.sleep(0.01)  # Let task start
 
         assert runner._task is not None
@@ -114,14 +114,14 @@ class TestDorothyRunner:
         runner = DorothyRunner(log=log_fn)
         runner._cycle = AsyncMock(return_value=None)
 
-        await runner.start(client=MagicMock())
+        await runner.start()
         await asyncio.sleep(0.01)
 
         assert runner._task is not None
         await runner.stop()
         await asyncio.sleep(0.01)
 
-        assert runner._task.done()
+        assert runner._task is None
 
     def test_set_config(self):
         """Test configuration update."""
@@ -129,7 +129,7 @@ class TestDorothyRunner:
         runner = DorothyRunner(log=log_fn)
 
         new_cfg = DorothyConfig(symbol="BTCUSDT", loop_interval_sec=300)
-        runner.set_config(new_cfg)
+        runner.apply_config(new_cfg)
 
         assert runner.config.symbol == "BTCUSDT"
         assert runner.config.loop_interval_sec == 300
@@ -140,11 +140,11 @@ class TestDorothyRunner:
         runner = DorothyRunner(log=log_fn)
 
         # Simulate setting a timestamp
-        now = datetime.utcnow().isoformat() + "Z"
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
         runner._last_cycle_ts = now
 
         # Should be parseable
-        parsed = datetime.fromisoformat(now.replace("Z", "+00:00"))
+        parsed = dt.datetime.fromisoformat(now)
         assert parsed is not None
 
     @pytest.mark.asyncio
@@ -188,7 +188,7 @@ class TestDorothyRunner:
         runner._cycle = AsyncMock(return_value=None)
 
         for _ in range(3):
-            await runner.start(client=MagicMock())
+            await runner.start()
             await asyncio.sleep(0.01)
             await runner.stop()
             await asyncio.sleep(0.01)
@@ -212,7 +212,7 @@ class TestDorothyDecimalHandling:
 
     def test_quantize_down(self):
         """Test downward quantization for order quantities."""
-        from runtime.modules.bots.dorothy import _q
+        from runtime.bot.dorothy import _q
 
         # 8.567 with 2 decimal places should become 8.56 (not 8.57)
         result = _q(Decimal("8.567"), places=2)
@@ -220,14 +220,14 @@ class TestDorothyDecimalHandling:
 
     def test_quantize_zero_places(self):
         """Test quantization with zero decimal places."""
-        from runtime.modules.bots.dorothy import _q
+        from runtime.bot.dorothy import _q
 
         result = _q(Decimal("8.9"), places=0)
         assert result == Decimal("8")
 
     def test_decimal_conversion_from_string(self):
         """Test _dec() handles string to Decimal conversion."""
-        from runtime.modules.bots.dorothy import _dec
+        from runtime.bot.dorothy import _dec
 
         assert _dec("8.5") == Decimal("8.5")
         assert _dec("0") == Decimal("0")
@@ -237,7 +237,7 @@ class TestDorothyDecimalHandling:
 
     def test_decimal_conversion_with_custom_default(self):
         """Test _dec() with custom default value."""
-        from runtime.modules.bots.dorothy import _dec
+        from runtime.bot.dorothy import _dec
 
         result = _dec("invalid", default="10")
         assert result == Decimal("10")

@@ -1819,48 +1819,160 @@ def _sandbox_curated_list(ctx: AppContext, limit: int = 50) -> list[dict[str, An
 def _sandbox_rest_catalog() -> list[dict[str, Any]]:
     return [
         {
+            "query_id": "historical_klines",
+            "title": "Historical Klines",
+            "description": "Datos historicos de velas",
+            "requires_credentials": False,
+            "args": ["symbol (required)", "interval (required)", "start_str (required)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "symbol_info",
+            "title": "Symbol Info",
+            "description": "Informacion detallada de un simbolo",
+            "requires_credentials": False,
+            "args": ["symbol (required)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "all_tickers",
+            "title": "All Tickers",
+            "description": "Ultimo precio de todos los simbolos",
+            "requires_credentials": False,
+            "args": [],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "recent_trades",
+            "title": "Recent Trades",
+            "description": "Trades recientes en el mercado para un simbolo",
+            "requires_credentials": False,
+            "args": ["symbol (required)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "asset_balance",
+            "title": "Asset Balance",
+            "description": "Balance de un activo especifico",
+            "requires_credentials": True,
+            "args": ["asset (required)"],
+            "category": "Account & Trades",
+        },
+        {
+            "query_id": "trade_fee",
+            "title": "Trade Fee",
+            "description": "Tarifas de trading de un simbolo",
+            "requires_credentials": True,
+            "args": ["symbol (optional)"],
+            "category": "Account & Trades",
+        },
+        {
             "query_id": "exchange_info",
             "title": "Exchange Info",
-            "description": "client.get_exchange_info()",
+            "description": "Retorna reglas de trading y símbolos de Binance",
             "requires_credentials": False,
             "args": ["symbol (optional)"],
+            "category": "Market Data",
         },
         {
             "query_id": "server_time",
             "title": "Server Time",
-            "description": "client.get_server_time()",
+            "description": "Retorna la hora actual del servidor de Binance",
             "requires_credentials": False,
             "args": [],
-        },
-        {
-            "query_id": "account",
-            "title": "Spot Account",
-            "description": "client.get_account()",
-            "requires_credentials": True,
-            "args": [],
-        },
-        {
-            "query_id": "open_orders",
-            "title": "Open Orders",
-            "description": "client.get_open_orders(symbol?)",
-            "requires_credentials": True,
-            "args": ["symbol (optional)"],
-        },
-        {
-            "query_id": "my_trades",
-            "title": "My Trades",
-            "description": "client.get_my_trades(symbol, limit)",
-            "requires_credentials": True,
-            "args": ["symbol (required)", "limit (optional, default 50)"],
+            "category": "Market Data",
         },
         {
             "query_id": "orderbook_ticker",
             "title": "Orderbook Ticker",
-            "description": "client.get_orderbook_ticker(symbol)",
+            "description": "Mejor precio bid/ask para un símbolo",
             "requires_credentials": False,
             "args": ["symbol (required)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "ticker_price",
+            "title": "Ticker Price",
+            "description": "Último precio transaccionado",
+            "requires_credentials": False,
+            "args": ["symbol (optional)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "ticker_24hr",
+            "title": "24hr Ticker",
+            "description": "Estadísticas de cambio de precio en 24h",
+            "requires_credentials": False,
+            "args": ["symbol (optional)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "klines",
+            "title": "Klines / Candlesticks",
+            "description": "Datos de velas para un símbolo e intervalo",
+            "requires_credentials": False,
+            "args": ["symbol (required)", "interval (required)"],
+            "category": "Market Data",
+        },
+        {
+            "query_id": "account",
+            "title": "Spot Account",
+            "description": "Balances y estado general de la cuenta Spot",
+            "requires_credentials": True,
+            "args": [],
+            "category": "Account & Trades",
+        },
+        {
+            "query_id": "open_orders",
+            "title": "Open Orders",
+            "description": "Todas las órdenes abiertas (LIMIT, STOP)",
+            "requires_credentials": True,
+            "args": ["symbol (optional)"],
+            "category": "Account & Trades",
+        },
+        {
+            "query_id": "all_orders",
+            "title": "All Orders",
+            "description": "Historial de órdenes (abiertas, cerradas, canceladas)",
+            "requires_credentials": True,
+            "args": ["symbol (required)", "limit (optional)"],
+            "category": "Account & Trades",
+        },
+        {
+            "query_id": "my_trades",
+            "title": "My Trades",
+            "description": "Historial de ejecuciones reales (trades)",
+            "requires_credentials": True,
+            "args": ["symbol (required)", "limit (optional)"],
+            "category": "Account & Trades",
+        },
+        {
+            "query_id": "deposit_history",
+            "title": "Deposit History",
+            "description": "Historial de depósitos entrantes a la cuenta",
+            "requires_credentials": True,
+            "args": ["coin (optional)", "status (optional)"],
+            "category": "Wallet",
+        },
+        {
+            "query_id": "withdraw_history",
+            "title": "Withdraw History",
+            "description": "Historial de retiros salientes",
+            "requires_credentials": True,
+            "args": ["coin (optional)", "status (optional)"],
+            "category": "Wallet",
+        },
+        {
+            "query_id": "trade_fee",
+            "title": "Trade Fee",
+            "description": "Comisiones de trading actuales (VIP, BNB discount)",
+            "requires_credentials": True,
+            "args": ["symbol (optional)"],
+            "category": "Account & Trades",
         },
     ]
+
+
 
 
 def _sandbox_curate_json(response: Any) -> dict[str, Any]:
@@ -1978,6 +2090,13 @@ async def _sandbox_rest_query(ctx: AppContext, body: dict[str, Any]) -> dict[str
             "get_open_orders": "open_orders",
             "get_my_trades": "my_trades",
             "get_orderbook_ticker": "orderbook_ticker",
+            "get_symbol_info": "symbol_info",
+            "get_all_tickers": "all_tickers",
+            "get_historical_klines": "historical_klines",
+            "get_klines": "klines",
+            "get_recent_trades": "recent_trades",
+            "get_asset_balance": "asset_balance",
+            "get_trade_fee": "trade_fee",
         }
         query_id = method_map.get(method)
         if not query_id:
@@ -2004,6 +2123,8 @@ async def _sandbox_rest_query(ctx: AppContext, body: dict[str, Any]) -> dict[str
             out["symbol"] = str(symbol).strip().upper()
         if "limit" in kwargs:
             out["limit"] = kwargs["limit"]
+        out["kwargs"] = kwargs
+        out["args"] = args
         return out
 
     query_id = str((body or {}).get("query_id", "")).strip().lower()
@@ -2019,7 +2140,13 @@ async def _sandbox_rest_query(ctx: AppContext, body: dict[str, Any]) -> dict[str
     if query_id not in catalog_ids:
         raise HTTPException(status_code=400, detail=f"Unsupported query_id: {query_id}")
 
-    symbol = str((body or {}).get("symbol", "") or parsed_call.get("symbol", "")).strip().upper()
+    query_id = query_id or str(parsed_call.get("query_id", ""))
+    
+    # Extraer kwargs y args parseados (si existen) o desde el body
+    p_kwargs = parsed_call.get("kwargs", {})
+    p_args = parsed_call.get("args", [])
+    
+    symbol = str((body or {}).get("symbol", parsed_call.get("symbol", ""))).strip().upper()
     limit_raw = (body or {}).get("limit", parsed_call.get("limit", 50))
     try:
         limit = max(1, min(int(limit_raw), 1000))
@@ -2075,6 +2202,59 @@ async def _sandbox_rest_query(ctx: AppContext, body: dict[str, Any]) -> dict[str
                 ctx=ctx,
                 source="sandbox",
                 action="sandbox:get_account",
+            )
+        elif query_id == "symbol_info":
+            if not symbol:
+                raise HTTPException(status_code=400, detail="symbol is required")
+            response = await asyncio.to_thread(client.get_symbol_info, symbol=symbol)
+            _audit_weight_from_client(ctx, client, source="sandbox", action="sandbox:get_symbol_info")
+        elif query_id == "all_tickers":
+            response = await asyncio.to_thread(client.get_all_tickers)
+            _audit_weight_from_client(ctx, client, source="sandbox", action="sandbox:get_all_tickers")
+        elif query_id == "historical_klines":
+            interval = p_kwargs.get("interval") or (body or {}).get("interval")
+            start_str = p_kwargs.get("start_str") or (body or {}).get("start_str")
+            if not symbol or not interval or not start_str:
+                raise HTTPException(status_code=400, detail="symbol, interval, and start_str are required")
+            response = await asyncio.to_thread(client.get_historical_klines, symbol=symbol, interval=interval, start_str=start_str)
+            _audit_weight_from_client(ctx, client, source="sandbox", action="sandbox:get_historical_klines")
+        elif query_id == "klines":
+            interval = p_kwargs.get("interval") or (body or {}).get("interval")
+            start_time = p_kwargs.get("startTime") or p_kwargs.get("startTime")
+            end_time = p_kwargs.get("endTime") or p_kwargs.get("endTime")
+            if not symbol or not interval:
+                raise HTTPException(status_code=400, detail="symbol and interval are required")
+            # Build kw args dynamically
+            k_kwargs = {"symbol": symbol, "interval": interval, "limit": limit}
+            if start_time: k_kwargs["startTime"] = start_time
+            if end_time: k_kwargs["endTime"] = end_time
+            response = await asyncio.to_thread(client.get_klines, **k_kwargs)
+            _audit_weight_from_client(ctx, client, source="sandbox", action="sandbox:get_klines")
+        elif query_id == "recent_trades":
+            if not symbol:
+                raise HTTPException(status_code=400, detail="symbol is required")
+            response = await asyncio.to_thread(client.get_recent_trades, symbol=symbol, limit=limit)
+            _audit_weight_from_client(ctx, client, source="sandbox", action="sandbox:get_recent_trades")
+        elif query_id == "asset_balance":
+            asset = p_kwargs.get("asset") or (body or {}).get("asset")
+            if not asset and p_args:
+                asset = p_args[0]
+            if not asset:
+                raise HTTPException(status_code=400, detail="asset is required")
+            response = await _sandbox_signed_call_with_time_retry(
+                client,
+                lambda: client.get_asset_balance(asset=asset),
+                ctx=ctx,
+                source="sandbox",
+                action="sandbox:get_asset_balance",
+            )
+        elif query_id == "trade_fee":
+            response = await _sandbox_signed_call_with_time_retry(
+                client,
+                lambda: client.get_trade_fee(symbol=symbol) if symbol else client.get_trade_fee(),
+                ctx=ctx,
+                source="sandbox",
+                action="sandbox:get_trade_fee",
             )
         elif query_id == "open_orders":
             if symbol:

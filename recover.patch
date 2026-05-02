@@ -1,0 +1,188 @@
+diff --git a/desktop_shell/lib/main.dart b/desktop_shell/lib/main.dart
+index 2e7f1a5..6a2327c 100644
+--- a/desktop_shell/lib/main.dart
++++ b/desktop_shell/lib/main.dart
+@@ -1431,63 +1431,72 @@ class _BotControlPageState extends State<BotControlPage> {
+           : const []),
+     ].length;
+     return Padding(
+-      padding: const EdgeInsets.symmetric(vertical: 4),
+-      child: Row(
++      padding: const EdgeInsets.symmetric(vertical: 8),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+-          Icon(icon, size: 18, color: accent),
+-          const SizedBox(width: 8),
+-          SizedBox(
+-            width: 130,
+-            child: Row(
+-              children: [
+-                Flexible(
+-                  child: Text(
+-                    title,
+-                    overflow: TextOverflow.ellipsis,
+-                    style: const TextStyle(fontWeight: FontWeight.w700),
++          Row(
++            children: [
++              Icon(icon, size: 18, color: accent),
++              const SizedBox(width: 8),
++              SizedBox(
++                width: 130,
++                child: Row(
++                  children: [
++                    Flexible(
++                      child: Text(
++                        title,
++                        overflow: TextOverflow.ellipsis,
++                        style: const TextStyle(fontWeight: FontWeight.w700),
++                      ),
++                    ),
++                    const SizedBox(width: 4),
++                    Tooltip(
++                      message: 'Precauciones:\n$precautions',
++                      child: const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
++                    ),
++                  ],
++                ),
++              ),
++              const SizedBox(width: 8),
++              SizedBox(
++                width: 84,
++                child: Text(
++                  status,
++                  style: TextStyle(
++                    fontSize: 11,
++                    fontFamily: 'monospace',
++                    color: _opStatusColor(status),
+                   ),
+                 ),
+-                const SizedBox(width: 4),
+-                Tooltip(
+-                  message: '$description\n\nPrecauciones:\n$precautions',
+-                  child: const Icon(Icons.info_outline, size: 14),
++              ),
++              const SizedBox(width: 8),
++              Expanded(
++                child: Text(
++                  'ts $ts · stopped $stopped · err $errors · ${_plainNum(elapsed)}s',
++                  overflow: TextOverflow.ellipsis,
++                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                 ),
+-              ],
+-            ),
+-          ),
+-          const SizedBox(width: 8),
+-          SizedBox(
+-            width: 84,
+-            child: Text(
+-              status,
+-              style: TextStyle(
+-                fontSize: 11,
+-                fontFamily: 'monospace',
+-                color: _opStatusColor(status),
+               ),
+-            ),
+-          ),
+-          const SizedBox(width: 8),
+-          Expanded(
+-            child: Text(
+-              'ts $ts · stopped $stopped · err $errors · ${_plainNum(elapsed)}s',
+-              overflow: TextOverflow.ellipsis,
+-              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+-            ),
+-          ),
+-          const SizedBox(width: 8),
+-          FilledButton.tonal(
+-            style: FilledButton.styleFrom(
+-              backgroundColor: accent.withValues(alpha: 0.18),
+-              foregroundColor: accent,
+-            ),
+-            onPressed: _loading ? null : onRun,
+-            child: const Text('Ejecutar'),
++              const SizedBox(width: 8),
++              FilledButton.tonal(
++                style: FilledButton.styleFrom(
++                  backgroundColor: accent.withValues(alpha: 0.18),
++                  foregroundColor: accent,
++                ),
++                onPressed: _loading ? null : onRun,
++                child: const Text('Ejecutar'),
++              ),
++              const SizedBox(width: 6),
++              OutlinedButton(
++                onPressed: state == null ? null : onViewSummary,
++                child: const Text('Resumen'),
++              ),
++            ],
+           ),
+-          const SizedBox(width: 6),
+-          OutlinedButton(
+-            onPressed: state == null ? null : onViewSummary,
+-            child: const Text('Resumen'),
++          Padding(
++            padding: const EdgeInsets.only(left: 26, top: 4),
++            child: Text(description, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+           ),
+         ],
+       ),
+@@ -1647,7 +1656,7 @@ class _BotControlPageState extends State<BotControlPage> {
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Text(
+-                        'Peso REST (1m): $_apiWeightUsed / $_apiWeightLimit',
++                        'Peso REST (1m): $_apiWeightUsed / $_apiWeightLimit (${((_apiWeightUsed! / (_apiWeightLimit == 0 ? 1 : _apiWeightLimit)) * 100).toStringAsFixed(1)}%)',
+                         style: TextStyle(
+                           fontSize: 12,
+                           color: Theme.of(context).colorScheme.onSurfaceVariant,
+@@ -1697,7 +1706,11 @@ class _BotControlPageState extends State<BotControlPage> {
+                 ),
+               ),
+             Card(
+-              child: Padding(
++              child: ExpansionTile(
++                initiallyExpanded: false,
++                title: const Text('Herramientas de Uso Delicado', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
++                children: [
++                  Padding(
+                 padding: const EdgeInsets.all(8),
+                 child: Column(
+                   children: [
+@@ -1793,6 +1806,8 @@ class _BotControlPageState extends State<BotControlPage> {
+                   ],
+                 ),
+               ),
++                ],
++              ),
+             ),
+             Card(
+               child: Padding(
+@@ -2081,6 +2096,8 @@ class _BotControlPageState extends State<BotControlPage> {
+                         value: (b['simulated'] ?? true) == true,
+                         activeThumbColor: Colors.redAccent,
+                         activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
++                        inactiveThumbColor: Colors.greenAccent,
++                        inactiveTrackColor: Colors.greenAccent.withValues(alpha: 0.3),
+                         onChanged: _loading
+                             ? null
+                             : (v) async {
+@@ -2253,7 +2270,10 @@ class _BotControlPageState extends State<BotControlPage> {
+                         ],
+                       ),
+                     ),
+-                    Container(
++                    ExpansionTile(
++                      title: const Text('Logs de ejecución', style: TextStyle(fontSize: 12)),
++                      initiallyExpanded: false,
++                      children: [Container(
+                       width: double.infinity,
+                       constraints: const BoxConstraints(
+                         minHeight: 80,
+@@ -2277,6 +2297,7 @@ class _BotControlPageState extends State<BotControlPage> {
+                           ),
+                         ),
+                       ),
++                    ),],
+                     ),
+                   ],
+                 ),

@@ -12,6 +12,8 @@ class _PrefsKeys {
   static const String configHistory = 'app.configHistory';
   static const String expandedBots = 'app.expandedBots';
   static const String lastScrollPos = 'app.lastScrollPos';
+  static const String apiKey = 'app.apiKey';
+  static const String apiSecret = 'app.apiSecret';
 }
 
 class AppPreferences {
@@ -88,6 +90,15 @@ class AppPreferences {
 
   static Future<void> setLastLogScrollPosition(int position) =>
       _prefs.setInt(_PrefsKeys.lastScrollPos, position);
+
+  // Credentials Persistence
+  static String get apiKey => _prefs.getString(_PrefsKeys.apiKey) ?? '';
+  static Future<void> setApiKey(String value) =>
+      _prefs.setString(_PrefsKeys.apiKey, value);
+
+  static String get apiSecret => _prefs.getString(_PrefsKeys.apiSecret) ?? '';
+  static Future<void> setApiSecret(String value) =>
+      _prefs.setString(_PrefsKeys.apiSecret, value);
 
   // Clear all
   static Future<void> clearAll() => _prefs.clear();
