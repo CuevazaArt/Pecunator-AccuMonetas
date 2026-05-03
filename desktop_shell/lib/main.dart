@@ -86,7 +86,7 @@ class _BotControlPageState extends State<BotControlPage> {
   final _stopLossCtrl = TextEditingController(text: '0.10');
   final _metricsEveryCtrl = TextEditingController(text: '5');
 
-  bool _loading = false;
+  bool _loadingHub = false;
   String _lastError = '-';
   bool _gatewayRunning = false;
   bool _gatewayWsConnected = false;
@@ -287,8 +287,8 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 
   Future<void> _withBusy(Future<void> Function() fn) async {
-    if (_loading) return;
-    setState(() => _loading = true);
+    if (_loadingHub) return;
+    setState(() => _loadingHub = true);
     try {
       await fn();
       _lastError = '-';
@@ -300,7 +300,7 @@ class _BotControlPageState extends State<BotControlPage> {
         ).showSnackBar(SnackBar(content: Text(_lastError)));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingHub = false);
     }
   }
 
@@ -431,7 +431,7 @@ class _BotControlPageState extends State<BotControlPage> {
   bool _bgRefreshInFlight = false;
 
   Future<void> _backgroundRefresh() async {
-    if (!mounted || _loading || _bgRefreshInFlight) return;
+    if (!mounted || _loadingHub || _bgRefreshInFlight) return;
     _bgRefreshInFlight = true;
     try {
       await _reloadData();
@@ -1139,7 +1139,7 @@ class _BotControlPageState extends State<BotControlPage> {
                                 const SizedBox(width: 4),
                                 IconButton(
                                   tooltip: 'Borrar',
-                                  onPressed: _loading
+                                  onPressed: _loadingHub
                                       ? null
                                       : () async {
                                           await _confirmDeleteCredential(id);
@@ -1171,7 +1171,7 @@ class _BotControlPageState extends State<BotControlPage> {
                                 obscureText: true,
                                 textInputAction: TextInputAction.done,
                                 onSubmitted: (_) async {
-                                  if (_loading) return;
+                                  if (_loadingHub) return;
                                   await _addCredential();
                                   setModal(() {});
                                 },
@@ -1184,7 +1184,7 @@ class _BotControlPageState extends State<BotControlPage> {
                             ),
                             const SizedBox(width: 6),
                             FilledButton.icon(
-                              onPressed: _loading
+                              onPressed: _loadingHub
                                   ? null
                                   : () async {
                                       await _addCredential();
@@ -1598,7 +1598,7 @@ class _BotControlPageState extends State<BotControlPage> {
               backgroundColor: accent.withValues(alpha: 0.18),
               foregroundColor: accent,
             ),
-            onPressed: _loading ? null : onRun,
+            onPressed: _loadingHub ? null : onRun,
             child: const Text('Ejecutar'),
           ),
           const SizedBox(width: 6),
@@ -1649,13 +1649,13 @@ class _BotControlPageState extends State<BotControlPage> {
           const SizedBox(width: 4),
           // ── Utilities ──
           IconButton(
-            onPressed: _loading ? null : _openCredentialManager,
+            onPressed: _loadingHub ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
           ),
           // ── Gateway toggle ──
           IconButton(
-            onPressed: _loading ? null : _toggleGateway,
+            onPressed: _loadingHub ? null : _toggleGateway,
             tooltip: _gatewayRunning
                 ? 'Gateway ON${_gatewayWsConnected ? " · WS" : ""} — pulsa para detener'
                 : 'Gateway OFF — pulsa para iniciar',
@@ -1667,7 +1667,7 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
           // ── Registros & Monitoreo (combined) ──
           IconButton(
-            onPressed: _loading ? null : _openRegistrosPage,
+            onPressed: _loadingHub ? null : _openRegistrosPage,
             tooltip: 'Registros, Monitor de Peso y SQLite',
             icon: const Icon(Icons.assessment_outlined, size: 18),
           ),
@@ -1684,7 +1684,7 @@ class _BotControlPageState extends State<BotControlPage> {
           Padding(
             padding: const EdgeInsets.only(right: 2),
             child: GestureDetector(
-              onTap: _loading ? null : _syncTimestamp,
+              onTap: _loadingHub ? null : _syncTimestamp,
               child: Tooltip(
                 message: 'Hora del servidor Binance — pulsa para sincronizar',
                 child: Row(
@@ -1707,7 +1707,7 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
           // ── Refresh ──
           IconButton(
-            onPressed: _loading ? null : _refreshAll,
+            onPressed: _loadingHub ? null : _refreshAll,
             tooltip: 'Refrescar',
             icon: const Icon(Icons.refresh, size: 18),
           ),
@@ -1743,7 +1743,7 @@ class _BotControlPageState extends State<BotControlPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_loading) const LinearProgressIndicator(),
+          if (_loadingHub) const LinearProgressIndicator(),
           if (_gatewayRunning &&
               _apiWeightUsed != null &&
                 _apiWeightLimit > 0)
@@ -1927,7 +1927,7 @@ class _BotControlPageState extends State<BotControlPage> {
                         Tooltip(
                           message: 'Crear instancia con este seteo',
                           child: FilledButton.icon(
-                            onPressed: _loading ? null : _createBot,
+                            onPressed: _loadingHub ? null : _createBot,
                             icon: const Icon(Icons.add_circle_outline, size: 16),
                             label: const Text('Nueva instancia'),
                           ),
@@ -2025,7 +2025,7 @@ class _BotControlPageState extends State<BotControlPage> {
                           const SizedBox(width: 10),
                           IconButton(
                             tooltip: 'Seteos usados anteriormente',
-                            onPressed: _loading ? null : _openConfigHistoryDialog,
+                            onPressed: _loadingHub ? null : _openConfigHistoryDialog,
                             icon: const Icon(Icons.history, size: 18),
                           ),
                         ],
@@ -2161,7 +2161,7 @@ class _BotControlPageState extends State<BotControlPage> {
                                   ? Colors.greenAccent
                                   : Colors.orangeAccent,
                             ),
-                            onPressed: _loading
+                            onPressed: _loadingHub
                                 ? null
                                 : () async {
                                     await _toggleBotLoop(botId, running);
@@ -2172,7 +2172,7 @@ class _BotControlPageState extends State<BotControlPage> {
                       ),
                       IconButton(
                         tooltip: 'Eliminar',
-                        onPressed: _loading
+                        onPressed: _loadingHub
                             ? null
                             : () async {
                                 await _confirmDeleteBot(botId);
@@ -2198,7 +2198,7 @@ class _BotControlPageState extends State<BotControlPage> {
                         value: (b['simulated'] ?? true) == true,
                         activeThumbColor: Colors.redAccent,
                         activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
-                        onChanged: _loading
+                        onChanged: _loadingHub
                             ? null
                             : (wantSim) async {
                                 if (wantSim) {
@@ -2338,7 +2338,7 @@ class _BotControlPageState extends State<BotControlPage> {
                               message:
                                   'Guardar y aplicar seteo ahora (reinicia si estaba activo)',
                               child: FilledButton.tonalIcon(
-                                onPressed: _loading
+                                onPressed: _loadingHub
                                     ? null
                                     : () => _saveBotConfig(botId),
                                 icon: const Icon(Icons.save, size: 16),
@@ -2362,7 +2362,7 @@ class _BotControlPageState extends State<BotControlPage> {
                           ),
                           const Spacer(),
                           TextButton(
-                            onPressed: _loading
+                            onPressed: _loadingHub
                                 ? null
                                 : () => _openSqliteRecordsList(botId),
                             child: const Text('Ver registros DB'),
