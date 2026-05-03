@@ -1089,6 +1089,14 @@ def create_app() -> FastAPI:
         from runtime.core.market_cache import get_market_cache
         return get_market_cache().status()
 
+    # ── Bot Coordinator Status ─────────────────────────────────────
+
+    @app.get("/api/v1/bot-coordinator/status")
+    async def get_bot_coordinator_status() -> dict[str, Any]:
+        """Return Bot Coordinator status (staged bots, active phases, jitter)."""
+        from runtime.core.bot_coordinator import get_bot_coordinator
+        return get_bot_coordinator().status()
+
     # ── Binance API Log ──────────────────────────────────────────────
 
     @app.get("/api-log/recent")
@@ -1232,6 +1240,12 @@ def _audit_weight_from_client(
         try:
             from runtime.core.weight_governor import get_weight_governor
             get_weight_governor().update_weight(used)
+        except Exception:
+            pass
+        # Feed real-time weight to the Coordinator for launch decisions
+        try:
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            get_bot_coordinator().update_weight(used)
         except Exception:
             pass
     except Exception:
