@@ -414,7 +414,8 @@ class BaseHubService(ABC):
                 bot_id,
                 self.HUB_CONFIG.get('table_prefix', 'dorothy'),
                 float(loop_sec),
-                api_key, api_secret,
+                # credential_ref only — raw keys are NOT passed to staging
+                credential_ref="",
             )
             launch_delay = staged.get('launch_delay_sec', 0.0)
             self._write_log(bot_id, rec.tag, "SYSTEM",
@@ -422,6 +423,7 @@ class BaseHubService(ABC):
                 staged)
         except Exception:
             pass  # Fallback: launch immediately
+
 
         # Wait for the optimal slot (0-60s max)
         if launch_delay > 0:

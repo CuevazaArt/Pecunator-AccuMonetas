@@ -43,12 +43,16 @@ _LOG = logging.getLogger("pecunator.core.bot_coordinator")
 
 @dataclass
 class StagedBot:
-    """A bot waiting to be launched at the optimal moment."""
+    """A bot waiting to be launched at the optimal moment.
+
+    Credentials are intentionally NOT stored here — they are resolved
+    from the vault at actual launch time by the caller.
+    """
     bot_id: str
     hub_type: str  # "dorothy", "masha", "thusnelda"
     loop_interval_sec: float
-    api_key: str
-    api_secret: str
+    # credential_ref: optional vault ID for audit tracing (never the raw keys)
+    credential_ref: str = ""  # vault credential_id, not the raw key
     staged_at: float = field(default_factory=time.monotonic)
     launch_at: float = 0.0  # Computed optimal launch time (monotonic)
     launch_delay_sec: float = 0.0  # How long to wait before launching
@@ -112,12 +116,13 @@ class BotCoordinator:
         bot_id: str,
         hub_type: str,
         loop_interval_sec: float,
-        api_key: str,
-        api_secret: str,
+        credential_ref: str = "",
     ) -> dict[str, Any]:
         """Stage a bot for coordinated launch.
 
         Returns immediately with the computed launch delay.
+        Credentials are NOT stored here — the caller retains them and
+        uses launch_delay_sec to sleep before actually starting the bot.
         """
         delay = self._compute_optimal_delay(loop_interval_sec)
 
@@ -125,8 +130,7 @@ class BotCoordinator:
             bot_id=bot_id,
             hub_type=hub_type,
             loop_interval_sec=loop_interval_sec,
-            api_key=api_key,
-            api_secret=api_secret,
+            credential_ref=credential_ref,  # vault ID only, never raw keys
             launch_delay_sec=delay,
             launch_at=time.monotonic() + delay,
             status="STAGED",
@@ -266,13 +270,10 @@ class BotCoordinator:
 
                 if callback:
                     try:
-                        await callback(
-                            staged.bot_id,
-                            staged.api_key,
-                            staged.api_secret,
-                        )
+                        # Callback receives only bot_id — credentials resolved
+                        # by the hub service from its own vault reference.
+                        await callback(staged.bot_id)
                         staged.status = "DONE"
-                        # Register as active
                         self.register_active(
                             staged.bot_id,
                             staged.loop_interval_sec,

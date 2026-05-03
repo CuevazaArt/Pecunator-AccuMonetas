@@ -172,9 +172,53 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
+    async def health() -> dict[str, Any]:
+        """Standard health check — safe to poll frequently, weight 0."""
         ctx = deps.get_ctx()
-        return {"status": "ok", "data_dir": str(ctx.config.data_dir)}
+        bot = deps.get_bot()
+        masha = deps.get_masha()
+        thusnelda = deps.get_thusnelda()
+        # Core system state
+        fuse_tripped = False
+        weight_zone = "UNKNOWN"
+        active_bots = 0
+        staged_bots = 0
+        try:
+            from runtime.core.api_fuse import get_api_fuse
+            fuse_tripped = get_api_fuse().is_tripped()
+        except Exception:
+            pass
+        try:
+            from runtime.core.weight_governor import get_weight_governor
+            weight_zone = get_weight_governor().status()["zone"]
+        except Exception:
+            pass
+        try:
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            cs = get_bot_coordinator().status()
+            active_bots = cs.get("active_bots", 0)
+            staged_bots = cs.get("staged_bots", 0)
+        except Exception:
+            pass
+        hub_stats = {
+            "dorothy": bot.hub_stats(),
+            "masha": masha.hub_stats(),
+            "thusnelda": thusnelda.hub_stats(),
+        }
+        total_running = sum(
+            v.get("hub_bots_running", 0) for v in hub_stats.values()
+        )
+        return {
+            "status": "degraded" if fuse_tripped else "healthy",
+            "fuse_tripped": fuse_tripped,
+            "weight_zone": weight_zone,
+            "active_bots": active_bots,
+            "staged_bots": staged_bots,
+            "total_running": total_running,
+            "hubs": hub_stats,
+            "uptime_sec": round(time.monotonic(), 1),
+            "data_dir": str(ctx.config.data_dir),
+        }
 
     @app.get("/health/deep")
     async def health_deep() -> dict[str, Any]:
