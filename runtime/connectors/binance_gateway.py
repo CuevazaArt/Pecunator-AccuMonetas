@@ -29,7 +29,6 @@ from runtime.core.settings import (
     equity_avg_window_samples,
     equity_base_asset,
     equity_poll_stride,
-    my_trades_poll_stride,
 )
 from runtime.core.state_store import StateStore
 
@@ -66,10 +65,12 @@ class BinanceGateway:
         self._client: Optional[Client] = None
         self._ws_task: Optional[asyncio.Task[Any]] = None
         self._poll_task: Optional[asyncio.Task[Any]] = None
+        self._user_data_task: Optional[asyncio.Task[Any]] = None
+        self._listen_key: Optional[str] = None
         self._stop = asyncio.Event()
         self._poll_cycle = 0
         self._last_time_sync_monotonic = 0.0
-        self._time_sync_interval_sec = 90.0
+        self._time_sync_interval_sec = 300.0  # 5 min (sweet spot for DCA)
         self._logged_account_rest_snapshot = False
         self._ticker_prices: dict[str, Decimal] = {}
         self._equity_rolling = EquityRollingWindow(sample_window=equity_avg_window_samples())
@@ -397,9 +398,177 @@ class BinanceGateway:
         sym = data.get("s", self.state.selected_symbol)
         self.bus.publish(f"market.trades.{sym}", data)
 
+    # ── User Data Stream (ZERO weight for balance/order updates) ──────
+
+    async def _obtain_listen_key(self) -> Optional[str]:
+        """POST /api/v3/userDataStream → listenKey (1 weight point)."""
+        if self._client is None:
+            return None
+        try:
+            data = await self._to_thread(lambda: self._client.stream_get_listen_key())
+            self._capture_rest_weight_from_client(action="user_data:stream_get_listen_key")
+            self._emit_log(f"User Data Stream: listenKey obtained")
+            return data
+        except BinanceAPIException as e:
+            self._emit_log(f"User Data Stream: listenKey error: {self._api_error_summary(e)}")
+            from runtime.core.api_fuse import get_api_fuse
+            code = getattr(e, 'code', 0) or 0
+            get_api_fuse().on_error_code(int(code), str(getattr(e, 'message', '')))
+            return None
+        except Exception as e:
+            self._emit_log(f"User Data Stream: listenKey error: {sanitize_log_message(str(e))}")
+            return None
+
+    async def _keepalive_listen_key(self) -> bool:
+        """PUT /api/v3/userDataStream — keepalive (1 weight point). Must be called < 60 min."""
+        if self._client is None or not self._listen_key:
+            return False
+        try:
+            await self._to_thread(lambda: self._client.stream_keepalive(self._listen_key))
+            self._capture_rest_weight_from_client(action="user_data:stream_keepalive")
+            return True
+        except Exception as e:
+            self._emit_log(f"User Data Stream keepalive failed: {sanitize_log_message(str(e))}")
+            return False
+
+    def _on_user_data(self, data: Dict[str, Any]) -> None:
+        """Process User Data Stream events (ZERO weight — pure WebSocket)."""
+        event_type = data.get("e", "")
+
+        if event_type == "outboundAccountPosition":
+            # Balance update — replaces get_account() polling.
+            balances_raw = data.get("B", [])
+            if isinstance(balances_raw, list):
+                for b in balances_raw:
+                    asset = str(b.get("a", "")).upper()
+                    free = b.get("f", "0")
+                    locked = b.get("l", "0")
+                    # Update in-place in state.balances
+                    found = False
+                    for existing in self.state.balances:
+                        if isinstance(existing, dict) and str(existing.get("asset", "")).upper() == asset:
+                            existing["free"] = free
+                            existing["locked"] = locked
+                            found = True
+                            break
+                    if not found and (float(free) > 0 or float(locked) > 0):
+                        self.state.balances.append({"asset": asset, "free": free, "locked": locked})
+                self.bus.publish("account.balances", self.state.balances)
+                _LOG.debug("User Data Stream: balances updated (%d assets)", len(balances_raw))
+
+        elif event_type == "executionReport":
+            # Order update — replaces get_open_orders() and get_my_trades() polling.
+            order_status = str(data.get("X", "")).upper()  # NEW, FILLED, CANCELED, etc.
+            symbol = str(data.get("s", "")).upper()
+            order_id = data.get("i")
+            side = str(data.get("S", "")).upper()
+            order_type = str(data.get("o", "")).upper()
+            qty = data.get("q", "0")
+            price = data.get("p", "0")
+            exec_qty = data.get("l", "0")  # last executed qty
+            exec_price = data.get("L", "0")  # last executed price
+
+            self._emit_log(
+                f"WS executionReport: {symbol} {side} {order_type} "
+                f"status={order_status} orderId={order_id} qty={qty} price={price}"
+            )
+            self.bus.publish("account.execution_report", data)
+
+            # If order is NEW or PARTIALLY_FILLED, add/update open_orders
+            if order_status in ("NEW", "PARTIALLY_FILLED"):
+                order_dict = {
+                    "symbol": symbol, "orderId": order_id, "side": side,
+                    "type": order_type, "origQty": qty, "price": price,
+                    "status": order_status,
+                }
+                existing = [o for o in self.state.open_orders if o.get("orderId") == order_id]
+                if existing:
+                    existing[0].update(order_dict)
+                else:
+                    self.state.open_orders.append(order_dict)
+            elif order_status in ("FILLED", "CANCELED", "EXPIRED", "REJECTED"):
+                self.state.open_orders = [
+                    o for o in self.state.open_orders if o.get("orderId") != order_id
+                ]
+            self.bus.publish("account.open_orders", self.state.open_orders)
+
+            # Track as a trade if filled
+            if order_status == "FILLED" or (order_status == "PARTIALLY_FILLED" and float(exec_qty) > 0):
+                trade = {
+                    "symbol": symbol, "orderId": order_id, "side": side,
+                    "price": exec_price, "qty": exec_qty,
+                    "time": data.get("T"),
+                    "isBuyer": side == "BUY",
+                }
+                self.state.my_trades.append(trade)
+                if len(self.state.my_trades) > 100:
+                    self.state.my_trades = self.state.my_trades[-100:]
+                self.bus.publish("account.my_trades", self.state.my_trades)
+
+        elif event_type == "balanceUpdate":
+            # Deposit/withdrawal — not common but good to capture.
+            asset = str(data.get("a", "")).upper()
+            delta = data.get("d", "0")
+            self._emit_log(f"WS balanceUpdate: {asset} delta={delta}")
+
+    async def _user_data_ws_loop(self) -> None:
+        """WebSocket loop for User Data Stream (balances + orders in real-time, ZERO weight)."""
+        backoff = 2.0
+        keepalive_sec = 1800.0  # 30 min (Binance requires < 60 min)
+        while not self._stop.is_set():
+            self._listen_key = await self._obtain_listen_key()
+            if not self._listen_key:
+                self._emit_log("User Data Stream: no listenKey, retry in 30s")
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            url = f"wss://stream.binance.com:9443/ws/{self._listen_key}"
+            self._emit_log(f"User Data Stream: connecting...")
+            try:
+                async with websockets.connect(
+                    url, ping_interval=20, ping_timeout=20, close_timeout=5,
+                ) as ws:
+                    backoff = 2.0
+                    self._emit_log("User Data Stream: connected ✅ (balances+orders in real-time, 0 weight)")
+                    last_keepalive = time.monotonic()
+                    while not self._stop.is_set():
+                        # Keepalive check
+                        if (time.monotonic() - last_keepalive) >= keepalive_sec:
+                            ok = await self._keepalive_listen_key()
+                            if ok:
+                                last_keepalive = time.monotonic()
+                                self._emit_log("User Data Stream: keepalive OK (1 pt)")
+                            else:
+                                self._emit_log("User Data Stream: keepalive failed, reconnecting...")
+                                break
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=60.0)
+                        except asyncio.TimeoutError:
+                            continue  # No events, just loop for keepalive check
+                        msg = json.loads(raw)
+                        self._on_user_data(msg)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self._emit_log(
+                    f"User Data Stream error ({type(e).__name__}: "
+                    f"{sanitize_log_message(str(e))}), retry in {backoff:.0f}s"
+                )
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=backoff)
+                except asyncio.TimeoutError:
+                    pass
+                backoff = min(backoff * 2, 60.0)
+
+    # ── Lightweight REST poll (only time_sync + equity) ──────────────
+
     async def _poll_account_loop(self, interval: float) -> None:
+        """Minimal REST loop: only time_sync and equity refresh.
+        Balances and orders are handled by User Data Stream (ZERO weight).
+        """
         from runtime.core.api_fuse import get_api_fuse
-        stride = my_trades_poll_stride()
         eq_stride = equity_poll_stride()
         while not self._stop.is_set():
             # ── API FUSE CHECK ──────────────────────────────────
@@ -414,15 +583,9 @@ class BinanceGateway:
                 except asyncio.TimeoutError:
                     pass
                 continue
-            # ── Normal polling ──────────────────────────────────
+            # ── Lightweight polling (time_sync + equity only) ───
             try:
-                await self.fetch_account()
-                await self.fetch_open_orders()
-                if eq_stride <= 1 or (self._poll_cycle % eq_stride == 0):
-                    await self.refresh_equity(force_tickers=True)
-                self._poll_cycle += 1
-                if stride <= 1 or (self._poll_cycle - 1) % stride == 0:
-                    await self.fetch_my_trades(self.state.selected_symbol)
+                # Time sync (1 weight point)
                 now_mono = time.monotonic()
                 if (
                     self._last_time_sync_monotonic <= 0
@@ -436,10 +599,16 @@ class BinanceGateway:
                             f"time sync: {sanitize_log_message(str(e))}"
                         )
                     self._last_time_sync_monotonic = now_mono
+
+                # Equity refresh (2 weight points for get_all_tickers)
+                self._poll_cycle += 1
+                if eq_stride <= 1 or (self._poll_cycle % eq_stride == 0):
+                    await self.refresh_equity(force_tickers=True)
+
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self._emit_log(f"poll account: {sanitize_log_message(str(e))}")
+                self._emit_log(f"poll light: {sanitize_log_message(str(e))}")
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=interval)
             except asyncio.TimeoutError:
@@ -458,17 +627,20 @@ class BinanceGateway:
             requests_params={"timeout": 30},
         )
         _LOG.info(
-            "BinanceGateway starting: REST client + poll %.2fs + market WS (symbol=%s)",
+            "BinanceGateway starting: WS-First architecture "
+            "(User Data Stream + Market WS + light REST poll %.2fs, symbol=%s)",
             poll_sec,
             self.state.selected_symbol,
         )
+        # 1. Market data stream (ticker, depth, trades) — ZERO weight
         self._ws_task = asyncio.create_task(self._websocket_loop())
+        # 2. User Data Stream (balances, orders) — ZERO weight after listenKey
+        self._user_data_task = asyncio.create_task(self._user_data_ws_loop())
+        # 3. Light REST poll (only time_sync + equity) — ~3 pts per cycle
         self._poll_task = asyncio.create_task(self._poll_account_loop(poll_sec))
         self._emit_log(
-            (
-                f"REST poll cadence {poll_sec:.2f}s, myTrades stride {my_trades_poll_stride()}, "
-                f"equity stride {equity_poll_stride()} ({equity_base_asset()})"
-            ),
+            f"WS-First: Market WS + User Data Stream + REST poll {poll_sec:.0f}s "
+            f"(equity stride {equity_poll_stride()}, base={equity_base_asset()})"
         )
 
     async def restart_market_stream(self) -> None:
@@ -484,13 +656,23 @@ class BinanceGateway:
 
     async def stop(self) -> None:
         self._stop.set()
-        tasks: List[asyncio.Task[Any]] = [t for t in (self._ws_task, self._poll_task) if t]
+        tasks: List[asyncio.Task[Any]] = [
+            t for t in (self._ws_task, self._poll_task, self._user_data_task) if t
+        ]
         for t in tasks:
             t.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._ws_task = None
         self._poll_task = None
+        self._user_data_task = None
+        # Close listenKey
+        if self._client and self._listen_key:
+            try:
+                await self._to_thread(lambda: self._client.stream_close(self._listen_key))
+            except Exception:
+                pass
+        self._listen_key = None
         if self._client is not None:
             try:
                 self._client.session.close()
