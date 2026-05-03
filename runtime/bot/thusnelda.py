@@ -343,7 +343,18 @@ class ThusneldaRunner:
                         ticker = await self._to_thread(
                             lambda s=symbol: client.get_symbol_ticker(symbol=s)
                         )
-                        self._emit("INFO", "binance:get_symbol_ticker", {"symbol": symbol, "response": ticker})
+                        # Note: per-symbol tickers cached at cache layer via key
+                        try:
+                            from runtime.core.market_cache import get_market_cache
+                            _cache = get_market_cache()
+                            ticker = await _cache.get_or_fetch(
+                                f"symbol_ticker:{symbol}",
+                                lambda s=symbol: self._to_thread(
+                                    lambda: client.get_symbol_ticker(symbol=s)
+                                ),
+                            )
+                        except Exception:
+                            pass  # Already fetched above as fallback
                         current = _dec((ticker or {}).get("price", "0"), "0")
                         limit_price = avg_price * c.factor_multiplication
                         item["avg_buy_price"] = str(avg_price)
@@ -383,8 +394,20 @@ class ThusneldaRunner:
                 except asyncio.TimeoutError:
                     pass
 
-        account = await self._signed_call(client, client.get_account)
-        tickers = await self._to_thread(client.get_all_tickers)
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            account = await _cache.get_or_fetch(
+                "account",
+                lambda: self._signed_call(client, client.get_account),
+            )
+            tickers = await _cache.get_or_fetch(
+                "tickers",
+                lambda: self._to_thread(client.get_all_tickers),
+            )
+        except Exception:
+            account = await self._signed_call(client, client.get_account)
+            tickers = await self._to_thread(client.get_all_tickers)
         self._emit("INFO", "binance:get_account", {"response": account})
         ticker_map = {}
         if isinstance(tickers, list):
@@ -556,6 +579,12 @@ class ThusneldaRunner:
                     f"thusnelda:cycle symbols={len(rep.get('symbols', []))} simulated={rep.get('simulated')}",
                     {"report": rep},
                 )
+                # Report cycle to coordinator for phase tracking
+                try:
+                    from runtime.core.bot_coordinator import get_bot_coordinator
+                    get_bot_coordinator().report_cycle(f"thusnelda:{self.config.symbols_csv}")
+                except Exception:
+                    pass
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -572,6 +601,14 @@ class ThusneldaRunner:
                     max(2.0, min(float(self.config.loop_interval_sec), float(2 ** min(self._error_streak, 6)))),
                 )
                 self._emit("ERROR", f"thusnelda:error {self._last_error}", {"error": self._last_error})
+            # Add coordinator jitter to prevent cycle collisions
+            try:
+                from runtime.core.bot_coordinator import get_bot_coordinator
+                jitter = get_bot_coordinator().compute_jitter(f"thusnelda:{self.config.symbols_csv}")
+                if jitter > 0:
+                    sleep_sec += jitter
+            except Exception:
+                pass
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
             except asyncio.TimeoutError:

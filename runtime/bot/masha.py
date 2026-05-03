@@ -274,6 +274,8 @@ class MashaRunner:
         klines = await self._to_thread(
             lambda: client.get_historical_klines(symbol, timeframe, start_time)
         )
+        # Note: klines are NOT cached here because they're per-symbol/timeframe
+        # and per-bot config. Cache benefit is low vs complexity.
         if not isinstance(klines, list) or not klines:
             raise RuntimeError(f"No OHLC data for {symbol} {timeframe}")
 
@@ -309,7 +311,15 @@ class MashaRunner:
         await self._sync_time_for_signed(client)
 
         # DCA anchor: current SELL LIMIT.
-        open_orders = await self._signed_call(client, lambda: client.get_open_orders(symbol=symbol))
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            open_orders = await _cache.get_or_fetch(
+                f"open_orders:{symbol}",
+                lambda: self._signed_call(client, lambda: client.get_open_orders(symbol=symbol)),
+            )
+        except Exception:
+            open_orders = await self._signed_call(client, lambda: client.get_open_orders(symbol=symbol))
         self._emit("INFO", "binance:get_open_orders", {"symbol": symbol, "response": open_orders})
         dca_price = Decimal("0")
         dca_volume = Decimal("0")
@@ -342,7 +352,15 @@ class MashaRunner:
             c.mm_periods_h,
         )
 
-        account = await self._signed_call(client, client.get_account)
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            account = await _cache.get_or_fetch(
+                "account",
+                lambda: self._signed_call(client, client.get_account),
+            )
+        except Exception:
+            account = await self._signed_call(client, client.get_account)
         self._emit("INFO", "binance:get_account", {"symbol": symbol, "response": account})
         base_free = Decimal("0")
         base_locked = Decimal("0")
@@ -589,6 +607,12 @@ class MashaRunner:
                     f"masha:{rep.get('decision')} symbol={rep.get('symbol')} simulated={rep.get('simulated')}",
                     {"report": rep},
                 )
+                # Report cycle to coordinator for phase tracking
+                try:
+                    from runtime.core.bot_coordinator import get_bot_coordinator
+                    get_bot_coordinator().report_cycle(f"masha:{self.config.symbol}")
+                except Exception:
+                    pass
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -610,6 +634,14 @@ class MashaRunner:
                     f"masha:retry_in {sleep_sec:.0f}s (streak={self._error_streak})",
                     {"retry_sec": sleep_sec, "streak": self._error_streak},
                 )
+            # Add coordinator jitter to prevent cycle collisions
+            try:
+                from runtime.core.bot_coordinator import get_bot_coordinator
+                jitter = get_bot_coordinator().compute_jitter(f"masha:{self.config.symbol}")
+                if jitter > 0:
+                    sleep_sec += jitter
+            except Exception:
+                pass
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
             except asyncio.TimeoutError:

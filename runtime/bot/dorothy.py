@@ -166,8 +166,22 @@ class DorothyRunner:
             self._cycle_count = max(0, int(cycle_count))
 
     async def _compute_equity_usdt(self, client: Client, base_asset: str = "USDT") -> tuple[Decimal, Decimal]:
-        account = await self._to_thread(client.get_account)
-        tickers = await self._to_thread(client.get_all_tickers)
+        # Use MarketCache: account/tickers are shared across ALL bots
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            account = await _cache.get_or_fetch(
+                "account",
+                lambda: self._to_thread(client.get_account),
+            )
+            tickers = await _cache.get_or_fetch(
+                "tickers",
+                lambda: self._to_thread(client.get_all_tickers),
+            )
+        except Exception:
+            # Fallback: direct call if cache unavailable
+            account = await self._to_thread(client.get_account)
+            tickers = await self._to_thread(client.get_all_tickers)
         prices: dict[str, Decimal] = {}
         if isinstance(tickers, list):
             for t in tickers:
@@ -277,7 +291,15 @@ class DorothyRunner:
             },
         )
 
-        open_orders = await self._to_thread(lambda: client.get_open_orders(symbol=symbol))
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            open_orders = await _cache.get_or_fetch(
+                f"open_orders:{symbol}",
+                lambda: self._to_thread(lambda: client.get_open_orders(symbol=symbol)),
+            )
+        except Exception:
+            open_orders = await self._to_thread(lambda: client.get_open_orders(symbol=symbol))
         if not isinstance(open_orders, list):
             open_orders = []
         self._emit(
@@ -294,7 +316,15 @@ class DorothyRunner:
         if sell_limit:
             lowest_sell = min(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
 
-        ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
+        try:
+            from runtime.core.market_cache import get_market_cache
+            _cache = get_market_cache()
+            ticker = await _cache.get_or_fetch(
+                f"symbol_ticker:{symbol}",
+                lambda: self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol)),
+            )
+        except Exception:
+            ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
         self._emit(
             "INFO",
             "binance:get_symbol_ticker",
@@ -478,6 +508,12 @@ class DorothyRunner:
                     f"bot:{rep.get('decision')} symbol={rep.get('symbol')} simulated={rep.get('simulated')}",
                     {"report": rep},
                 )
+                # Report cycle to coordinator for phase tracking
+                try:
+                    from runtime.core.bot_coordinator import get_bot_coordinator
+                    get_bot_coordinator().report_cycle(f"dorothy:{self.config.symbol}")
+                except Exception:
+                    pass
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -500,6 +536,14 @@ class DorothyRunner:
                     f"bot:retry_in {sleep_sec:.0f}s (streak={self._error_streak})",
                     {"retry_sec": sleep_sec, "streak": self._error_streak},
                 )
+            # Add coordinator jitter to prevent cycle collisions
+            try:
+                from runtime.core.bot_coordinator import get_bot_coordinator
+                jitter = get_bot_coordinator().compute_jitter(f"dorothy:{self.config.symbol}")
+                if jitter > 0:
+                    sleep_sec += jitter
+            except Exception:
+                pass
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
             except asyncio.TimeoutError:
