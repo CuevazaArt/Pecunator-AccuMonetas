@@ -1,50 +1,75 @@
 import 'dart:isolate';
-import 'dart:collection';
 import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 import 'package:candlesticks/candlesticks.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/histogram_storage.dart';
 
-/// Message types sent from the background isolate to the main isolate.
-class _IsolateMsg {
-  final String type; // 'status', 'log', 'insert', 'done', 'error'
+// ============================================================================
+// VisionScraper — Background data ingestion via Binance Vision ZIPs
+//
+// DESIGN PRINCIPLES:
+// 1. ALL heavy work (HTTP, ZIP, CSV) runs in a BACKGROUND Isolate.
+// 2. Only the SQLite INSERT runs on the main isolate (FFI limitation).
+// 3. Pacing: 1 download per hour during normal operation.
+//    The historical data doesn't change — there is no rush.
+// 4. Only activated manually from the Library page.
+// ============================================================================
+
+/// Message types sent from background isolate → main isolate.
+class _ScrapeResult {
+  final String type; // 'status', 'log', 'insert', 'done', 'error', 'wait'
   final String text;
   final String? symbol;
   final String? interval;
   final List<Map<String, dynamic>>? candleData;
 
-  _IsolateMsg(this.type, this.text, {this.symbol, this.interval, this.candleData});
+  _ScrapeResult(this.type, this.text,
+      {this.symbol, this.interval, this.candleData});
 }
 
 /// Parameters sent to the background isolate.
-class _IsolateParams {
+class _ScrapeParams {
   final SendPort sendPort;
   final List<String> symbols;
   final List<String> intervals;
+  final int delayBetweenDownloadsMs;
 
-  _IsolateParams(this.sendPort, this.symbols, this.intervals);
+  _ScrapeParams(this.sendPort, this.symbols, this.intervals,
+      this.delayBetweenDownloadsMs);
 }
 
 class VisionScraperService {
-  static final VisionScraperService instance = VisionScraperService._internal();
+  static final VisionScraperService instance =
+      VisionScraperService._internal();
 
   VisionScraperService._internal();
 
   final ValueNotifier<bool> isRunningNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<String> statusNotifier = ValueNotifier<String>('Inactivo');
+  final ValueNotifier<String> statusNotifier =
+      ValueNotifier<String>('Inactivo');
 
   Isolate? _isolate;
   ReceivePort? _receivePort;
 
-  void startColdSync(List<String> symbols, List<String> intervals) async {
+  /// Default: 1 hour between downloads. Calm, patient, no rush.
+  static const int defaultDelayMs = 3600000; // 1 hour
+
+  /// Quick mode for first-time setup: 10s between downloads.
+  static const int quickDelayMs = 10000; // 10 seconds
+
+  void startColdSync(List<String> symbols, List<String> intervals,
+      {bool quickMode = false}) async {
     if (isRunningNotifier.value) return;
 
     isRunningNotifier.value = true;
-    statusNotifier.value = 'Iniciando Colección en hilo separado...';
+    final delayMs = quickMode ? quickDelayMs : defaultDelayMs;
+    final modeLabel = quickMode ? 'Rápido (10s)' : 'Paciente (1/hora)';
+    statusNotifier.value = 'Iniciando en modo $modeLabel...';
 
     _receivePort = ReceivePort();
-    final params = _IsolateParams(_receivePort!.sendPort, symbols, intervals);
+    final params =
+        _ScrapeParams(_receivePort!.sendPort, symbols, intervals, delayMs);
 
     try {
       _isolate = await Isolate.spawn(_isolateWorker, params);
@@ -55,35 +80,41 @@ class VisionScraperService {
     }
 
     _receivePort!.listen((dynamic rawMsg) async {
-      if (rawMsg is _IsolateMsg) {
+      if (rawMsg is _ScrapeResult) {
         switch (rawMsg.type) {
           case 'status':
             statusNotifier.value = rawMsg.text;
             break;
           case 'log':
-            print('[VisionScraper] ${rawMsg.text}');
+            debugPrint('[VisionScraper] ${rawMsg.text}');
             break;
           case 'insert':
-            // The insert still has to run on the main isolate because
-            // sqlite3 FFI handles aren't transferable. But the heavy
-            // ZIP+CSV parsing was already done in the background.
-            if (rawMsg.symbol != null && rawMsg.interval != null && rawMsg.candleData != null) {
-              final candles = rawMsg.candleData!.map((m) => Candle(
-                date: DateTime.fromMillisecondsSinceEpoch(m['ts'] as int, isUtc: true),
-                open: m['o'] as double,
-                high: m['h'] as double,
-                low: m['l'] as double,
-                close: m['c'] as double,
-                volume: m['v'] as double,
-              )).toList();
+            if (rawMsg.symbol != null &&
+                rawMsg.interval != null &&
+                rawMsg.candleData != null) {
+              final candles = rawMsg.candleData!
+                  .map((m) => Candle(
+                        date: DateTime.fromMillisecondsSinceEpoch(
+                            m['ts'] as int,
+                            isUtc: true),
+                        open: m['o'] as double,
+                        high: m['h'] as double,
+                        low: m['l'] as double,
+                        close: m['c'] as double,
+                        volume: m['v'] as double,
+                      ))
+                  .toList();
               try {
-                await HistogramStorage.instance.insertCandles(rawMsg.symbol!, rawMsg.interval!, candles);
-                print('[VisionScraper] INSERCIÓN OK: ${candles.length} velas para ${rawMsg.symbol} ${rawMsg.interval}');
+                await HistogramStorage.instance
+                    .insertCandles(rawMsg.symbol!, rawMsg.interval!, candles);
+                debugPrint(
+                    '[VisionScraper] INSERT OK: ${candles.length} velas → '
+                    '${rawMsg.symbol} ${rawMsg.interval}');
               } catch (e) {
-                print('[VisionScraper] INSERT ERROR: $e');
+                debugPrint('[VisionScraper] INSERT ERROR: $e');
               }
-              // Yield to UI thread after DB write
-              await Future.delayed(const Duration(milliseconds: 50));
+              // Micro-yield after DB write so the UI thread can paint
+              await Future.delayed(const Duration(milliseconds: 20));
             }
             break;
           case 'done':
@@ -92,7 +123,7 @@ class VisionScraperService {
             break;
           case 'error':
             statusNotifier.value = rawMsg.text;
-            print('[VisionScraper] ERROR: ${rawMsg.text}');
+            debugPrint('[VisionScraper] ERROR: ${rawMsg.text}');
             break;
         }
       }
@@ -100,34 +131,22 @@ class VisionScraperService {
   }
 
   /// The actual work runs entirely in a separate isolate.
-  /// ZIP download, decompression, and CSV parsing happen here — 
-  /// zero impact on Flutter's UI thread.
-  static void _isolateWorker(_IsolateParams params) async {
+  /// Zero impact on Flutter's UI thread.
+  static void _isolateWorker(_ScrapeParams params) async {
     final port = params.sendPort;
     final symbols = params.symbols;
     final intervals = params.intervals;
+    final delayMs = params.delayBetweenDownloadsMs;
     final now = DateTime.now();
     const startYear = 2017;
-    const startMonth = 8;
+    const startMonth = 8; // Binance inception
+
+    int downloaded = 0;
+    int skipped = 0;
+    int totalSymbols = symbols.length;
     int completedSymbols = 0;
 
-    // We can't access HistogramStorage from here (FFI not transferable),
-    // so we'll fetch the existing months via a lightweight HTTP check,
-    // or skip the check and let the main isolate handle duplicates via
-    // INSERT OR REPLACE. But to avoid unnecessary downloads, we'll
-    // query existing months on the main isolate first.
-    // 
-    // Actually, since we can't easily do that without a back-channel,
-    // the simpler approach is: the isolate does HTTP+ZIP+CSV, sends
-    // parsed candle data back to the main isolate for DB insert.
-    // The main isolate's insertCandles uses INSERT OR REPLACE, so
-    // duplicates are safe.
-
-    final queue = Queue<String>.from(symbols);
-
-    while (queue.isNotEmpty) {
-      final symbol = queue.removeFirst();
-
+    for (final symbol in symbols) {
       for (final interval in intervals) {
         int consecutive404s = 0;
 
@@ -139,16 +158,21 @@ class VisionScraperService {
             final monthStr = m.toString().padLeft(2, '0');
             final targetMonthStr = '$y-$monthStr';
 
-            final logMsg = '[W1] Recuperando: $symbol ($interval) $targetMonthStr...';
-            port.send(_IsolateMsg('status', logMsg));
+            port.send(_ScrapeResult('status',
+                '[$symbol $interval] $targetMonthStr · ↓$downloaded ⊘$skipped · '
+                '${completedSymbols + 1}/$totalSymbols'));
 
-            final url = 'https://data.binance.vision/data/spot/monthly/klines/$symbol/$interval/$symbol-$interval-$y-$monthStr.zip';
+            final url =
+                'https://data.binance.vision/data/spot/monthly/klines/'
+                '$symbol/$interval/$symbol-$interval-$y-$monthStr.zip';
 
             try {
               final response = await http.get(Uri.parse(url));
+
               if (response.statusCode == 200) {
                 consecutive404s = 0;
-                final archive = ZipDecoder().decodeBytes(response.bodyBytes);
+                final archive =
+                    ZipDecoder().decodeBytes(response.bodyBytes);
 
                 if (archive.isNotEmpty) {
                   final file = archive.first;
@@ -167,43 +191,64 @@ class VisionScraperService {
                       final c = double.tryParse(parts[4]);
                       final v = double.tryParse(parts[5]);
 
-                      if (ts != null && o != null && h != null && l != null && c != null && v != null) {
-                        candleData.add({'ts': ts, 'o': o, 'h': h, 'l': l, 'c': c, 'v': v});
+                      if (ts != null &&
+                          o != null &&
+                          h != null &&
+                          l != null &&
+                          c != null &&
+                          v != null) {
+                        candleData.add({
+                          'ts': ts, 'o': o, 'h': h,
+                          'l': l, 'c': c, 'v': v,
+                        });
                       }
                     }
                   }
                   if (candleData.isNotEmpty) {
-                    port.send(_IsolateMsg('insert',
-                      'INSERT ${candleData.length} candles $symbol $interval ($targetMonthStr)',
+                    port.send(_ScrapeResult(
+                      'insert',
+                      '${candleData.length} velas',
                       symbol: symbol,
                       interval: interval,
                       candleData: candleData,
                     ));
-                    port.send(_IsolateMsg('log',
-                      'W1 PARSED: ${candleData.length} velas $symbol $interval ($targetMonthStr)'));
+                    downloaded++;
+                    port.send(_ScrapeResult('log',
+                        'PARSED: ${candleData.length} velas → '
+                        '$symbol $interval ($targetMonthStr)'));
                   }
                 }
               } else if (response.statusCode == 404) {
                 consecutive404s++;
-                port.send(_IsolateMsg('log',
-                  'W1 404: $symbol $targetMonthStr (Consecutivos: $consecutive404s)'));
+                skipped++;
                 if (consecutive404s > 3) {
-                  port.send(_IsolateMsg('log',
-                    'W1 Límite 404. Deteniendo $symbol $interval.'));
+                  port.send(_ScrapeResult('log',
+                      '404 x$consecutive404s → saltando $symbol $interval'));
                   break;
                 }
               } else if (response.statusCode == 429) {
-                port.send(_IsolateMsg('error',
-                  'FUSIBLE ACTIVADO: 429 LIMIT EXCEEDED. Motor detenido.'));
-                port.send(_IsolateMsg('done', 'Abortado por 429.'));
+                port.send(_ScrapeResult('error',
+                    'FUSIBLE: 429 Rate Limit. Motor detenido.'));
+                port.send(_ScrapeResult('done',
+                    'Abortado por 429. ↓$downloaded total.'));
                 return;
               }
             } catch (e) {
-              port.send(_IsolateMsg('log', 'ERROR red $symbol: $e'));
+              port.send(
+                  _ScrapeResult('log', 'ERROR red $symbol: $e'));
             }
 
-            // Delay between fetches — isolate won't block UI thread
-            await Future.delayed(const Duration(milliseconds: 2000));
+            // ── Patience delay ──
+            // 1 hour in normal mode, 10s in quick mode.
+            // This isolate sleeps without affecting the UI at all.
+            if (delayMs > 1000) {
+              // Show countdown for long waits
+              final waitMin = delayMs ~/ 60000;
+              port.send(_ScrapeResult('status',
+                  '💤 Esperando ${waitMin}min antes del siguiente... '
+                  '(↓$downloaded ⊘$skipped)'));
+            }
+            await Future.delayed(Duration(milliseconds: delayMs));
           }
           if (consecutive404s > 3) break;
         }
@@ -211,8 +256,9 @@ class VisionScraperService {
       completedSymbols++;
     }
 
-    port.send(_IsolateMsg('done',
-      'Auditoría 100% Completada. Símbolos: $completedSymbols'));
+    port.send(_ScrapeResult('done',
+        '✅ Completado. ↓$downloaded descargas, ⊘$skipped omitidos. '
+        'Símbolos: $completedSymbols'));
   }
 
   void _cleanup() {
@@ -225,9 +271,8 @@ class VisionScraperService {
 
   void stop() {
     if (isRunningNotifier.value) {
-      statusNotifier.value = 'Abortando hilo...';
+      statusNotifier.value = 'Detenido por el usuario.';
       _cleanup();
-      statusNotifier.value = 'Abortado por el usuario.';
     }
   }
 }

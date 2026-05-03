@@ -251,46 +251,87 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Ingesta Masiva de Histórico (data.binance.vision)',
+              '📦 Ingesta Masiva (data.binance.vision)',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             const Text(
-              'Descarga archivos ZIP mensuales sin consumir la API REST. Ideal para poblar años de datos rápidamente.',
+              'Descarga ZIPs mensuales sin consumir peso API REST.\n'
+              '• Paciente: 1 descarga cada hora (recomendado, bajo impacto)\n'
+              '• Rápido: 1 cada 10s (solo para setup inicial)',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  icon: isRunning ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
-                  label: Text(isRunning ? 'Abortar Sincronización' : 'Sincronizar (Último Mes)'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isRunning ? Colors.red.withOpacity(0.3) : Colors.green.withOpacity(0.3),
+            if (isRunning) ...[
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('Detener'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.withOpacity(0.3),
+                    ),
+                    onPressed: () => VisionScraperService.instance.stop(),
                   ),
-                  onPressed: () {
-                    if (isRunning) {
-                      VisionScraperService.instance.stop();
-                    } else {
+                  const SizedBox(width: 12),
+                  const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      status,
+                      style: const TextStyle(
+                          color: Colors.amberAccent, fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.hourglass_bottom, size: 18),
+                    label: const Text('Paciente (1/hora)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.withOpacity(0.3),
+                    ),
+                    onPressed: () {
                       final symbols = HistoryScraperService.instance.symbols;
-                      VisionScraperService.instance.startColdSync(symbols, ['1m', '1h', '4h', '1d']);
-                    }
-                  },
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    status,
-                    style: TextStyle(color: isRunning ? Colors.amberAccent : Colors.grey, fontSize: 13),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                      VisionScraperService.instance.startColdSync(
+                          symbols, ['1d', '4h', '1h', '1m']);
+                    },
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.bolt, size: 18),
+                    label: const Text('Rápido (10s)'),
+                    onPressed: () {
+                      final symbols = HistoryScraperService.instance.symbols;
+                      VisionScraperService.instance.startColdSync(
+                          symbols, ['1d', '4h', '1h', '1m'],
+                          quickMode: true);
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      status,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 }
+

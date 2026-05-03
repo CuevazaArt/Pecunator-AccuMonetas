@@ -131,7 +131,7 @@ class _BotControlPageState extends State<BotControlPage> {
       // NOTE: _syncTimestamp() removed from autostart — consumes API weight.
       // User can manually sync via the clock button when needed.
     });
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _backgroundRefresh();
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
