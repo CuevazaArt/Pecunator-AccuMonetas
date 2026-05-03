@@ -1,4 +1,4 @@
-"""FastAPI application: credential vault, gateway lifecycle, and operations API."""
+﻿"""FastAPI application: credential vault, gateway lifecycle, and operations API."""
 
 from __future__ import annotations
 
@@ -55,6 +55,14 @@ from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_base
 from runtime.core.ops_audit_log import get_ops_audit_log
 from runtime.core.security_util import sanitize_log_message
+from runtime.api._helpers import resolve_pair as _resolve_pair_impl
+from runtime.api._helpers import build_snapshot as _snapshot_impl
+from runtime.api._helpers import audit_weight_from_client as _audit_weight_impl
+from runtime.api._helpers import mask_pk, pk_last4, rest_weight_estimate_report
+from runtime.api.routers import system as _system_router
+from runtime.api.routers import masha as _masha_router
+from runtime.api.routers import thusnelda as _thusnelda_router
+
 from runtime.core.settings import (
     account_poll_interval_sec,
     api_bind_host_for_cors_regex,
@@ -171,7 +179,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    @app.get("/health")
+    # ── Routers (extracted from monolith) ────────────────────────────
+    app.include_router(_system_router.router)
+    app.include_router(_masha_router.router)
+    app.include_router(_thusnelda_router.router)
+
+    # ── NOTE: The routes below remain here temporarily.
+    # ── They will be extracted to routers in future iterations.
+
+    # ── Dorothy Hub routes (kept inline for now) ──────────────────
+
+    @app.get("/api/v1/bot/presets")
     async def health() -> dict[str, Any]:
         """Standard health check — safe to poll frequently, weight 0."""
         ctx = deps.get_ctx()
@@ -534,259 +552,8 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Bot not found") from None
         return HubBotLogsOut(logs=rows)
 
-    @app.get("/api/v1/masha/bots", response_model=MashaBotsOut)
-    async def masha_bots_list() -> Any:
-        return MashaBotsOut(bots=[MashaBotOut(**row) for row in deps.get_masha().list_instances()])
+    # ── Masha & Thusnelda routes moved to routers/masha.py and routers/thusnelda.py ──
 
-    @app.post("/api/v1/masha/bots", response_model=MashaBotOut)
-    async def masha_bots_create(body: MashaBotCreateBody) -> Any:
-        svc = deps.get_masha()
-        try:
-            row = svc.create_instance(
-                bot_id=body.bot_id,
-                tag=body.tag,
-                symbol=body.symbol,
-                base_asset=body.base_asset,
-                quote_asset=body.quote_asset,
-                loop_interval_sec=body.loop_interval_sec,
-                quote_min_free_to_operate=body.quote_min_free_to_operate,
-                buy_qty_base=body.buy_qty_base,
-                profit_factor=body.profit_factor,
-                timeframe_w=body.timeframe_w,
-                periods_w=body.periods_w,
-                mm_periods_w=body.mm_periods_w,
-                margin_low_w=body.margin_low_w,
-                timeframe_h=body.timeframe_h,
-                periods_h=body.periods_h,
-                mm_periods_h=body.mm_periods_h,
-                margin_low_h=body.margin_low_h,
-                qty_decimals=body.qty_decimals,
-                price_decimals=body.price_decimals,
-                note=body.note,
-                max_drawdown_pct=body.max_drawdown_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                metrics_interval_cycles=body.metrics_interval_cycles,
-                simulated=body.simulated,
-                trading_enabled=body.trading_enabled,
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
-        return MashaBotOut(**row)
-
-    @app.patch("/api/v1/masha/bots/{bot_id}", response_model=MashaBotOut)
-    async def masha_bots_update(bot_id: str, body: MashaBotUpdateBody) -> Any:
-        svc = deps.get_masha()
-        try:
-            row = svc.update_instance(
-                bot_id,
-                tag=body.tag,
-                symbol=body.symbol,
-                base_asset=body.base_asset,
-                quote_asset=body.quote_asset,
-                loop_interval_sec=body.loop_interval_sec,
-                quote_min_free_to_operate=body.quote_min_free_to_operate,
-                buy_qty_base=body.buy_qty_base,
-                profit_factor=body.profit_factor,
-                timeframe_w=body.timeframe_w,
-                periods_w=body.periods_w,
-                mm_periods_w=body.mm_periods_w,
-                margin_low_w=body.margin_low_w,
-                timeframe_h=body.timeframe_h,
-                periods_h=body.periods_h,
-                mm_periods_h=body.mm_periods_h,
-                margin_low_h=body.margin_low_h,
-                qty_decimals=body.qty_decimals,
-                price_decimals=body.price_decimals,
-                note=body.note,
-                max_drawdown_pct=body.max_drawdown_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                metrics_interval_cycles=body.metrics_interval_cycles,
-                simulated=body.simulated,
-                trading_enabled=body.trading_enabled,
-            )
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
-        return MashaBotOut(**row)
-
-    @app.delete("/api/v1/masha/bots/{bot_id}")
-    async def masha_bots_delete(bot_id: str) -> dict[str, bool]:
-        svc = deps.get_masha()
-        try:
-            await svc.delete_instance(bot_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return {"deleted": True}
-
-    @app.post("/api/v1/masha/bots/{bot_id}/start", response_model=MashaBotOut)
-    async def masha_bots_start(
-        bot_id: str,
-        body: GatewayStartBody = GatewayStartBody(),
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> Any:
-        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
-        if not pair:
-            raise HTTPException(status_code=400, detail="No API credentials available")
-        try:
-            row = await deps.get_masha().start_instance(bot_id, pair[0], pair[1])
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
-        return MashaBotOut(**row)
-
-    @app.post("/api/v1/masha/bots/{bot_id}/stop", response_model=MashaBotOut)
-    async def masha_bots_stop(bot_id: str) -> Any:
-        try:
-            row = await deps.get_masha().stop_instance(bot_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return MashaBotOut(**row)
-
-    @app.post("/api/v1/masha/bots/{bot_id}/run_once", response_model=MashaBotOut)
-    async def masha_bots_run_once(
-        bot_id: str,
-        body: GatewayStartBody = GatewayStartBody(),
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> Any:
-        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
-        if not pair:
-            raise HTTPException(status_code=400, detail="No API credentials available")
-        try:
-            row = await deps.get_masha().run_once_instance(bot_id, pair[0], pair[1])
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
-        return MashaBotOut(**row)
-
-    @app.get("/api/v1/masha/bots/{bot_id}/logs", response_model=MashaBotLogsOut)
-    async def masha_bots_logs(bot_id: str, limit: int = 200) -> Any:
-        try:
-            rows = deps.get_masha().get_logs(bot_id, limit=limit)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return MashaBotLogsOut(logs=rows)
-
-    @app.get("/api/v1/thusnelda/bots", response_model=ThusneldaBotsOut)
-    async def thusnelda_bots_list() -> Any:
-        return ThusneldaBotsOut(
-            bots=[ThusneldaBotOut(**row) for row in deps.get_thusnelda().list_instances()]
-        )
-
-    @app.post("/api/v1/thusnelda/bots", response_model=ThusneldaBotOut)
-    async def thusnelda_bots_create(body: ThusneldaBotCreateBody) -> Any:
-        svc = deps.get_thusnelda()
-        try:
-            row = svc.create_instance(
-                bot_id=body.bot_id,
-                tag=body.tag,
-                symbols_csv=body.symbols_csv,
-                loop_interval_sec=body.loop_interval_sec,
-                between_symbol_sec=body.between_symbol_sec,
-                quote_order_qty_modulo=body.quote_order_qty_modulo,
-                factor_multiplication=body.factor_multiplication,
-                meta_equity_usdt=body.meta_equity_usdt,
-                reference_ts_iso=body.reference_ts_iso,
-                qty_decimals=body.qty_decimals,
-                note=body.note,
-                max_drawdown_pct=body.max_drawdown_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                metrics_interval_cycles=body.metrics_interval_cycles,
-                simulated=body.simulated,
-                trading_enabled=body.trading_enabled,
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
-        return ThusneldaBotOut(**row)
-
-    @app.patch("/api/v1/thusnelda/bots/{bot_id}", response_model=ThusneldaBotOut)
-    async def thusnelda_bots_update(bot_id: str, body: ThusneldaBotUpdateBody) -> Any:
-        svc = deps.get_thusnelda()
-        try:
-            row = svc.update_instance(
-                bot_id,
-                tag=body.tag,
-                symbols_csv=body.symbols_csv,
-                loop_interval_sec=body.loop_interval_sec,
-                between_symbol_sec=body.between_symbol_sec,
-                quote_order_qty_modulo=body.quote_order_qty_modulo,
-                factor_multiplication=body.factor_multiplication,
-                meta_equity_usdt=body.meta_equity_usdt,
-                reference_ts_iso=body.reference_ts_iso,
-                qty_decimals=body.qty_decimals,
-                note=body.note,
-                max_drawdown_pct=body.max_drawdown_pct,
-                stop_loss_pct=body.stop_loss_pct,
-                metrics_interval_cycles=body.metrics_interval_cycles,
-                simulated=body.simulated,
-                trading_enabled=body.trading_enabled,
-            )
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
-        return ThusneldaBotOut(**row)
-
-    @app.delete("/api/v1/thusnelda/bots/{bot_id}")
-    async def thusnelda_bots_delete(bot_id: str) -> dict[str, bool]:
-        svc = deps.get_thusnelda()
-        try:
-            await svc.delete_instance(bot_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return {"deleted": True}
-
-    @app.post("/api/v1/thusnelda/bots/{bot_id}/start", response_model=ThusneldaBotOut)
-    async def thusnelda_bots_start(
-        bot_id: str,
-        body: GatewayStartBody = GatewayStartBody(),
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> Any:
-        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
-        if not pair:
-            raise HTTPException(status_code=400, detail="No API credentials available")
-        try:
-            row = await deps.get_thusnelda().start_instance(bot_id, pair[0], pair[1])
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
-        return ThusneldaBotOut(**row)
-
-    @app.post("/api/v1/thusnelda/bots/{bot_id}/stop", response_model=ThusneldaBotOut)
-    async def thusnelda_bots_stop(bot_id: str) -> Any:
-        try:
-            row = await deps.get_thusnelda().stop_instance(bot_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return ThusneldaBotOut(**row)
-
-    @app.post("/api/v1/thusnelda/bots/{bot_id}/run_once", response_model=ThusneldaBotOut)
-    async def thusnelda_bots_run_once(
-        bot_id: str,
-        body: GatewayStartBody = GatewayStartBody(),
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> Any:
-        pair = _resolve_pair(ctx, body.api_key, body.api_secret)
-        if not pair:
-            raise HTTPException(status_code=400, detail="No API credentials available")
-        try:
-            row = await deps.get_thusnelda().run_once_instance(bot_id, pair[0], pair[1])
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
-        return ThusneldaBotOut(**row)
-
-    @app.get("/api/v1/thusnelda/bots/{bot_id}/logs", response_model=ThusneldaBotLogsOut)
-    async def thusnelda_bots_logs(bot_id: str, limit: int = 200) -> Any:
-        try:
-            rows = deps.get_thusnelda().get_logs(bot_id, limit=limit)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Bot not found") from None
-        return ThusneldaBotLogsOut(logs=rows)
 
     @app.post("/api/v1/terminal/execute", response_model=TerminalExecOut)
     async def terminal_execute(
@@ -894,49 +661,7 @@ def create_app() -> FastAPI:
     async def gateway_snapshot(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
         return _snapshot(ctx)
 
-    @app.get("/api/v1/usage/rest-weight/samples")
-    async def usage_rest_weight_samples(
-        limit: int = 200,
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        from runtime.core.rest_usage_log import get_rest_usage_log
-
-        rows = get_rest_usage_log(ctx.config.data_dir).list_samples(limit=limit)
-        return {"items": rows}
-
-    @app.get("/api/v1/usage/rest-weight/events")
-    async def usage_rest_weight_events(
-        limit: int = 300,
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        from runtime.core.rest_usage_log import get_rest_usage_log
-
-        rows = get_rest_usage_log(ctx.config.data_dir).list_events(limit=limit)
-        return {"items": rows}
-
-    @app.get("/api/v1/usage/rest-weight/report")
-    async def usage_rest_weight_report(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
-        from runtime.core.rest_usage_log import get_rest_usage_log
-
-        usage = get_rest_usage_log(ctx.config.data_dir)
-        return {
-            "now": {
-                "used_weight_1m": getattr(ctx.state, "api_weight_used_1m", None),
-                "weight_limit_1m": api_weight_limit_1m_display(),
-            },
-            "polling_config": {
-                "account_poll_sec": account_poll_interval_sec(),
-                "my_trades_stride": my_trades_poll_stride(),
-                "equity_stride": equity_poll_stride(),
-            },
-            "estimated_calls_per_min": _rest_weight_estimate_report(),
-            "top_actions": usage.summary_by_action(limit=5000)[:25],
-            "notes": [
-                "X-MBX-USED-WEIGHT-1M is IP-scoped and cumulative in a rolling 1-minute window.",
-                "Totals include calls from this engine and any other process sharing the same outbound IP.",
-                "A window reset can make per-call deltas unavailable for a sample.",
-            ],
-        }
+    # ── Usage routes moved to routers/system.py ──
 
     @app.get("/api/v1/account/wallets")
     async def account_wallets(
@@ -1086,90 +811,7 @@ def create_app() -> FastAPI:
 
     # ── Gateway Settings (persistent JSON) ───────────────────────────
 
-    @app.get("/gateway/settings")
-    async def get_gateway_settings() -> dict[str, Any]:
-        """Return current gateway settings from persistent JSON."""
-        from runtime.core.settings import load_gateway_settings
-        return load_gateway_settings()
-
-    @app.post("/gateway/settings")
-    async def update_gateway_settings(body: dict[str, Any]) -> dict[str, Any]:
-        """Update gateway settings and persist to JSON."""
-        from runtime.core.settings import load_gateway_settings, save_gateway_settings
-        current = load_gateway_settings()
-        current.update(body)
-        save_gateway_settings(current)
-        return {"ok": True, "settings": load_gateway_settings()}
-
-    # ── API Fuse Status ──────────────────────────────────────────────
-
-    @app.get("/api-fuse/status")
-    async def get_api_fuse_status() -> dict[str, Any]:
-        """Return API Fuse status (tripped, reason, cooldown, etc.)."""
-        from runtime.core.api_fuse import get_api_fuse
-        fuse = get_api_fuse()
-        return fuse.status()
-
-    @app.post("/api-fuse/reset")
-    async def reset_api_fuse() -> dict[str, Any]:
-        """Manually reset the API Fuse (use with extreme caution)."""
-        from runtime.core.api_fuse import get_api_fuse
-        fuse = get_api_fuse()
-        fuse.manual_reset()
-        return {"ok": True, "status": fuse.status()}
-    # ── Weight Governor Status ────────────────────────────────────────
-
-    @app.get("/api/v1/weight-governor/status")
-    async def get_weight_governor_status() -> dict[str, Any]:
-        """Return Weight Governor status (zones, throttle, bot slots)."""
-        from runtime.core.weight_governor import get_weight_governor
-        return get_weight_governor().status()
-
-    # ── Market Cache Status ────────────────────────────────────────
-
-    @app.get("/api/v1/market-cache/status")
-    async def get_market_cache_status() -> dict[str, Any]:
-        """Return Market Cache stats (hit rate, memory, weight saved)."""
-        from runtime.core.market_cache import get_market_cache
-        return get_market_cache().status()
-
-    # ── Bot Coordinator Status ─────────────────────────────────────
-
-    @app.get("/api/v1/bot-coordinator/status")
-    async def get_bot_coordinator_status() -> dict[str, Any]:
-        """Return Bot Coordinator status (staged bots, active phases, jitter)."""
-        from runtime.core.bot_coordinator import get_bot_coordinator
-        return get_bot_coordinator().status()
-
-    # ── Binance API Log ──────────────────────────────────────────────
-
-    @app.get("/api-log/recent")
-    async def get_api_log_recent(
-        limit: int = 200,
-        source: str | None = None,
-        errors_only: bool = False,
-    ) -> list[dict[str, Any]]:
-        """Return recent Binance API log entries."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.list_recent(limit=limit, source=source, errors_only=errors_only)
-
-    @app.get("/api-log/weight-summary")
-    async def get_api_log_weight_summary() -> dict[str, Any]:
-        """Return weight usage summary for the last hour."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.weight_summary_last_hour()
-
-    @app.get("/api-log/db-stats")
-    async def get_api_log_db_stats() -> dict[str, Any]:
-        """Return API log database statistics."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.db_stats()
+    # ── System routes moved to routers/system.py ──
 
     return app
 
