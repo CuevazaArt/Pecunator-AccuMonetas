@@ -1040,6 +1040,70 @@ def create_app() -> FastAPI:
         res = await earn.force_sync(_client_resolver)
         return res
 
+    # ── Gateway Settings (persistent JSON) ───────────────────────────
+
+    @app.get("/gateway/settings")
+    async def get_gateway_settings() -> dict[str, Any]:
+        """Return current gateway settings from persistent JSON."""
+        from runtime.core.settings import load_gateway_settings
+        return load_gateway_settings()
+
+    @app.post("/gateway/settings")
+    async def update_gateway_settings(body: dict[str, Any]) -> dict[str, Any]:
+        """Update gateway settings and persist to JSON."""
+        from runtime.core.settings import load_gateway_settings, save_gateway_settings
+        current = load_gateway_settings()
+        current.update(body)
+        save_gateway_settings(current)
+        return {"ok": True, "settings": load_gateway_settings()}
+
+    # ── API Fuse Status ──────────────────────────────────────────────
+
+    @app.get("/api-fuse/status")
+    async def get_api_fuse_status() -> dict[str, Any]:
+        """Return API Fuse status (tripped, reason, cooldown, etc.)."""
+        from runtime.core.api_fuse import get_api_fuse
+        fuse = get_api_fuse()
+        return fuse.status()
+
+    @app.post("/api-fuse/reset")
+    async def reset_api_fuse() -> dict[str, Any]:
+        """Manually reset the API Fuse (use with extreme caution)."""
+        from runtime.core.api_fuse import get_api_fuse
+        fuse = get_api_fuse()
+        fuse.manual_reset()
+        return {"ok": True, "status": fuse.status()}
+
+    # ── Binance API Log ──────────────────────────────────────────────
+
+    @app.get("/api-log/recent")
+    async def get_api_log_recent(
+        limit: int = 200,
+        source: str | None = None,
+        errors_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return recent Binance API log entries."""
+        ctx = deps.get_ctx()
+        from runtime.core.binance_api_log import get_binance_api_log
+        log = get_binance_api_log(ctx.config.data_dir)
+        return log.list_recent(limit=limit, source=source, errors_only=errors_only)
+
+    @app.get("/api-log/weight-summary")
+    async def get_api_log_weight_summary() -> dict[str, Any]:
+        """Return weight usage summary for the last hour."""
+        ctx = deps.get_ctx()
+        from runtime.core.binance_api_log import get_binance_api_log
+        log = get_binance_api_log(ctx.config.data_dir)
+        return log.weight_summary_last_hour()
+
+    @app.get("/api-log/db-stats")
+    async def get_api_log_db_stats() -> dict[str, Any]:
+        """Return API log database statistics."""
+        ctx = deps.get_ctx()
+        from runtime.core.binance_api_log import get_binance_api_log
+        log = get_binance_api_log(ctx.config.data_dir)
+        return log.db_stats()
+
     return app
 
 
@@ -2721,70 +2785,4 @@ async def _sync_binance_time(
             await asyncio.to_thread(client.close_connection)
         except Exception:
             pass
-
-    # ── Gateway Settings (persistent JSON) ───────────────────────────
-
-    @app.get("/gateway/settings")
-    async def get_gateway_settings() -> dict[str, Any]:
-        """Return current gateway settings from persistent JSON."""
-        from runtime.core.settings import load_gateway_settings
-        return load_gateway_settings()
-
-    @app.post("/gateway/settings")
-    async def update_gateway_settings(body: dict[str, Any]) -> dict[str, Any]:
-        """Update gateway settings and persist to JSON."""
-        from runtime.core.settings import load_gateway_settings, save_gateway_settings
-        current = load_gateway_settings()
-        current.update(body)
-        save_gateway_settings(current)
-        return {"ok": True, "settings": load_gateway_settings()}
-
-    # ── API Fuse Status ──────────────────────────────────────────────
-
-    @app.get("/api-fuse/status")
-    async def get_api_fuse_status() -> dict[str, Any]:
-        """Return API Fuse status (tripped, reason, cooldown, etc.)."""
-        from runtime.core.api_fuse import get_api_fuse
-        fuse = get_api_fuse()
-        return fuse.status()
-
-    @app.post("/api-fuse/reset")
-    async def reset_api_fuse() -> dict[str, Any]:
-        """Manually reset the API Fuse (use with extreme caution)."""
-        from runtime.core.api_fuse import get_api_fuse
-        fuse = get_api_fuse()
-        fuse.manual_reset()
-        return {"ok": True, "status": fuse.status()}
-
-    # ── Binance API Log ──────────────────────────────────────────────
-
-    @app.get("/api-log/recent")
-    async def get_api_log_recent(
-        limit: int = 200,
-        source: str | None = None,
-        errors_only: bool = False,
-    ) -> list[dict[str, Any]]:
-        """Return recent Binance API log entries."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.list_recent(limit=limit, source=source, errors_only=errors_only)
-
-    @app.get("/api-log/weight-summary")
-    async def get_api_log_weight_summary() -> dict[str, Any]:
-        """Return weight usage summary for the last hour."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.weight_summary_last_hour()
-
-    @app.get("/api-log/db-stats")
-    async def get_api_log_db_stats() -> dict[str, Any]:
-        """Return API log database statistics."""
-        ctx = deps.get_ctx()
-        from runtime.core.binance_api_log import get_binance_api_log
-        log = get_binance_api_log(ctx.config.data_dir)
-        return log.db_stats()
-
-    return app
 
