@@ -16,20 +16,8 @@ import 'pages/bot_guide_page.dart';
 import 'pages/api_sandbox_page.dart';
 import 'pages/spot_account_page.dart';
 import 'widgets/weight_monitor_dialog.dart';
+import 'utils.dart';
 
-String _plainNum(dynamic value, {int maxDecimals = 12}) {
-  if (value == null) return '0';
-  final raw = value.toString().trim();
-  if (raw.isEmpty) return '0';
-  final n = num.tryParse(raw);
-  if (n == null || n.isNaN || n.isInfinite) return raw;
-  if (n == 0) return '0';
-  if (n is int) return n.toString();
-  var out = n.toStringAsFixed(maxDecimals);
-  out = out.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
-  if (out == '-0') return '0';
-  return out;
-}
 
 void main() {
   runApp(const PecunatorDesktopApp());
@@ -1593,7 +1581,7 @@ class _BotControlPageState extends State<BotControlPage> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'ts $ts Â· stopped $stopped Â· err $errors Â· ${_plainNum(elapsed)}s',
+              'ts $ts Â· stopped $stopped Â· err $errors Â· ${plainNum(elapsed)}s',
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
             ),
@@ -2107,17 +2095,17 @@ class _BotControlPageState extends State<BotControlPage> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'qty ${_plainNum(b['quote_order_qty'])}',
+                          'qty ${plainNum(b['quote_order_qty'])}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'p ${_plainNum(b['profit_factor'])}',
+                          'p ${plainNum(b['profit_factor'])}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'd ${_plainNum(b['margin_drop_factor'])}',
+                          'd ${plainNum(b['margin_drop_factor'])}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 8),
@@ -2137,12 +2125,12 @@ class _BotControlPageState extends State<BotControlPage> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'dd ${_plainNum(b['max_drawdown_pct'])}',
+                          'dd ${plainNum(b['max_drawdown_pct'])}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'sl ${_plainNum(b['stop_loss_pct'])}',
+                          'sl ${plainNum(b['stop_loss_pct'])}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(width: 8),

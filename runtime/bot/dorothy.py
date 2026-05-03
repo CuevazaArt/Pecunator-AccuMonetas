@@ -497,8 +497,32 @@ class DorothyRunner:
     async def _loop(self) -> None:
         while not self._stop.is_set():
             sleep_sec = float(self.config.loop_interval_sec)
+            # ── Governor permission gate ─────────────────────────
+            try:
+                from runtime.core.weight_governor import get_weight_governor
+                gov = get_weight_governor()
+                bot_key = f"dorothy:{self.config.symbol}"
+                wait = gov.request_permission(bot_key)
+                if wait == float('inf'):
+                    self._emit("WARNING", "governor:LOCKOUT — ciclo omitido (zona emergencia)")
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+                if wait > 0:
+                    self._emit("INFO", f"governor:throttle — esperando {wait:.1f}s")
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=wait)
+                    except asyncio.TimeoutError:
+                        pass
+                    if self._stop.is_set():
+                        break
+            except Exception:
+                pass  # Governor unavailable — proceed normally
             try:
                 rep = await self.run_once()
+
                 self._last_report = rep
                 self._last_error = None
                 self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()

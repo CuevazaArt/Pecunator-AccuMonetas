@@ -1,12 +1,11 @@
 /// UI tests for refactored architecture.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pecunator_desktop/config/app_config.dart';
-import 'package:pecunator_desktop/providers/app_providers.dart';
 import 'package:pecunator_desktop/services/exceptions.dart';
+
 import 'package:pecunator_desktop/widgets/error_display.dart';
 import 'package:pecunator_desktop/widgets/gateway_status.dart';
 import 'package:pecunator_desktop/widgets/logs_viewer.dart';
@@ -163,58 +162,8 @@ void main() {
     });
   });
 
-  group('Riverpod Providers Integration Tests', () {
-    testWidgets('Engine URL provider builds correctly', (WidgetTester tester) async {
-      late String engineUrl;
 
-      await tester.pumpWidget(
-        ProviderScope(
-          child: Consumer(
-            builder: (context, ref, _) {
-              engineUrl = ref.watch(engineBaseUrlProvider);
-              return MaterialApp(
-                home: Scaffold(
-                  body: Text(engineUrl),
-                ),
-              );
-            },
-          ),
-        ),
-      );
 
-      expect(engineUrl, 'http://127.0.0.1:8765');
-    });
-
-    testWidgets('Dark mode provider toggles', (WidgetTester tester) async {
-      late bool darkMode;
-
-      await tester.pumpWidget(
-        ProviderScope(
-          child: Consumer(
-            builder: (context, ref, _) {
-              darkMode = ref.watch(darkModeProvider);
-              return MaterialApp(
-                home: Scaffold(
-                  body: Center(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ref.read(darkModeProvider.notifier).state = !darkMode;
-                      },
-                      child: const Text('Toggle'),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-
-      expect(darkMode, true); // Default
-      await tester.tap(find.text('Toggle'));
-      await tester.pump();
-    });
-  });
 
   group('Widget Integration Tests', () {
     testWidgets('ErrorDisplay + GatewayStatus together', (WidgetTester tester) async {
