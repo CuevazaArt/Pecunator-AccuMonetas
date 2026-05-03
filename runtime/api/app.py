@@ -1073,6 +1073,21 @@ def create_app() -> FastAPI:
         fuse = get_api_fuse()
         fuse.manual_reset()
         return {"ok": True, "status": fuse.status()}
+    # ── Weight Governor Status ────────────────────────────────────────
+
+    @app.get("/api/v1/weight-governor/status")
+    async def get_weight_governor_status() -> dict[str, Any]:
+        """Return Weight Governor status (zones, throttle, bot slots)."""
+        from runtime.core.weight_governor import get_weight_governor
+        return get_weight_governor().status()
+
+    # ── Market Cache Status ────────────────────────────────────────
+
+    @app.get("/api/v1/market-cache/status")
+    async def get_market_cache_status() -> dict[str, Any]:
+        """Return Market Cache stats (hit rate, memory, weight saved)."""
+        from runtime.core.market_cache import get_market_cache
+        return get_market_cache().status()
 
     # ── Binance API Log ──────────────────────────────────────────────
 
@@ -1213,6 +1228,12 @@ def _audit_weight_from_client(
             used_weight_1m=used,
             note=note,
         )
+        # Feed real-time weight to the Governor for dynamic throttling
+        try:
+            from runtime.core.weight_governor import get_weight_governor
+            get_weight_governor().update_weight(used)
+        except Exception:
+            pass
     except Exception:
         pass
 
