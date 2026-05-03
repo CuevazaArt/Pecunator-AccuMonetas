@@ -947,6 +947,82 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
+  Future<void> _openRegistrosPage() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: DefaultTabController(
+            length: 2,
+            child: Column(
+              children: [
+                Container(
+                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                  child: TabBar(
+                    tabs: const [
+                      Tab(icon: Icon(Icons.analytics_outlined), text: 'Monitor de Peso REST'),
+                      Tab(icon: Icon(Icons.storage), text: 'Registro SQLite'),
+                    ],
+                    labelColor: Theme.of(ctx).colorScheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Tab 1: REST Weight Monitor
+                      _RestWeightMonitorDialog(api: _api, embedded: true),
+                      // Tab 2: SQLite Registry
+                      _buildSqliteTab(ctx),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSqliteTab(BuildContext ctx) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SelectableText(
+            'runtime/data/dorothy_hub.sqlite',
+            style: TextStyle(fontFamily: 'monospace', fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Cada instancia se identifica por su bot_id y guarda historial crudo completo.',
+          ),
+          const SizedBox(height: 12),
+          ..._hubBots.map((b) {
+            final botId = (b['bot_id'] ?? '').toString();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(child: SelectableText('bot_id=$botId')),
+                  TextButton(
+                    onPressed: () => _openSqliteRecordsList(botId),
+                    child: const Text('Consultar'),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (_hubBots.isEmpty)
+            const Text('Sin instancias activas.', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmDeleteBot(String botId) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -1542,7 +1618,6 @@ class _BotControlPageState extends State<BotControlPage> {
           _navBtn(Icons.savings_outlined, 'Earn', 6),
           _navBtn(Icons.currency_exchange, 'Carry', 7),
           const SizedBox(width: 4),
-          // ── Vertical divider ──
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
           // ── Utilities ──
@@ -1568,16 +1643,11 @@ class _BotControlPageState extends State<BotControlPage> {
               color: _gatewayRunning ? _gatewayTrafficColor() : Colors.grey,
             ),
           ),
-          // ── Logs / DB / Analytics ──
+          // ── Registros & Monitoreo (combined) ──
           IconButton(
-            onPressed: _loading ? null : _openRestUsageDialog,
-            tooltip: 'Monitor de peso REST',
-            icon: const Icon(Icons.analytics_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openSqliteInfo,
-            tooltip: 'Registro SQLite',
-            icon: const Icon(Icons.storage, size: 18),
+            onPressed: _loading ? null : _openRegistrosPage,
+            tooltip: 'Registros, Monitor de Peso y SQLite',
+            icon: const Icon(Icons.assessment_outlined, size: 18),
           ),
           // ── Theme toggle ──
           IconButton(
@@ -1588,21 +1658,26 @@ class _BotControlPageState extends State<BotControlPage> {
               size: 18,
             ),
           ),
-          // ── Clock ──
+          // ── Binance Server Clock ──
           Padding(
             padding: const EdgeInsets.only(right: 2),
             child: GestureDetector(
               onTap: _loading ? null : _syncTimestamp,
               child: Tooltip(
-                message: 'Pulsa para sincronizar reloj Binance',
+                message: 'Hora del servidor Binance — pulsa para sincronizar',
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.public, size: 14,
+                    Icon(Icons.public, size: 13,
                       color: Theme.of(context).colorScheme.primary),
                     const SizedBox(width: 3),
                     Text(_clockText,
                       style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                    const SizedBox(width: 3),
+                    Text('BINANCE',
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7))),
                   ],
                 ),
               ),
@@ -2302,9 +2377,10 @@ class _BotControlPageState extends State<BotControlPage> {
 }
 
 class _RestWeightMonitorDialog extends StatefulWidget {
-  const _RestWeightMonitorDialog({required this.api});
+  const _RestWeightMonitorDialog({required this.api, this.embedded = false});
 
   final EngineApi api;
+  final bool embedded;
 
   @override
   State<_RestWeightMonitorDialog> createState() =>
@@ -2428,102 +2504,101 @@ class _RestWeightMonitorDialogState extends State<_RestWeightMonitorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Monitor de peso REST (X-MBX-USED-WEIGHT-1M)'),
-      content: SizedBox(
-        width: 860,
-        height: 560,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Este monitor muestra el encabezado acumulado de Binance por ventana de 1 minuto '
-              'y por IP compartida. No es por bot individual y puede subir por llamadas de otros '
-              'procesos/terminales que usen la misma red.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Este monitor muestra el encabezado acumulado de Binance por ventana de 1 minuto '
+          'y por IP compartida. No es por bot individual.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_loading)
+          const LinearProgressIndicator()
+        else if (_error.isNotEmpty)
+          Text(_error, style: const TextStyle(color: Colors.redAccent))
+        else ...[
+          Row(
+            children: [
+              Text(
+                'Gateway: ${_gatewayRunning ? "ON" : "OFF"}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _gatewayRunning ? Colors.green : Colors.orange,
+                ),
               ),
+              const SizedBox(width: 12),
+              Text(
+                'Peso actual: ${_liveUsed ?? "-"} / $_liveLimit',
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: _animFrom, end: _animTo),
+            duration: const Duration(milliseconds: 650),
+            builder: (context, v, _) => LinearProgressIndicator(
+              minHeight: 10,
+              value: v,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _weightColorFromPct(v),
+              ),
+              backgroundColor: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Lógica de cálculo (igual a monitorPesos): ocupación = used_weight_1m / weight_limit_1m.',
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            ),
-            const SizedBox(height: 10),
-            if (_loading)
-              const LinearProgressIndicator()
-            else if (_error.isNotEmpty)
-              Text(_error, style: const TextStyle(color: Colors.redAccent))
-            else ...[
-              Row(
+          ),
+          const SizedBox(height: 6),
+          SelectableText(
+            _asciiBar(_liveUsed, _liveLimit),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: DefaultTabController(
+              length: 3,
+              child: Column(
                 children: [
-                  Text(
-                    'Gateway: ${_gatewayRunning ? "ON" : "OFF"}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: _gatewayRunning ? Colors.green : Colors.orange,
-                    ),
+                  const TabBar(
+                    isScrollable: true,
+                    tabs: [
+                      Tab(text: 'Resumen'),
+                      Tab(text: 'Eventos'),
+                      Tab(text: 'Muestras'),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Peso actual: ${_liveUsed ?? "-"} / $_liveLimit',
-                    style: const TextStyle(fontFamily: 'monospace'),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildSummaryTab(context),
+                        _buildEventsTab(),
+                        _buildSamplesTab(),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: _animFrom, end: _animTo),
-                duration: const Duration(milliseconds: 650),
-                builder: (context, v, _) => LinearProgressIndicator(
-                  minHeight: 10,
-                  value: v,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    _weightColorFromPct(v),
-                  ),
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
-                ),
-              ),
-              const SizedBox(height: 6),
-              SelectableText(
-                _asciiBar(_liveUsed, _liveLimit),
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: DefaultTabController(
-                  length: 3,
-                  child: Column(
-                    children: [
-                      const TabBar(
-                        isScrollable: true,
-                        tabs: [
-                          Tab(text: 'Resumen'),
-                          Tab(text: 'Eventos'),
-                          Tab(text: 'Muestras'),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: TabBarView(
-                          children: [
-                            _buildSummaryTab(context),
-                            _buildEventsTab(),
-                            _buildSamplesTab(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    if (widget.embedded) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: body,
+      );
+    }
+
+    return AlertDialog(
+      title: const Text('Monitor de peso REST (X-MBX-USED-WEIGHT-1M)'),
+      content: SizedBox(width: 860, height: 560, child: body),
       actions: [
         TextButton(
           onPressed: _loading ? null : () => _refresh(),

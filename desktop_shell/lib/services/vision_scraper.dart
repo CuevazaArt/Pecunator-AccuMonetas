@@ -132,8 +132,8 @@ class VisionScraperService {
       }
     }
 
-    // Start extremely conservatively to protect IP
-    final int concurrency = 2;
+    // Single worker to moderate downloads and keep UI responsive
+    final int concurrency = 1;
     final List<Future<void>> workers = [];
     for (int i = 0; i < concurrency; i++) {
       workers.add(worker(i + 1));
