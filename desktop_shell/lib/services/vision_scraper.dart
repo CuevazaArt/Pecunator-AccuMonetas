@@ -99,6 +99,8 @@ class VisionScraperService {
                     if (candles.isNotEmpty) {
                       await HistogramStorage.instance.insertCandles(symbol, interval, candles);
                       print('[VisionScraper W$workerId] INSERCIÓN OK: ${candles.length} velas para $symbol $interval ($targetMonthStr)');
+                      // Yield to UI thread after heavy DB write
+                      await Future.delayed(const Duration(milliseconds: 100));
                     }
                   }
                 } else if (response.statusCode == 404) {
@@ -120,8 +122,8 @@ class VisionScraperService {
                  print('[VisionScraper] ERROR de red en $symbol: $e');
               }
               
-              // Delay timidly to avoid data.binance.vision 429 rate limits
-              await Future.delayed(const Duration(milliseconds: 1500));
+              // Delay between fetches to avoid rate-limit AND give UI breathing room
+              await Future.delayed(const Duration(milliseconds: 2500));
             }
             if (consecutive404s > 3) break; 
           }

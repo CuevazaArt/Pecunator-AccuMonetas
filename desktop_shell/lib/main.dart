@@ -1317,10 +1317,6 @@ class _BotControlPageState extends State<BotControlPage> {
     setState(() => _currentIndex = 2);
   }
 
-  Future<void> _openSandboxPage() async {
-    setState(() => _currentIndex = 6);
-  }
-
   Future<void> _openMashaPage() async {
     setState(() => _currentIndex = 4);
   }
@@ -1330,11 +1326,19 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 
   Future<void> _openEarnPage() async {
-    setState(() => _currentIndex = 7);
+    setState(() => _currentIndex = 6);
   }
 
   Future<void> _openCarryTradePage() async {
-    setState(() => _currentIndex = 8);
+    setState(() => _currentIndex = 7);
+  }
+
+  Future<void> _toggleGateway() async {
+    if (_gatewayRunning) {
+      await _stopGateway();
+    } else {
+      await _startGateway();
+    }
   }
 
   Map<String, String> _draftFor(Map<String, dynamic> bot) {
@@ -1504,114 +1508,78 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
+  Widget _navBtn(IconData icon, String tooltip, int idx) {
+    final active = _currentIndex == idx;
+    return IconButton(
+      onPressed: () => setState(() => _currentIndex = idx),
+      tooltip: tooltip,
+      icon: Icon(icon, size: 18,
+        color: active
+            ? Theme.of(context).colorScheme.primary
+            : null),
+      style: active
+          ? IconButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('PecunatorCore'),
-        leading: IconButton(
-          icon: const Icon(Icons.home),
-          tooltip: 'Inicio (Dorothy)',
-          onPressed: () => setState(() => _currentIndex = 0),
-        ),
+        automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            onPressed: _loading ? null : _openDorothyHubPage,
-            tooltip: 'Dorothy Hub (Home)',
-            icon: const Icon(Icons.home, size: 18),
-          ),
+          // ── Navigation: pages ──
+          _navBtn(Icons.home, 'Dorothy Hub', 0),
+          _navBtn(Icons.candlestick_chart, 'Mercado', 1),
+          _navBtn(Icons.account_balance_wallet_outlined, 'Cuenta Spot', 2),
+          _navBtn(Icons.library_books, 'Biblioteca', 3),
+          _navBtn(Icons.psychology_alt_outlined, 'Masha', 4),
+          _navBtn(Icons.hub_outlined, 'Thusnelda', 5),
+          _navBtn(Icons.savings_outlined, 'Earn', 6),
+          _navBtn(Icons.currency_exchange, 'Carry', 7),
+          const SizedBox(width: 4),
+          // ── Vertical divider ──
+          Container(width: 1, height: 24, color: Colors.white24),
+          const SizedBox(width: 4),
+          // ── Utilities ──
           IconButton(
             onPressed: _loading ? null : _openDorothyGuide,
             tooltip: 'Instructivo Dorothy7.0',
             icon: const Icon(Icons.menu_book, size: 18),
           ),
           IconButton(
-            onPressed: _loading ? null : _openSpotAccountPage,
-            tooltip: 'Resumen cuenta Spot',
-            icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openMarketMonitorPage,
-            tooltip: 'Posiciones, Órdenes y Cotizaciones (0 Peso API)',
-            icon: const Icon(Icons.candlestick_chart, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openLibraryManagerPage,
-            tooltip: 'Índice de Biblioteca Local',
-            icon: const Icon(Icons.library_books, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openMashaPage,
-            tooltip: 'Hub de instancias Masha2.0',
-            icon: const Icon(Icons.psychology_alt_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openThusneldaPage,
-            tooltip: 'Hub de instancias Thusnelda1.0',
-            icon: const Icon(Icons.hub_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openSandboxPage,
-            tooltip: 'Sandbox de endpoints y datos curados',
-            icon: const Icon(Icons.science_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openEarnPage,
-            tooltip: 'Rendimiento Pasivo (Earn Manager)',
-            icon: const Icon(Icons.savings_outlined, size: 18),
-          ),
-          IconButton(
-            onPressed: _loading ? null : _openCarryTradePage,
-            tooltip: 'Carry Trade (Arbitraje)',
-            icon: const Icon(Icons.currency_exchange, size: 18),
-          ),
-          IconButton(
             onPressed: _loading ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Tooltip(
-              message:
-                  'Gateway ${_gatewayRunning ? "ON" : "OFF"}'
-                  '${_gatewayWsConnected ? " · WS" : ""}',
-              child: Icon(
-                Icons.circle,
-                size: 10,
-                color: _gatewayTrafficColor(),
-              ),
-            ),
-          ),
+          // ── Gateway toggle ──
           IconButton(
-            onPressed: _loading ? null : _startGateway,
-            tooltip: 'Iniciar gateway Binance',
+            onPressed: _loading ? null : _toggleGateway,
+            tooltip: _gatewayRunning
+                ? 'Gateway ON${_gatewayWsConnected ? " · WS" : ""} — pulsa para detener'
+                : 'Gateway OFF — pulsa para iniciar',
             icon: Icon(
-              Icons.cloud_upload_outlined,
-              size: 18,
+              _gatewayRunning ? Icons.cloud_done : Icons.cloud_off_outlined,
+              size: 20,
               color: _gatewayRunning ? _gatewayTrafficColor() : Colors.grey,
             ),
           ),
-          IconButton(
-            onPressed: _loading ? null : _stopGateway,
-            tooltip: 'Detener gateway',
-            icon: Icon(
-              Icons.cloud_off_outlined,
-              size: 18,
-              color: _gatewayRunning ? _gatewayTrafficColor() : Colors.grey,
-            ),
-          ),
+          // ── Logs / DB / Analytics ──
           IconButton(
             onPressed: _loading ? null : _openRestUsageDialog,
-            tooltip:
-                'Historial local de peso REST (evitar 429/418). Misma IP para todas las instancias.',
+            tooltip: 'Monitor de peso REST',
             icon: const Icon(Icons.analytics_outlined, size: 18),
           ),
           IconButton(
             onPressed: _loading ? null : _openSqliteInfo,
-            tooltip: 'Acceso a registro SQLite',
+            tooltip: 'Registro SQLite',
             icon: const Icon(Icons.storage, size: 18),
           ),
+          // ── Theme toggle ──
           IconButton(
             onPressed: () => widget.onThemeChanged(!widget.darkMode),
             tooltip: widget.darkMode ? 'Modo día' : 'Modo noche',
@@ -1620,51 +1588,31 @@ class _BotControlPageState extends State<BotControlPage> {
               size: 18,
             ),
           ),
-          Tooltip(
-            message:
-                'Hora estimada del servidor Binance mostrada en hora local de este equipo '
-                '(GET /api/v3/time a través del motor). Pulsa el icono de reloj para sincronizar.',
-            child: Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Center(
+          // ── Clock ──
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: GestureDetector(
+              onTap: _loading ? null : _syncTimestamp,
+              child: Tooltip(
+                message: 'Pulsa para sincronizar reloj Binance',
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.public,
-                      size: 15,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _clockText,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'LOCAL',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    Icon(Icons.public, size: 14,
+                      color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 3),
+                    Text(_clockText,
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
                   ],
                 ),
               ),
             ),
           ),
-          IconButton(
-            onPressed: _loading ? null : _syncTimestamp,
-            tooltip: 'Sincronizar reloj con servidor Binance',
-            icon: const Icon(Icons.schedule, size: 18),
-          ),
+          // ── Refresh ──
           IconButton(
             onPressed: _loading ? null : _refreshAll,
-            tooltip: 'Refrescar estado, instancias y logs',
-            icon: const Icon(Icons.refresh),
+            tooltip: 'Refrescar',
+            icon: const Icon(Icons.refresh, size: 18),
           ),
         ],
       ),
@@ -1678,7 +1626,6 @@ class _BotControlPageState extends State<BotControlPage> {
               const LibraryManagerPage(),
               MashaHubPage(engineBase: _engineBase),
               ThusneldaHubPage(engineBase: _engineBase),
-              ApiSandboxPage(engineBase: _engineBase),
               const EarnManagerPage(),
               const CarryTradePage(),
             ][_currentIndex],
