@@ -332,12 +332,24 @@ class BaseHubService(ABC):
     # --- Record payload ------------------------------------------------------
 
     def _record_payload(self, rec: BotRecord) -> dict[str, Any]:
+        # Check if this bot is currently staged for coordinated launch
+        staged_info = None
+        try:
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            coord = get_bot_coordinator()
+            cs = coord.status()
+            if rec.bot_id in cs.get("staged", {}):
+                staged_info = cs["staged"][rec.bot_id]
+        except Exception:
+            pass
+
         base = {
             "bot_id": rec.bot_id,
             "tag": rec.tag,
             "created_at": rec.created_at,
             "running": rec.runner.running,
             "desired_running": rec.desired_running,
+            "staged": staged_info,  # None if not staged, dict if waiting
             "last_cycle_ts": rec.runner.last_cycle_ts,
             "last_error": rec.runner.last_error,
             "last_report": rec.runner.last_report,
@@ -369,6 +381,20 @@ class BaseHubService(ABC):
         rec.runner.set_credentials(api_key, api_secret)
         await rec.runner.sync_time()
         await rec.runner.start()
+        # Register with governor and coordinator for phase tracking
+        try:
+            interval = getattr(rec.runner, 'config', None)
+            loop_sec = getattr(interval, 'loop_interval_sec', 450) if interval else 450
+            from runtime.core.weight_governor import get_weight_governor
+            get_weight_governor().register_bot(
+                rec.bot_id, weight_per_cycle=15, loop_interval_sec=float(loop_sec),
+            )
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            get_bot_coordinator().register_active(
+                rec.bot_id, loop_interval_sec=float(loop_sec),
+            )
+        except Exception:
+            pass  # Non-critical — bot runs fine without coordination
 
     async def start_instance(self, bot_id: str, api_key: str, api_secret: str) -> dict[str, Any]:
         rec = self._bots.get(bot_id)
@@ -376,10 +402,43 @@ class BaseHubService(ABC):
             raise KeyError(bot_id)
         rec.desired_running = True
         self._save_instance(rec)
+
+        # Ask the coordinator for the optimal launch delay
+        launch_delay = 0.0
+        try:
+            interval = getattr(rec.runner, 'config', None)
+            loop_sec = getattr(interval, 'loop_interval_sec', 450) if interval else 450
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            coord = get_bot_coordinator()
+            staged = coord.stage_bot(
+                bot_id,
+                self.HUB_CONFIG.get('table_prefix', 'dorothy'),
+                float(loop_sec),
+                api_key, api_secret,
+            )
+            launch_delay = staged.get('launch_delay_sec', 0.0)
+            self._write_log(bot_id, rec.tag, "SYSTEM",
+                f"bot_staged: launching in {launch_delay:.1f}s",
+                staged)
+        except Exception:
+            pass  # Fallback: launch immediately
+
+        # Wait for the optimal slot (0-60s max)
+        if launch_delay > 0:
+            await asyncio.sleep(launch_delay)
+
         try:
             await self._start_runner(rec, api_key, api_secret)
         except Exception as e:
             self._write_log(bot_id, rec.tag, "WARNING", f"bot_start_failed: {e}", {"error": str(e)})
+            # Unregister from coordinator on failure
+            try:
+                from runtime.core.bot_coordinator import get_bot_coordinator
+                get_bot_coordinator().unregister_active(bot_id)
+                from runtime.core.weight_governor import get_weight_governor
+                get_weight_governor().unregister_bot(bot_id)
+            except Exception:
+                pass
             raise
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_started", payload)
@@ -404,6 +463,14 @@ class BaseHubService(ABC):
         rec.desired_running = False
         self._save_instance(rec)
         await rec.runner.stop()
+        # Unregister from governor and coordinator
+        try:
+            from runtime.core.weight_governor import get_weight_governor
+            get_weight_governor().unregister_bot(bot_id)
+            from runtime.core.bot_coordinator import get_bot_coordinator
+            get_bot_coordinator().unregister_active(bot_id)
+        except Exception:
+            pass
         payload = self._record_payload(rec)
         self._write_log(bot_id, rec.tag, "SYSTEM", "bot_stopped", payload)
         return payload
@@ -531,6 +598,26 @@ class BaseHubService(ABC):
                                         "immortal: waiting for credentials")
                         self._immortal_last_reason[rec.bot_id] = reason
                     continue
+
+                # ── Coordinated restart: ask governor before resuming ──
+                try:
+                    from runtime.core.weight_governor import get_weight_governor
+                    gov = get_weight_governor()
+                    wait_sec = gov.request_permission(rec.bot_id)
+                    if wait_sec == float('inf'):
+                        reason = "weight_emergency:lockout"
+                        if self._immortal_last_reason.get(rec.bot_id) != reason:
+                            self._write_log(rec.bot_id, rec.tag, "WARNING",
+                                            "immortal: weight emergency — restart deferred")
+                            self._immortal_last_reason[rec.bot_id] = reason
+                        continue
+                    if wait_sec > 0:
+                        self._write_log(rec.bot_id, rec.tag, "SYSTEM",
+                                        f"immortal: waiting {wait_sec:.1f}s for optimal slot")
+                        await asyncio.sleep(min(wait_sec, 30.0))
+                except Exception:
+                    pass  # If governor unavailable, proceed anyway
+
                 try:
                     await self._start_runner(rec, pair[0], pair[1])
                     self._write_log(rec.bot_id, rec.tag, "SYSTEM", "immortal: bot_resumed",
