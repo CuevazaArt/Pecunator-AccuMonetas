@@ -131,7 +131,7 @@ class _BotControlPageState extends State<BotControlPage> {
       // NOTE: _syncTimestamp() removed from autostart — consumes API weight.
       // User can manually sync via the clock button when needed.
     });
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       _backgroundRefresh();
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -140,7 +140,9 @@ class _BotControlPageState extends State<BotControlPage> {
       }
     });
     HistoryScraperService.instance.api = _api;
-    HistoryScraperService.instance.start();
+    // NOTE: HistoryScraperService.start() disabled — it uses REST API
+    // (banned). Historical data now ingested via VisionScraper (ZIPs).
+    // HistoryScraperService.instance.start();
   }
 
   @override
@@ -1622,11 +1624,6 @@ class _BotControlPageState extends State<BotControlPage> {
           const SizedBox(width: 4),
           // ── Utilities ──
           IconButton(
-            onPressed: _loading ? null : _openDorothyGuide,
-            tooltip: 'Instructivo Dorothy7.0',
-            icon: const Icon(Icons.menu_book, size: 18),
-          ),
-          IconButton(
             onPressed: _loading ? null : _openCredentialManager,
             tooltip: 'Gestionar API keys',
             icon: const Icon(Icons.key, size: 18),
@@ -1774,6 +1771,13 @@ class _BotControlPageState extends State<BotControlPage> {
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
+            ),
+            const SizedBox(height: 8),
+            // ── Dorothy Guide button ──
+            OutlinedButton.icon(
+              onPressed: _openDorothyGuide,
+              icon: const Icon(Icons.menu_book, size: 16),
+              label: const Text('Instructivo Dorothy 7.0'),
             ),
             const SizedBox(height: 8),
             if (_lastError != '-')
