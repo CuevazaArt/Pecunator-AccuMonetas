@@ -40,6 +40,9 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
   double _fuseRemainingSec = 0;
   double _animTarget = 0;
   bool _expanded = false;
+  int _fuseStreak = 0;
+  int _fuseNextCooldown = 300;
+  int _fuseCurrentCooldown = 300;
   // For pts/min tracking
   final List<_WeightSample> _samples = [];
 
@@ -100,6 +103,15 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
         fuseRemaining = (fuse['remaining_cooldown_sec'] is num)
             ? (fuse['remaining_cooldown_sec'] as num).toDouble()
             : 0;
+        _fuseStreak = (fuse['consecutive_streak'] is num)
+            ? (fuse['consecutive_streak'] as num).toInt()
+            : 0;
+        _fuseNextCooldown = (fuse['next_cooldown_sec'] is num)
+            ? (fuse['next_cooldown_sec'] as num).toInt()
+            : 300;
+        _fuseCurrentCooldown = (fuse['current_cooldown_sec'] is num)
+            ? (fuse['current_cooldown_sec'] as num).toInt()
+            : 300;
       } catch (_) {}
 
       if (!mounted) return;
@@ -354,6 +366,43 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
               _thresholdDot('Critical', const Color(0xFFFF1744), pct >= 0.80),
             ],
           ),
+          // Escalation streak info
+          if (_fuseStreak > 0) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _fuseStreak >= 3
+                    ? const Color(0x44FF1744)
+                    : const Color(0x44FF9100),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.bolt,
+                    size: 11,
+                    color: _fuseStreak >= 3
+                        ? const Color(0xFFFF1744)
+                        : const Color(0xFFFF9100),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Racha #$_fuseStreak · Cooldown actual: ${_fuseCurrentCooldown}s'
+                    ' · Siguiente si re-dispara: ${_fuseNextCooldown}s',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontFamily: 'monospace',
+                      color: _fuseStreak >= 3
+                          ? const Color(0xFFFF1744)
+                          : const Color(0xFFFF9100),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
