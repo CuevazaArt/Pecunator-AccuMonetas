@@ -305,38 +305,56 @@ class _BotControlPageState extends State<BotControlPage> {
   }
 
   Future<void> _reloadData() async {
-    final cred = await _api.activeCredential();
-    final creds = await _api.vaultCredentials();
-    final rows = (creds['items'] as List?) ?? const [];
-    _vaultCredentials = rows
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final source = (cred['source'] ?? 'none').toString();
-    final last4 = (cred['public_key_last4'] ?? '-').toString();
-    _activeCredentialId = (cred['active_credential_id'] ?? '').toString();
-    final activeLabel = (cred['label'] ?? '').toString().trim();
-    final activeName = activeLabel.isNotEmpty
-        ? activeLabel
-        : (_activeCredentialId.isEmpty ? '-' : _activeCredentialId);
-    _activeCredential = '$activeName · $last4 · $source';
-    final hub = await _api.hubBots();
-    final botsRaw = (hub['bots'] as List?) ?? const [];
-    _hubBots = botsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    _opsBaseAsset = _deriveOperationalBaseAsset(_hubBots);
-    _configHistory = _buildConfigHistory(_hubBots);
-    final liveIds = _hubBots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
-    _expandedBots.removeWhere((id) => !liveIds.contains(id));
-    _draftByBotId.removeWhere((id, _) => !liveIds.contains(id));
-    _logScrollByBot.removeWhere((id, ctrl) {
-      if (!liveIds.contains(id)) {
-        ctrl.dispose();
-        return true;
-      }
-      return false;
-    });
-    for (final id in _expandedBots) {
-      await _refreshHubLogs(id);
+    // ── Section 1: Credentials (non-critical) ──
+    try {
+      final cred = await _api.activeCredential();
+      final creds = await _api.vaultCredentials();
+      final rows = (creds['items'] as List?) ?? const [];
+      _vaultCredentials = rows
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final source = (cred['source'] ?? 'none').toString();
+      final last4 = (cred['public_key_last4'] ?? '-').toString();
+      _activeCredentialId = (cred['active_credential_id'] ?? '').toString();
+      final activeLabel = (cred['label'] ?? '').toString().trim();
+      final activeName = activeLabel.isNotEmpty
+          ? activeLabel
+          : (_activeCredentialId.isEmpty ? '-' : _activeCredentialId);
+      _activeCredential = '$activeName · $last4 · $source';
+    } catch (_) {
+      // Keep previous credential state
     }
+
+    // ── Section 2: Bot list (CRITICAL — the stars of the show) ──
+    try {
+      final hub = await _api.hubBots();
+      final botsRaw = (hub['bots'] as List?) ?? const [];
+      _hubBots = botsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      _opsBaseAsset = _deriveOperationalBaseAsset(_hubBots);
+      _configHistory = _buildConfigHistory(_hubBots);
+      final liveIds = _hubBots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
+      _expandedBots.removeWhere((id) => !liveIds.contains(id));
+      _draftByBotId.removeWhere((id, _) => !liveIds.contains(id));
+      _logScrollByBot.removeWhere((id, ctrl) {
+        if (!liveIds.contains(id)) {
+          ctrl.dispose();
+          return true;
+        }
+        return false;
+      });
+      // Only fetch logs for expanded bots (lazy loading)
+      for (final id in _expandedBots) {
+        try {
+          await _refreshHubLogs(id);
+        } catch (_) {
+          // Individual bot log failure is non-critical
+        }
+      }
+    } catch (_) {
+      // Keep previous bot list — never clear running bots on transient error
+    }
+
+    // ── Section 3: Gateway snapshot (weight monitoring) ──
     try {
       final snap = await _api.gatewaySnapshot();
       _gatewayRunning = snap['gateway_running'] == true;
@@ -382,6 +400,8 @@ class _BotControlPageState extends State<BotControlPage> {
       _gatewayLastError = null;
       _apiWeightUsed = null;
     }
+
+    // ── Section 4: Protocol ops status (non-critical) ──
     try {
       final st = await _api.protocolOpsStatus();
       _closeProtocolState = st['close_protocol'] is Map
@@ -408,13 +428,18 @@ class _BotControlPageState extends State<BotControlPage> {
     await _withBusy(_reloadData);
   }
 
+  bool _bgRefreshInFlight = false;
+
   Future<void> _backgroundRefresh() async {
-    if (!mounted || _loading) return;
+    if (!mounted || _loading || _bgRefreshInFlight) return;
+    _bgRefreshInFlight = true;
     try {
       await _reloadData();
       if (mounted) setState(() {});
     } catch (_) {
       // Silent background refresh; explicit actions still surface errors.
+    } finally {
+      _bgRefreshInFlight = false;
     }
   }
 
