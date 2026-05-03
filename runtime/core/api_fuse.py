@@ -116,7 +116,7 @@ class ApiFuse:
             return {
                 "tripped": self._tripped,
                 "reason": self._trip_reason if self._tripped else "",
-                "remaining_sec": round(remaining, 1),
+                "remaining_cooldown_sec": round(remaining, 1),
                 "trip_count": self._trip_count,
                 "threshold_pct": self.threshold_pct,
                 "cooldown_sec": self.cooldown_sec,

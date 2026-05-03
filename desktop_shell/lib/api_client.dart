@@ -323,4 +323,34 @@ class EngineApi {
       'limit': limit,
     },
   );
+
+  // ── API Fuse & Binance Log endpoints ──────────────────────────
+
+  Future<Map<String, dynamic>> apiFuseStatus() =>
+      _client.get('/api-fuse/status');
+
+  Future<Map<String, dynamic>> apiFuseReset() =>
+      _client.post('/api-fuse/reset');
+
+  Future<Map<String, dynamic>> gatewaySettings() =>
+      _client.get('/gateway/settings');
+
+  Future<Map<String, dynamic>> updateGatewaySettings(Map<String, dynamic> body) =>
+      _client.post('/gateway/settings', body: body);
+
+  Future<Map<String, dynamic>> apiLogRecent({int limit = 100, String? source, bool errorsOnly = false}) async {
+    final q = StringBuffer('/api-log/recent?limit=$limit');
+    if (source != null && source.isNotEmpty) q.write('&source=$source');
+    if (errorsOnly) q.write('&errors_only=true');
+    // Endpoint returns a list; wrap in map for consistency.
+    final resp = await _client.get(q.toString());
+    return resp;
+  }
+
+  Future<Map<String, dynamic>> apiLogWeightSummary() =>
+      _client.get('/api-log/weight-summary');
+
+  Future<Map<String, dynamic>> apiLogDbStats() =>
+      _client.get('/api-log/db-stats');
 }
+

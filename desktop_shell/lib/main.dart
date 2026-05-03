@@ -9,6 +9,7 @@ import 'widgets/market_monitor.dart';
 import 'widgets/library_manager.dart';
 import 'widgets/earn_manager.dart';
 import 'widgets/carry_trade.dart';
+import 'widgets/compact_weight_gauge.dart';
 
 String _plainNum(dynamic value, {int maxDecimals = 12}) {
   if (value == null) return '0';
@@ -1666,17 +1667,28 @@ class _BotControlPageState extends State<BotControlPage> {
           ),
         ],
       ),
-      body: [
-        _buildDorothyView(),
-        MarketMonitorPage(api: _api),
-        SpotAccountPage(engineBase: _engineBase, activeSymbols: _hubBots.map((b) => (b['symbol'] ?? '').toString()).where((s) => s.isNotEmpty).toList()),
-        const LibraryManagerPage(),
-        MashaHubPage(engineBase: _engineBase),
-        ThusneldaHubPage(engineBase: _engineBase),
-        ApiSandboxPage(engineBase: _engineBase),
-        const EarnManagerPage(),
-        const CarryTradePage(),
-      ][_currentIndex],
+      body: Column(
+        children: [
+          Expanded(
+            child: [
+              _buildDorothyView(),
+              MarketMonitorPage(api: _api),
+              SpotAccountPage(engineBase: _engineBase, activeSymbols: _hubBots.map((b) => (b['symbol'] ?? '').toString()).where((s) => s.isNotEmpty).toList()),
+              const LibraryManagerPage(),
+              MashaHubPage(engineBase: _engineBase),
+              ThusneldaHubPage(engineBase: _engineBase),
+              ApiSandboxPage(engineBase: _engineBase),
+              const EarnManagerPage(),
+              const CarryTradePage(),
+            ][_currentIndex],
+          ),
+          // ── Persistent compact weight gauge (visible on ALL pages) ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: CompactWeightGauge(api: _api),
+          ),
+        ],
+      ),
     );
   }
 
