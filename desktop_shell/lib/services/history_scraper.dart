@@ -1,6 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+﻿import 'dart:async';
 import 'package:candlesticks/candlesticks.dart';
 import '../api_client.dart';
 import '../utils/histogram_storage.dart';
@@ -26,6 +24,7 @@ class HistoryScraperService {
 
   EngineApi? api;
   bool _isRunningLoop = false;
+  // ignore: unused_field
   bool _isRunningTick = false;
 
   final ValueNotifier<String> currentJobNotifier = ValueNotifier<String>('Inactivo');
@@ -111,6 +110,7 @@ class HistoryScraperService {
   }
 
   /// Returns true if an API call was made, false otherwise.
+  // ignore: unused_element
   Future<bool> _processSymbolInterval(String symbol, String interval) async {
     final localCandles = await HistogramStorage.instance.getCandles(symbol, interval);
 
@@ -145,6 +145,7 @@ class HistoryScraperService {
     return false; // No API calls needed for this pair
   }
 
+  // ignore: unused_field
   final Set<String> _backwardsCompleted = {};
 
   DateTime _nextAllowedRequestTime = DateTime.now();

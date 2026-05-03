@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import '../utils.dart';
 import '../api_client.dart';
 import 'bot_guide_page.dart';
-import '../widgets/compact_weight_gauge.dart';
-import '../widgets/market_monitor.dart';
 class MashaHubPage extends StatefulWidget {
   const MashaHubPage({super.key, required this.engineBase});
 

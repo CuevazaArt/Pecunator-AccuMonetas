@@ -95,16 +95,8 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
     final symbol = _currentSymbol.toUpperCase();
     final interval = _currentInterval;
 
-    String startStr = '1000 minutes ago UTC';
-    if (interval.endsWith('m')) {
-      startStr = '${int.parse(interval.replaceAll('m', '')) * 1000} minutes ago UTC';
-    } else if (interval.endsWith('h')) {
-      startStr = '${int.parse(interval.replaceAll('h', '')) * 1000} hours ago UTC';
-    } else if (interval.endsWith('d')) {
-      startStr = '${int.parse(interval.replaceAll('d', '')) * 1000} days ago UTC';
-    }
-
     try {
+
       // 1. Cargar biblioteca local
       List<Candle> localCandles = await HistogramStorage.instance.getCandles(symbol, interval);
       

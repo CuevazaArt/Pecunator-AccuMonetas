@@ -13,13 +13,60 @@ import 'widgets/compact_weight_gauge.dart';
 import 'pages/masha_hub_page.dart';
 import 'pages/thusnelda_hub_page.dart';
 import 'pages/bot_guide_page.dart';
-import 'pages/api_sandbox_page.dart';
 import 'pages/spot_account_page.dart';
 import 'widgets/weight_monitor_dialog.dart';
 import 'utils.dart';
 
 
 void main() {
+  // ── Error boundary: prevent widget crashes from killing the entire app ──
+  // Critical for production: if a widget build() throws, the bots in the
+  // backend keep running. Without this, an uncaught widget error kills
+  // the Flutter process and all bots lose their coordinated state.
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    // Log but do NOT crash — bots must keep running
+    debugPrint('FlutterError caught: ${details.exceptionAsString()}');
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.red.withAlpha(25),
+          border: Border.all(color: Colors.redAccent.withAlpha(100)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
+            const SizedBox(height: 8),
+            const Text(
+              'Error de renderizado',
+              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              details.exceptionAsString(),
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Los bots siguen operando normalmente.',
+              style: TextStyle(color: Colors.orangeAccent, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  };
+
   runApp(const PecunatorDesktopApp());
 }
 
@@ -961,13 +1008,6 @@ class _BotControlPageState extends State<BotControlPage> {
     });
   }
 
-  Future<void> _openRestUsageDialog() async {
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => RestWeightMonitorDialog(api: _api),
-    );
-  }
-
   Future<void> _openRegistrosPage() async {
     await showDialog<void>(
       context: context,
@@ -1207,51 +1247,6 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
-  Future<void> _openSqliteInfo() async {
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Registro SQLite'),
-        content: SizedBox(
-          width: 620,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SelectableText('runtime/data/dorothy_hub.sqlite'),
-              const SizedBox(height: 8),
-              const Text(
-                'Cada instancia se identifica por su bot_id y guarda historial crudo completo.',
-              ),
-              const SizedBox(height: 10),
-              ..._hubBots.map((b) {
-                final botId = (b['bot_id'] ?? '').toString();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(child: SelectableText('bot_id=$botId')),
-                      TextButton(
-                        onPressed: () => _openSqliteRecordsList(botId),
-                        child: const Text('Consultar'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _openSqliteRecordsList(String botId) async {
     final rows = await _api.hubLogs(botId, limit: 300);
     final logs = (rows['logs'] as List?) ?? const [];
@@ -1390,44 +1385,12 @@ class _BotControlPageState extends State<BotControlPage> {
     );
   }
 
-  Future<void> _openMarketMonitorPage() async {
-    setState(() => _currentIndex = 1);
-  }
-
-  Future<void> _openLibraryManagerPage() async {
-    setState(() => _currentIndex = 3);
-  }
-
-  Future<void> _openDorothyHubPage() async {
-    setState(() => _currentIndex = 0);
-  }
-
   Future<void> _openDorothyGuide() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const BotGuidePage(botName: 'Dorothy'),
       ),
     );
-  }
-
-  Future<void> _openSpotAccountPage() async {
-    setState(() => _currentIndex = 2);
-  }
-
-  Future<void> _openMashaPage() async {
-    setState(() => _currentIndex = 4);
-  }
-
-  Future<void> _openThusneldaPage() async {
-    setState(() => _currentIndex = 5);
-  }
-
-  Future<void> _openEarnPage() async {
-    setState(() => _currentIndex = 6);
-  }
-
-  Future<void> _openCarryTradePage() async {
-    setState(() => _currentIndex = 7);
   }
 
   Future<void> _toggleGateway() async {
