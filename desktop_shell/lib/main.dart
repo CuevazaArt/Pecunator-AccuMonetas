@@ -128,7 +128,8 @@ class _BotControlPageState extends State<BotControlPage> {
     _tickBinanceClock();
     _refreshAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncTimestamp();
+      // NOTE: _syncTimestamp() removed from autostart — consumes API weight.
+      // User can manually sync via the clock button when needed.
     });
     _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       _backgroundRefresh();
@@ -2945,23 +2946,27 @@ class _MashaHubPageState extends State<MashaHubPage> {
   }
 
   Future<void> _reload() async {
-    final data = await _api.mashaBots();
-    final rows = ((data['bots'] as List?) ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    _bots = rows;
-    final ids = _bots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
-    _draftByBot.removeWhere((id, _) => !ids.contains(id));
-    _expandedBots.removeWhere((id) => !ids.contains(id));
-    _logScrollByBot.removeWhere((id, c) {
-      if (!ids.contains(id)) {
-        c.dispose();
-        return true;
+    try {
+      final data = await _api.mashaBots();
+      final rows = ((data['bots'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      _bots = rows;
+      final ids = _bots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
+      _draftByBot.removeWhere((id, _) => !ids.contains(id));
+      _expandedBots.removeWhere((id) => !ids.contains(id));
+      _logScrollByBot.removeWhere((id, c) {
+        if (!ids.contains(id)) {
+          c.dispose();
+          return true;
+        }
+        return false;
+      });
+      for (final id in _expandedBots) {
+        await _refreshLogs(id);
       }
-      return false;
-    });
-    for (final id in _expandedBots) {
-      await _refreshLogs(id);
+    } catch (e) {
+      debugPrint('Masha _reload error: $e');
     }
     if (mounted) setState(() {});
   }
@@ -3531,23 +3536,27 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
   }
 
   Future<void> _reload() async {
-    final data = await _api.thusneldaBots();
-    final rows = ((data['bots'] as List?) ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    _bots = rows;
-    final ids = _bots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
-    _draftByBot.removeWhere((id, _) => !ids.contains(id));
-    _expandedBots.removeWhere((id) => !ids.contains(id));
-    _logScrollByBot.removeWhere((id, c) {
-      if (!ids.contains(id)) {
-        c.dispose();
-        return true;
+    try {
+      final data = await _api.thusneldaBots();
+      final rows = ((data['bots'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      _bots = rows;
+      final ids = _bots.map((b) => (b['bot_id'] ?? '').toString()).toSet();
+      _draftByBot.removeWhere((id, _) => !ids.contains(id));
+      _expandedBots.removeWhere((id) => !ids.contains(id));
+      _logScrollByBot.removeWhere((id, c) {
+        if (!ids.contains(id)) {
+          c.dispose();
+          return true;
+        }
+        return false;
+      });
+      for (final id in _expandedBots) {
+        await _refreshLogs(id);
       }
-      return false;
-    });
-    for (final id in _expandedBots) {
-      await _refreshLogs(id);
+    } catch (e) {
+      debugPrint('Thusnelda _reload error: $e');
     }
     if (mounted) setState(() {});
   }

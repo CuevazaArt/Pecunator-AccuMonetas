@@ -264,7 +264,7 @@ class MashaBotOut(BaseModel):
     tag: str
     created_at: str
     running: bool
-    preset_id: str
+    preset_id: str = ""
     symbol: str
     base_asset: str
     quote_asset: str
@@ -343,9 +343,9 @@ class ThusneldaBotOut(BaseModel):
     tag: str
     created_at: str
     running: bool
-    preset_id: str
+    preset_id: str = ""
     symbols_csv: str
-    symbols: list[str]
+    symbols: list[str] = Field(default_factory=list)
     loop_interval_sec: int
     between_symbol_sec: int
     quote_order_qty_modulo: str
