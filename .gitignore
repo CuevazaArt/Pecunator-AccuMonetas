@@ -20,3 +20,4 @@ exampleJV/
 exampleJV_enhanced/
 examples/**/config.py
 examples/**/.env
+config.py
