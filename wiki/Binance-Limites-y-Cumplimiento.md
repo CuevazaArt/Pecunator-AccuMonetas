@@ -1,124 +1,124 @@
-# Binance — Límites y Cumplimiento
+# Binance — Limits and Compliance
 
-> Referencia operativa para PecunatorCore sobre rate limits de Binance REST y WebSocket.  
-> Los límites **cambian**; Binance es la fuente de verdad.  
-> Última revisión: 2026-04-29
+> Operational reference for PecunatorCore on Binance REST and WebSocket rate limits.  
+> The limits **change**; Binance is the source of truth.  
+> Last revision: 2026-04-29
 
 ---
 
-## Fuentes Oficiales
+## Official Sources
 
-| Tema | URL |
+| Theme | URL |
 |------|-----|
-| Límites REST (Spot) | https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits |
-| Límites WebSocket API | https://developers.binance.com/docs/binance-spot-api-docs/websocket-api/rate-limits |
+| REST Limits (Spot) | https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits |
+| WebSocket API Limits | https://developers.binance.com/docs/binance-spot-api-docs/websocket-api/rate-limits |
 | Streams WebSocket (Spot) | https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md |
-| FAQ API (límites duros, WAF, bans) | https://www.binance.com/en/support/faq/detail/360004492232 |
+| FAQ API (hard limits, WAF, bans) | https://www.binance.com/en/support/faq/detail/360004492232 |
 | Changelog API | https://developers.binance.com/docs/binance-spot-api-docs |
 
-> Nota regional: si usas otro dominio (ej. `.info`), verificar que la política coincida con tu jurisdicción y producto.
+> Regional note: if you use another domain (e.g. `.info`), verify that the policy matches your jurisdiction and product.
 
 ---
 
-## Conceptos Clave
+## Key Concepts
 
-### Peso de peticiones (`REQUEST_WEIGHT`)
+### Request weight (`REQUEST_WEIGHT`)
 
-Cada endpoint REST tiene un **peso distinto** — no es "un request = una unidad".
+Each REST endpoint has a **different weight** — it's not "one request = one unit".
 
-- El consumo se acumula **por IP** en Spot REST típico
-- Las respuestas incluyen cabeceras `X-MBX-USED-WEIGHT-*`
-- **HTTP 429** = límite superado
-- **HTTP 418** = ban por IP por insistir sin backoff (duración escalable)
+- Consumption is accumulated **per IP** in typical REST Spot
+- Responses include `X-MBX-USED-WEIGHT-*` headers
+- **HTTP 429** = limit exceeded
+- **HTTP 418** = IP ban for insisting without backoff (scalable duration)
 
-> ⚠️ No fijes límites como constantes en código — los valores exactos cambian.
+> ⚠️ Don't set limits as constants in code — the exact values ​​change.
 
-### Órdenes (`ORDERS`)
+### Orders (`ORDERS`)
 
-- Límites **por cuenta** para creación de órdenes (por ventanas de tiempo)
-- Órdenes rechazadas pueden no incrementar ciertos contadores (ver documentación vigente)
+- Limits **per account** for order creation (per time windows)
+- Rejected orders may not increment certain counters (see current documentation)
 
 ### Web Application Firewall (WAF)
 
-- Patrones de tráfico sospechosos producen **403** con duración de bloqueo típica de minutos (abuso leve)
-- **No** intentes evadir límites — reduce frecuencia y usa streams
+- Suspicious traffic patterns produce **403** with typical block duration of minutes (mild abuse)
+- **Don't** try to evade limits — reduce frequency and use streams
 
-### WebSocket — Streams de Mercado
+### WebSocket — Market Streams
 
-| Parámetro | Valor típico (verificar doc actual) |
-|-----------|--------------------------------------|
-| Duración máxima de conexión | ~24 horas (prever reconexión) |
-| Mensajes de control (subscribe/unsubscribe) | ~5 por segundo por conexión |
-| Streams por conexión | Hasta 1024 |
-| Intentos de nueva conexión | ~300 por 5 minutos por IP |
+| Parameter | Typical value (check current doc) |
+|-----------|-------------------------------|
+| Maximum connection duration | ~24 hours (expect reconnection) |
+| Control messages (subscribe/unsubscribe) | ~5 per second per connection |
+| Streams per connection | Up to 1024 |
+| New connection attempts | ~300 for 5 minutes per IP |
 
-El servidor envía **ping** periódico; el cliente debe responder **pong** o la conexión cae.
+The server sends periodic **ping**; the client must respond **pong** or the connection drops.
 
-### WebSocket API (API sobre WS)
+### WebSocket API (API over WS)
 
-- Límites de peso y conexiones documentados separadamente del REST
-- Una conexión nueva puede tener coste de peso > 0
-
----
-
-## Cómo se Relaciona con PecunatorCore
-
-| Área | Comportamiento recomendado |
-|------|----------------------------|
-| **Polling REST** | Ajustar `PECUNATOR_ACCOUNT_POLL_SEC` en `runtime/core/settings.py` si aparecen 429 o latencia excesiva |
-| **Credenciales** | Usar el vault cifrado (`runtime/data/`) o variables de entorno; no incrustar claves en Flutter ni repos |
-| **Arranque motor** | Ejecutar `scripts/engine/run_engine.ps1` o `python main.py`; credenciales se resuelven por entorno o cofre |
-| **Órdenes / bots** | Respetar filtros de símbolo (`PRICE_FILTER`, `LOT_SIZE`, notional mínimo); errores de precisión son responsabilidad de la estrategia |
+- Weight limits and connections documented separately from REST
+- A new connection can have weight cost > 0
 
 ---
 
-## Monitor de Peso REST en la UI
+## How it is related to PecunatorCore
 
-El motor expone el peso REST actual:
+| Area | Recommended behavior |
+|------|--------------------------|
+| **REST Polling** | Adjust `PECUNATOR_ACCOUNT_POLL_SEC` in `runtime/core/settings.py` if 429 or excessive latency appears |
+| **Credentials** | Use the encrypted vault (`runtime/data/`) or environment variables; do not embed keys in Flutter or repos |
+| **Engine start** | Run `scripts/engine/run_engine.ps1` or `python main.py`; credentials are resolved by environment or chest |
+| **Orders / bots** | Respect symbol filters (`PRICE_FILTER`, `LOT_SIZE`, minimum notional); precision errors are the responsibility of the strategy |
 
-- **En `GET /api/v1/gateway/snapshot`:** campo `used_weight_1m` y `weight_limit_1m`
-- **En la UI Flutter:** barra de peso REST con colores: verde / naranja / rojo
-- **Auditoría detallada:** `GET /api/v1/usage/rest-weight/events` y `/report`
+---
 
-**Variable de entorno para ajustar límite de referencia:**
+## REST Weight Monitor in UI
+
+The engine exposes the current REST weight:
+
+- **In `GET /api/v1/gateway/snapshot`:** field `used_weight_1m` and `weight_limit_1m`
+- **In Flutter UI:** REST weight bar with colors: green/orange/red
+- **Detailed audit:** `GET /api/v1/usage/rest-weight/events` and `/report`
+
+**Environment variable to adjust reference limit:**
 ```
-PECUNATOR_API_WEIGHT_LIMIT_1M=6000  # default
+PECUNATOR_API_WEIGHT_LIMIT_1M=6000 # default
 ```
 
-### Fuentes principales de consumo de peso
+### Main sources of weight consumption
 
-| Fuente | Frecuencia |
+| Source | Frequency |
 |--------|-----------|
-| `fetch_account:get_account` | Cada ciclo de polling |
-| `fetch_open_orders:get_open_orders` | Cada ciclo de polling |
-| `fetch_my_trades:get_my_trades` | Cada `PECUNATOR_MY_TRADES_POLL_STRIDE` ciclos |
-| `refresh_equity:get_all_tickers` | Cada `PECUNATOR_EQUITY_POLL_STRIDE` ciclos |
+| `fetch_account:get_account` | Each polling cycle |
+| `fetch_open_orders:get_open_orders` | Each polling cycle |
+| `fetch_my_trades:get_my_trades` | Every `PECUNATOR_MY_TRADES_POLL_STRIDE` cycles |
+| `refresh_equity:get_all_tickers` | Every `PECUNATOR_EQUITY_POLL_STRIDE` cycles |
 | `sync_time:get_server_time` | Startup / manual / retry |
-| Sandbox queries | A demanda del operador |
+| Sandbox queries | At the operator's request |
 
 ---
 
-## Lista de Verificación ante Incidentes
+## Incident Checklist
 
-| Código | Acción |
+| Code | Action |
 |--------|--------|
-| **HTTP 429** | Reducir frecuencia, esperar `Retry-After` si está en cabecera, revisar peso acumulado |
-| **HTTP 418** | No reintentar en bucle; esperar el tiempo indicado y corregir estrategia de polling |
-| **HTTP 403 WAF** | Revisar volumen y patrones; esperar ventana de bloqueo |
-| **WS desconectado** | Implementar backoff exponencial y reconexión; responder ping/pong correctamente |
+| **HTTP 429** | Reduce frequency, wait for `Retry-After` if it is in header, check accumulated weight |
+| **HTTP 418** | Do not retry in loop; wait the indicated time and correct polling strategy |
+| **HTTP 403 WAF** | Review volume and patterns; wait lock window |
+| **WS offline** | Implement exponential backoff and reconnection; answer ping/pong correctly |
 
 ---
 
-## Snapshots Históricos de Rate Limits
+## Historical Snapshots of Rate Limits
 
-Capturas fechadas del endpoint `exchangeInfo.rateLimits` para análisis histórico:
+Dated snapshots of the `exchangeInfo.rateLimits` endpoint for historical analysis:
 
-- **Carpeta:** `docs/binance-limits-snapshots/`
-- **Script para actualizar:** `scripts/data/fetch_binance_exchange_info_limits.py`
+- **Folder:** `docs/binance-limits-snapshots/`
+- **Script to update:** `scripts/data/fetch_binance_exchange_info_limits.py`
 
 ---
 
-## Cumplimiento y Términos de Uso
+## Compliance and Terms of Use
 
-- Las [Condiciones de uso de Binance](https://www.binance.com/en/terms) y políticas aplicables al uso de API prevalecen sobre cualquier automatización local
-- Pecunator es software de **automatización local**; el operador es responsable del cumplimiento normativo (KYC, jurisdicciones, productos permitidos)
+- The [Binance Terms of Use](https://www.binance.com/en/terms) and policies applicable to API use take precedence over any local automation
+- Pecunator is **local automation** software; the operator is responsible for regulatory compliance (KYC, jurisdictions, permitted products)

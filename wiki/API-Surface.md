@@ -1,40 +1,40 @@
-# API Surface — Pecunator
+#API Surface—Pecunator
 
-> Referencia completa de endpoints REST del motor Python.  
+> Complete Python Engine REST Endpoints Reference.  
 > Base URL: `http://127.0.0.1:8765`  
-> OpenAPI interactivo: `http://127.0.0.1:8765/docs`
+> Interactive OpenAPI: `http://127.0.0.1:8765/docs`
 
 ---
 
-## Vault y Credenciales
+## Vault and Credentials
 
-Gestión del vault cifrado de credenciales Binance.
+Binance credentials encrypted vault management.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/vault/status` | Estado del vault (abierto/cerrado, número de credenciales) |
-| `GET` | `/api/v1/vault/credentials` | Lista de credenciales almacenadas (sin exponer secrets) |
-| `POST` | `/api/v1/vault/credentials` | Añadir nueva credencial (API key + secret) |
-| `PATCH` | `/api/v1/vault/credentials/{credential_id}` | Actualizar credencial existente |
-| `DELETE` | `/api/v1/vault/credentials/{credential_id}` | Eliminar credencial |
-| `GET` | `/api/v1/credentials/active` | Credencial activa actualmente |
+| `GET` | `/api/v1/vault/status` | Vault status (open/closed, number of credentials) |
+| `GET` | `/api/v1/vault/credentials` | List of stored credentials (without exposing secrets) |
+| `POST` | `/api/v1/vault/credentials` | Add new credential (API key + secret) |
+| `PATCH` | `/api/v1/vault/credentials/{credential_id}` | Update existing credential |
+| `DELETE` | `/api/v1/vault/credentials/{credential_id}` | Delete credential |
+| `GET` | `/api/v1/credentials/active` | Currently active credential |
 
 ---
 
-## Gateway Binance
+##Binance Gateway
 
-Control del conector con Binance y estado de cuenta.
+Control of the connector with Binance and account status.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/gateway/start` | Iniciar el gateway (conectar con Binance) |
-| `POST` | `/api/v1/gateway/stop` | Detener el gateway |
-| `GET` | `/api/v1/gateway/snapshot` | Snapshot del estado actual: balances, equity, peso REST |
-| `POST` | `/api/v1/gateway/fetch_account` | Forzar actualización de datos de cuenta |
-| `GET` | `/api/v1/account/wallets` | Wallets de la cuenta con equity calculado (`?base_asset=USDT`) |
-| `POST` | `/api/v1/time/sync` | Sincronizar timestamp con servidor Binance |
+| `POST` | `/api/v1/gateway/start` | Start the gateway (connect to Binance) |
+| `POST` | `/api/v1/gateway/stop` | Stop the gateway |
+| `GET` | `/api/v1/gateway/snapshot` | Snapshot of the current state: balances, equity, weight REST |
+| `POST` | `/api/v1/gateway/fetch_account` | Force account data update |
+| `GET` | `/api/v1/account/wallets` | Account wallets with calculated equity (`?base_asset=USDT`) |
+| `POST` | `/api/v1/time/sync` | Synchronize timestamp with Binance server |
 
-### Respuesta ejemplo — `GET /api/v1/gateway/snapshot`
+### Example response — `GET /api/v1/gateway/snapshot`
 
 ```json
 {
@@ -52,97 +52,97 @@ Control del conector con Binance y estado de cuenta.
 
 ---
 
-## Protocolos Operativos
+## Operational Protocols
 
-Operaciones de seguridad y cierre controlado de posiciones.
+Security operations and controlled closing of positions.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/ops/protocol/status` | Estado del último protocolo ejecutado |
-| `POST` | `/api/v1/ops/protocol/close` | Protocolo de cierre: detiene bots + cierra posiciones USDT |
-| `POST` | `/api/v1/ops/red_button` | **Botón rojo:** detiene **todos** los bots inmediatamente |
-| `POST` | `/api/v1/ops/orders/cleanup/limit` | Cancela todas las órdenes LIMIT abiertas |
-| `POST` | `/api/v1/ops/orders/cleanup/stop` | Cancela todas las órdenes STOP abiertas |
-| `POST` | `/api/v1/ops/orders/cleanup/all` | Cancela todas las órdenes abiertas |
+| `GET` | `/api/v1/ops/protocol/status` | Status of the last executed protocol |
+| `POST` | `/api/v1/ops/protocol/close` | Closing Protocol: Stop Bots + Close USDT Positions |
+| `POST` | `/api/v1/ops/red_button` | **Red button:** stops **all** bots immediately |
+| `POST` | `/api/v1/ops/orders/cleanup/limit` | Cancel all open LIMIT orders |
+| `POST` | `/api/v1/ops/orders/cleanup/stop` | Cancel all open STOP orders |
+| `POST` | `/api/v1/ops/orders/cleanup/all` | Cancel all open orders |
 
-> ⚠️ Los protocolos `close` y `red_button` detienen Dorothy **antes** de ejecutar para evitar loops de disposición/conversión.
+> ⚠️ The `close` and `red_button` protocols stop Dorothy **before** executing to avoid layout/conversion loops.
 
-**Parámetros comunes:** `?base_asset=USDT`
+**Common parameters:** `?base_asset=USDT`
 
 ---
 
-## Hub Dorothy (Multi-instancia)
+## Dorothy Hub (Multi-instance)
 
-Gestión del ciclo de vida de instancias del bot Dorothy.
+Lifecycle management of Dorothy bot instances.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/hub/bots` | Lista todas las instancias de bots |
-| `POST` | `/api/v1/hub/bots` | Crear nueva instancia de bot |
-| `PATCH` | `/api/v1/hub/bots/{bot_id}` | Actualizar configuración de una instancia |
-| `DELETE` | `/api/v1/hub/bots/{bot_id}` | Eliminar instancia |
-| `POST` | `/api/v1/hub/bots/{bot_id}/start` | Arrancar instancia |
-| `POST` | `/api/v1/hub/bots/{bot_id}/stop` | Detener instancia |
-| `POST` | `/api/v1/hub/bots/{bot_id}/run_once` | Ejecutar un ciclo único |
-| `GET` | `/api/v1/hub/bots/{bot_id}/logs` | Obtener logs de la instancia |
+| `GET` | `/api/v1/hub/bots` | List all bot instances |
+| `POST` | `/api/v1/hub/bots` | Create new bot instance |
+| `PATCH` | `/api/v1/hub/bots/{bot_id}` | Update configuration of an instance |
+| `DELETE` | `/api/v1/hub/bots/{bot_id}` | Delete instance |
+| `POST` | `/api/v1/hub/bots/{bot_id}/start` | Start instance |
+| `POST` | `/api/v1/hub/bots/{bot_id}/stop` | Stop instance |
+| `POST` | `/api/v1/hub/bots/{bot_id}/run_once` | Run a single loop |
+| `GET` | `/api/v1/hub/bots/{bot_id}/logs` | Get instance logs |
 
-**Endpoints legacy** (compatibilidad): `/api/v1/bot/*`
+**Legacy endpoints** (compatibility): `/api/v1/bot/*`
 
 ---
 
-## Hub Thusnelda (Multi-instancia)
+## Thusnelda Hub (Multi-instance)
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/thusnelda/bots` | Lista instancias Thusnelda |
-| `POST` | `/api/v1/thusnelda/bots` | Crear instancia Thusnelda |
-| `POST` | `/api/v1/thusnelda/bots/{bot_id}/start` | Arrancar instancia |
-| `POST` | `/api/v1/thusnelda/bots/{bot_id}/stop` | Detener instancia |
-| `POST` | `/api/v1/thusnelda/bots/{bot_id}/run_once` | Ciclo único |
-| `GET` | `/api/v1/thusnelda/bots/{bot_id}/logs` | Logs de la instancia |
+| `GET` | `/api/v1/thusnelda/bots` | List Thusnelda instances |
+| `POST` | `/api/v1/thusnelda/bots` | Create Thusnelda instance |
+| `POST` | `/api/v1/thusnelda/bots/{bot_id}/start` | Start instance |
+| `POST` | `/api/v1/thusnelda/bots/{bot_id}/stop` | Stop instance |
+| `POST` | `/api/v1/thusnelda/bots/{bot_id}/run_once` | Single cycle |
+| `GET` | `/api/v1/thusnelda/bots/{bot_id}/logs` | Instance logs |
 
 ---
 
-## Sandbox REST
+## REST sandbox
 
-Queries guiadas a la API de Binance para exploración y diagnóstico.
+Queries guided to the Binance API for exploration and diagnosis.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/sandbox/rest/catalog` | Catálogo de queries disponibles |
-| `POST` | `/api/v1/sandbox/rest/query` | Ejecutar una query guiada |
+| `GET` | `/api/v1/sandbox/rest/catalog` | Catalog of available queries |
+| `POST` | `/api/v1/sandbox/rest/query` | Run a guided query |
 
-**Queries disponibles:** `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
+**Available queries:** `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
 
 ---
 
-## Monitor de Peso REST
+## REST Weight Monitor
 
-Auditoría de consumo de peso REST por endpoint/acción.
+REST weight consumption audit per endpoint/action.
 
-| Método | Endpoint | Descripción |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/usage/rest-weight/events` | Eventos de peso por endpoint |
-| `GET` | `/api/v1/usage/rest-weight/report` | Reporte de consumo (`top_actions`, histórico) |
+| `GET` | `/api/v1/usage/rest-weight/events` | Weight events per endpoint |
+| `GET` | `/api/v1/usage/rest-weight/report` | Consumption report (`top_actions`, historical) |
 
 ---
 
-## Códigos de respuesta
+## Response codes
 
-| Código | Significado |
+| Code | Meaning |
 |--------|-------------|
-| `200` | Éxito |
-| `400` | Parámetros inválidos |
-| `401` | Sin credenciales activas |
-| `404` | Recurso no encontrado |
-| `429` | Rate limit de Binance alcanzado |
-| `500` | Error interno del motor |
+| `200` | Success |
+| `400` | Invalid parameters |
+| `401` | No active credentials |
+| `404` | Resource not found |
+| `429` | Binance rate limit reached |
+| `500` | Internal engine error |
 
 ---
 
-## Notas de uso
+## Usage Notes
 
-- Todas las operaciones requieren credenciales activas en el vault
-- El timestamp se sincroniza automáticamente en arranque; también vía `POST /api/v1/time/sync`
-- El campo `base_asset` por defecto es `USDT` en todos los endpoints que lo requieran
-- El peso REST se incluye en el snapshot del gateway para monitoreo en tiempo real
+- All operations require active credentials in the vault
+- The timestamp is automatically synchronized at startup; also via `POST /api/v1/time/sync`
+- The default `base_asset` field is `USDT` on all endpoints that require it
+- REST weight is included in the gateway snapshot for real-time monitoring

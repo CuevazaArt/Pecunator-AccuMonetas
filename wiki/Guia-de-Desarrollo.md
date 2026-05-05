@@ -1,57 +1,57 @@
-# Guía de Desarrollo — Pecunator
+# Development Guide — Pecunator
 
-> Flujo de trabajo, convenciones, tests y CI/CD para contribuir al proyecto.  
-> Rama de desarrollo activa: `refactor/stable-ui-and-tests`
+> Workflow, conventions, tests and CI/CD to contribute to the project.  
+> Active development branch: `refactor/stable-ui-and-tests`
 
 ---
 
-## Quick Start (5 minutos)
+## Quick Start (5 minutes)
 
 ```bash
-# 1. Clonar
+#1. Clone
 git clone https://github.com/CuevazaArt/Pecunator.git
-cd Pecunator
+cd pecunator
 
-# 2. Instalar dependencias Python
+#2. Install Python dependencies
 pip install -r requirements-dev.txt
 
-# 3. Instalar dependencias Flutter
+#3. Install Flutter dependencies
 cd desktop_shell && flutter pub get && cd ..
 
-# 4. Verificar tests
+# 4. Verify tests
 pytest runtime/tests/ -v
 cd desktop_shell && flutter test test/ -v
 ```
 
 ---
 
-## Estructura de Branches
+## Branch Structure
 
-| Branch | Propósito |
+| Branch | Purpose |
 |--------|-----------|
-| `main` | Rama estable — siempre deployable. **Push directo bloqueado.** |
-| `refactor/stable-ui-and-tests` | Desarrollo activo — todo el trabajo va aquí |
-| `feature/*` | Ramas de feature derivadas desde `refactor/stable-ui-and-tests` |
+| `main` | Stable branch — always deployable. **Direct push blocked.** |
+| `refactor/stable-ui-and-tests` | Active development — all work goes here |
+| `feature/*` | Feature branches derived from `refactor/stable-ui-and-tests` |
 
-### Reglas
+### Rules
 
-**✅ HACER:**
-- Desarrollar en `refactor/stable-ui-and-tests` o ramas de feature derivadas
-- Crear PRs hacia `refactor/stable-ui-and-tests`
-- Correr tests localmente antes de hacer push
-- Documentar cambios en `docs/CHANGELOG.md`
+**✅ DO:**
+- Develop in `refactor/stable-ui-and-tests` or derived feature branches
+- Create PRs towards `refactor/stable-ui-and-tests`
+- Run tests locally before pushing
+- Document changes in `docs/CHANGELOG.md`
 
-**❌ NO HACER:**
-- Push directo a `main` (está protegido)
-- PRs hacia `main` sin autorización explícita
-- Mergear código sin tests
-- Ignorar fallos de GitHub Actions
+**❌ DON'T:**
+- Direct push to `main` (it is protected)
+- PRs to `main` without explicit authorization
+- Merge code without tests
+- Ignore GitHub Actions crashes
 
 ---
 
-## Flujo de Trabajo
+## Workflow
 
-### 1. Crear rama de feature
+### 1. Create feature branch
 
 ```bash
 git checkout refactor/stable-ui-and-tests
@@ -59,10 +59,10 @@ git pull
 git checkout -b feature/nombre-de-la-feature
 ```
 
-### 2. Desarrollar y testear
+### 2. Develop and test
 
 ```bash
-# Hacer cambios...
+# Make changes...
 
 # Python tests
 pytest runtime/tests/ -v
@@ -72,44 +72,44 @@ cd desktop_shell
 flutter test test/ -v
 flutter analyze lib/
 
-# Commit con formato convencional
+# Commit with conventional format
 git add .
-git commit -m "feat(scope): descripción del cambio"
+git commit -m "feat(scope): change description"
 ```
 
-**Formato de commits:**
+**Commit format:**
 
-| Prefijo | Cuándo usar |
+| Prefix | When to use |
 |---------|-------------|
-| `feat(scope):` | Nueva funcionalidad |
-| `fix(scope):` | Corrección de bug |
-| `docs:` | Solo documentación |
-| `refactor(scope):` | Refactorización sin cambio funcional |
+| `feat(scope):` | New functionality |
+| `fix(scope):` | Bug fix |
+| `docs:` | Documentation only |
+| `refactor(scope):` | Refactoring without functional change |
 | `test:` | Tests |
-| `chore:` | Tareas de mantenimiento |
+| `chore:` | Maintenance tasks |
 
-### 3. Push y PR
+### 3. Push and PR
 
 ```bash
-git push -u origin feature/nombre-de-la-feature
+git push -u origin feature/feature-name
 
-# Crear PR hacia refactor/stable-ui-and-tests
+# Create PR towards refactor/stable-ui-and-tests
 gh pr create --base refactor/stable-ui-and-tests \
-             --head feature/nombre-de-la-feature \
-             --title "feat: descripción" \
-             --body "Descripción de los cambios"
+             --head feature/feature-name \
+             --title "feat: description" \
+             --body "Description of changes"
 ```
 
-### 4. Esperar GitHub Actions
+### 4. Wait for GitHub Actions
 
-GitHub Actions ejecuta automáticamente:
-- ✅ Python tests (pytest en Python 3.11 y 3.12)
+GitHub Actions automatically run:
+- ✅ Python tests (pytest in Python 3.11 and 3.12)
 - ✅ Flutter tests (flutter test)
-- ✅ Análisis de código (ruff, dart analyzer)
+- ✅ Code analysis (ruff, dart analyzer)
 
 ### 5. Merge a refactor branch
 
-Una vez que pasan los tests y hay revisión:
+Once the tests are passed and there is a review:
 
 ```bash
 gh pr merge <PR_NUMBER> --merge
@@ -119,26 +119,26 @@ gh pr merge <PR_NUMBER> --merge
 
 ## Tests
 
-### Python
+###Python
 
 ```bash
-# Todos los tests
+# All tests
 pytest runtime/tests/ -v
 
-# Test específico
+# Specific test
 pytest runtime/tests/test_dorothy.py -v
 
-# Test específico por nombre
+# Specific test by name
 pytest runtime/tests/test_dorothy.py::test_defaults -v
 
-# Con reporte de duración
+# With duration report
 pytest runtime/tests/ -v --durations=10
 
-# Con cobertura
+# Covered
 pytest runtime/tests/ --cov=runtime --cov-report=term-missing
 ```
 
-**Estructura de tests:**
+**Test structure:**
 
 ```
 runtime/
@@ -147,24 +147,24 @@ runtime/
     └── test_dorothy.py    # 25+ tests para Dorothy
 ```
 
-### Flutter
+###Flutter
 
 ```bash
 cd desktop_shell
 
-# Todos los tests
+# All tests
 flutter test test/ -v
 
-# Análisis estático
+# Static analysis
 flutter analyze lib/
 
-# Formato de código
+# Code format
 dart format lib/
 ```
 
 ---
 
-## Organización del Código
+## Code Organization
 
 ### Python (Backend)
 
@@ -180,15 +180,15 @@ runtime/
     └── tools/          # Herramientas operativas
 ```
 
-**Convenciones Python:**
-- Type hints en funciones públicas
-- Docstrings en clases
-- Anti-NaN guards en operaciones con `Decimal`
-- `sanitize_log_message()` en toda salida de log
-- No bare `except:` — siempre especificar tipo
+**Python Conventions:**
+- Type hints in public functions
+- Docstrings in classes
+- Anti-NaN guards on `Decimal` operations
+- `sanitize_log_message()` on all log output
+- No bare `except:` — always specify type
 - Imports: stdlib → third party → local
 
-### Flutter (Frontend)
+###Flutter (Frontend)
 
 ```
 desktop_shell/lib/
@@ -213,55 +213,55 @@ desktop_shell/lib/
 
 ---
 
-## Ejemplos de Tareas Comunes
+## Examples of Common Tasks
 
-### Añadir un test Python
+### Add a Python test
 
 ```python
 # runtime/tests/test_dorothy.py
 
-def test_nueva_feature():
-    """Test de la nueva feature."""
-    # Arrange
+def test_new_feature():
+    """Test of the new feature."""
+    #Arrange
     config = DorothyConfig(symbol="BTCUSDT")
     
-    # Act
+    #Act
     config.normalize()
     
     # Assert
     assert config.symbol == "BTCUSDT"
 ```
 
-### Añadir un widget Flutter
+### Add a Flutter widget
 
-```dart
-// desktop_shell/lib/widgets/nuevo_widget.dart
+``dart
+// desktop_shell/lib/widgets/new_widget.dart
 
 import 'package:flutter/material.dart';
 
-class NuevoWidget extends StatelessWidget {
-  const NuevoWidget({super.key});
+class NewWidget extends StatelessWidget {
+  const NewWidget({super.key});
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('Nuevo Widget'),
+        child: Text('New Widget'),
       ),
     );
   }
 }
 ```
 
-### Añadir un Riverpod provider
+### Add a Riverpod provider
 
-```dart
+``dart
 // desktop_shell/lib/providers/app_providers.dart
 
-final miDatoProvider = FutureProvider<MiDato>((ref) async {
+final myDataProvider = FutureProvider<MyData>((ref) async {
   final api = ref.watch(engineApiProvider);
-  return api.fetchMiDato();
+  return api.fetchMyData();
 });
 ```
 
@@ -269,64 +269,64 @@ final miDatoProvider = FutureProvider<MiDato>((ref) async {
 
 ## GitHub Actions
 
-### Workflows disponibles
+### Available workflows
 
-| Workflow | Trigger | Qué ejecuta |
+| Workflow | Trigger | What it runs |
 |----------|---------|-------------|
-| `test-python.yml` | Push a `refactor/**`, `main`, PR a `main` | pytest (Python 3.11, 3.12) |
-| `test-flutter.yml` | Push a `refactor/**`, `main`, PR a `main` | flutter test + dart analyzer |
-| `protect-main.yml` | PR hacia `main` | Bloquea PRs desde `refactor/*` sin autorización |
-| `sync-main.yml` | Push a `main` con cambios en `docs/` | Sincroniza docs a `refactor/stable-ui-and-tests` |
-| `secret-scan.yml` | Push y PR a ramas principales | Gitleaks — detección de secretos |
+| `test-python.yml` | Push to `refactor/**`, `main`, PR to `main` | pytest (Python 3.11, 3.12) |
+| `test-flutter.yml` | Push to `refactor/**`, `main`, PR to `main` | flutter test + dart analyzer |
+| `protect-main.yml` | PR to `main` | Block PRs from `refactor/*` without authorization |
+| `sync-main.yml` | Push to `main` with changes to `docs/` | Sync docs to `refactor/stable-ui-and-tests` |
+| `secret-scan.yml` | Push and PR to main branches | Gitleaks — secret detection |
 
-### Ver logs de CI
+### View CI logs
 
 ```bash
-# Listar últimas ejecuciones
+# List latest runs
 gh run list --branch refactor/stable-ui-and-tests -L 10
 
-# Ver logs de una ejecución
+# View logs of an execution
 gh run view <RUN_ID> --log
 ```
 
 ---
 
-## Sincronización con Main
+## Synchronization with Main
 
 ```bash
-# Obtener últimas docs de main
+# Get latest docs from main
 git fetch origin
 git merge origin/main -- docs/
 git push origin refactor/stable-ui-and-tests
 
-# Obtener mejoras de código de main
+# Get code improvements from main
 git fetch origin
 git merge origin/main -- runtime/core/
 git push origin refactor/stable-ui-and-tests
 
-# Mantener rama de feature actualizada
+# Keep feature branch updated
 git fetch origin
 git rebase origin/refactor/stable-ui-and-tests
-git push --force-with-lease origin feature/tu-rama
+git push --force-with-lease origin feature/your-branch
 ```
 
 ---
 
-## Checklist antes de crear un PR
+## Checklist before creating a PR
 
-- [ ] El código corre localmente sin errores
-- [ ] Tests Python pasan: `pytest runtime/tests/ -v`
-- [ ] Tests Flutter pasan: `flutter test test/ -v`
-- [ ] Código formateado: `dart format lib/`
-- [ ] Sin warnings de lint: `flutter analyze lib/`
-- [ ] Commits descriptivos con formato convencional
-- [ ] Descripción del PR explica los cambios
+- [ ] The code runs locally without errors
+- [ ] Python tests pass: `pytest runtime/tests/ -v`
+- [ ] Flutter tests pass: `flutter test test/ -v`
+- [ ] Formatted code: `dart format lib/`
+- [ ] No lint warnings: `flutter analyze lib/`
+- [ ] Descriptive commits with conventional format
+- [ ] PR description explains the changes
 
 ---
 
-## Proceso para Mergear a Main
+## Process to Merge to Main
 
-1. Obtener **autorización explícita**: "merge to main approved"
-2. Crear PR formal: `gh pr create --base main --head refactor/stable-ui-and-tests`
-3. Esperar que GitHub Actions pase + aprobación del owner
-4. Mergear cuando todos los checks estén en verde
+1. Obtain **explicit authorization**: "merge to main approved"
+2. Create formal PR: `gh pr create --base main --head refactor/stable-ui-and-tests`
+3. Wait for GitHub Actions to pass + owner approval
+4. Merge when all checks are green

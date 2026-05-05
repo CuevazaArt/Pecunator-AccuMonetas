@@ -1,11 +1,11 @@
-# Arquitectura — Pecunator
+# Architecture — Pecunator
 
-> Flutter Desktop + Motor Python. Sin dashboard web.  
-> Referencia técnica del estado actual del sistema.
+> Flutter Desktop + Python Engine. No web dashboard.  
+> Technical reference of the current state of the system.
 
 ---
 
-## Visión General
+## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -21,108 +21,108 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-El motor Python corre en `http://127.0.0.1:8765` por defecto.  
-Flutter **solo** habla con el motor vía loopback HTTP; nunca tiene API keys en Dart.
+The Python engine runs on `http://127.0.0.1:8765` by default.  
+Flutter **only** talks to the engine via HTTP loopback; you never have API keys in Dart.
 
 ---
 
-## Componentes Principales
+## Main Components
 
-### 1. Motor Python (`runtime/`)
+### 1. Python engine (`runtime/`)
 
-| Subcarpeta | Responsabilidad |
+| Subfolder | Responsibility |
 |------------|----------------|
-| `runtime/main.py` | Entrypoint del engine: startup, servidor API |
-| `runtime/api/` | Façade FastAPI: rutas, schemas, orquestación de servicios |
-| `runtime/connectors/` | Gateway Binance — polling de cuenta, market streams, equity, REST weight |
-| `runtime/core/` | Primitivas compartidas: vault, settings, state store, audit stores, equity math |
-| `runtime/modules/bots/` | Módulos de estrategia de bots (Dorothy, Masha, Thusnelda) |
-| `runtime/modules/tools/` | Módulos de herramientas operativas (ops, sandbox, rest-weight) |
-| `runtime/bot/` | Puente de compatibilidad para imports legacy (deprecado gradualmente) |
+| `runtime/main.py` | Engine entrypoint: startup, API server |
+| `runtime/api/` | Façade FastAPI: routes, schemas, service orchestration |
+| `runtime/connectors/` | Gateway Binance — account polling, market streams, equity, REST weight |
+| `runtime/core/` | Shared primitives: vault, settings, state store, audit stores, equity math |
+| `runtime/modules/bots/` | Bot Strategy Modules (Dorothy, Masha, Thusnelda) |
+| `runtime/modules/tools/` | Operational tools modules (ops, sandbox, rest-weight) |
+| `runtime/bot/` | Compatibility bridge for legacy imports (gradually deprecated) |
 
-**Arranque:**
+**Start:**
 ```bash
-python main.py          # bootstrap → runtime/main.py
-python -m runtime       # arranque como paquete
+python main.py # bootstrap → runtime/main.py
+python -m runtime # boot as package
 ```
 
-**Variables de entorno clave:**
+**Key environment variables:**
 
-| Variable | Default | Descripción |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `PECUNATOR_API_HOST` | `127.0.0.1` | Host de la API |
-| `PECUNATOR_API_PORT` | `8765` | Puerto de la API |
-| `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | Límite de referencia de peso REST |
-| `PECUNATOR_BINANCE_API_KEY` | — | API key de Binance (alternativa al vault) |
-| `PECUNATOR_BINANCE_API_SECRET` | — | API secret de Binance (alternativa al vault) |
-| `PECUNATOR_EQUITY_BASE_ASSET` | `USDT` | Activo base para cálculo de equity |
-| `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Ventana de promedio para equity rolling |
-| `PECUNATOR_EQUITY_POLL_STRIDE` | `5` | Cada cuántos ciclos refrescar equity |
-| `PECUNATOR_ENGINE_STUB` | — | Si `=1`, arranca en modo stub sin servidor |
+| `PECUNATOR_API_HOST` | `127.0.0.1` | API Host |
+| `PECUNATOR_API_PORT` | `8765` | API Port |
+| `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | REST Weight Reference Limit |
+| `PECUNATOR_BINANCE_API_KEY` | — | Binance API key (alternative to vault) |
+| `PECUNATOR_BINANCE_API_SECRET` | — | Binance secret API (alternative to vault) |
+| `PECUNATOR_EQUITY_BASE_ASSET` | `USDT` | Base asset for equity calculation |
+| `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Average window for equity rolling |
+| `PECUNATOR_EQUITY_POLL_STRIDE` | `5` | How many cycles to refresh equity |
+| `PECUNATOR_ENGINE_STUB` | — | If `=1`, boot in serverless stub mode |
 
 ### 2. Flutter Desktop Shell (`desktop_shell/`)
 
-| Subcarpeta | Responsabilidad |
+| Subfolder | Responsibility |
 |------------|----------------|
-| `lib/config/app_config.dart` | Configuración centralizada |
-| `lib/providers/app_providers.dart` | Estado global vía Riverpod |
+| `lib/config/app_config.dart` | Centralized configuration |
+| `lib/providers/app_providers.dart` | Global status via Riverpod |
 | `lib/services/` | HTTP client, exceptions, preferences |
-| `lib/screens/` | Pantallas: home, bots, spot account |
-| `lib/widgets/` | Widgets reutilizables: error display, logs viewer, gateway status |
-| `lib/utils/` | Helpers: formateadores de números |
-| `lib/api_client.dart` | Cliente HTTP del motor |
-| `lib/main.dart` | Entry point de la UI |
+| `lib/screens/` | Screens: home, bots, spot account |
+| `lib/widgets/` | Reusable widgets: error display, logs viewer, gateway status |
+| `lib/utils/` | Helpers: number formatters |
+| `lib/api_client.dart` | Engine HTTP Client |
+| `lib/main.dart` | UI entry point |
 
-**Pantallas principales:**
-- **Dorothy Hub** — gestión de instancias Dorothy
-- **Masha Hub** — gestión de instancias Masha
-- **Thusnelda Hub** — gestión de instancias Thusnelda
-- **Spot Account** — equity, wallets y monitor de peso REST
-- **Sandbox** — queries guiadas a Binance
-- **Vault** — gestión de credenciales
+**Main screens:**
+- **Dorothy Hub** — Dorothy instance management
+- **Masha Hub** — Masha instance management
+- **Thusnelda Hub** — Thusnelda instance management
+- **Spot Account** — equity, wallets and REST weight monitor
+- **Sandbox** — queries guided to Binance
+- **Vault** — credential management
 
-### 3. Vault de Credenciales
+### 3. Credential Vault
 
-- Ubicación: `runtime/data/credentials.enc`
-- Cifrado: **Fernet** (AES 128-CBC + HMAC-SHA256) con clave en `runtime/data/vault_local.key`
-- Gestión: desde la UI Flutter (add/delete con auto-activación) o por variables de entorno
-- **Regla:** una sola fuente activa por sesión para evitar mezclar cuentas
+- Location: `runtime/data/credentials.enc`
+- Encryption: **Fernet** (AES 128-CBC + HMAC-SHA256) with key in `runtime/data/vault_local.key`
+- Management: from the Flutter UI (add/delete with auto-activation) or by environment variables
+- **Rule:** only one active source per session to avoid mixing accounts
 
-### 4. Persistencia SQLite
+### 4. SQLite persistence
 
-| Base | Tablas principales |
-|------|-------------------|
+| Base | Main tables |
+|------|-----|
 | `runtime/data/dorothy_hub.sqlite` | `dorothy_instances`, `dorothy_logs`, `dorothy_runtime_state`, `dorothy_equity_snapshots`, `dorothy_metrics_log` |
 | `runtime/data/masha_hub.sqlite` | `masha_runtime_state`, `masha_equity_snapshots`, `masha_metrics_log` |
 | `runtime/data/thusnelda_hub.sqlite` | `thusnelda_runtime_state`, `thusnelda_equity_snapshots`, `thusnelda_metrics_log` |
-| `runtime/data/ops_audit.sqlite` | Trazabilidad de protocolos operativos |
+| `runtime/data/ops_audit.sqlite` | Traceability of operational protocols |
 
 ---
 
-## Doctrina Operativa
+## Operational Doctrine
 
-- **Objetivo de trading:** componer beneficio a lo largo de ciclos repetidos
-- **Las pérdidas no se prohíben;** se contienen, auditan y aprenden con controles estrictos
-- Toda ruta de operación (loops de bots, protocolos de limpieza, botón rojo, lecturas de cuenta) prioriza:
-  - Inputs determinísticos (credencial activa + base asset)
-  - Corrección de timestamp contra servidor Binance
-  - Trazabilidad en logs SQLite y registros de auditoría
+- **Trading objective:** to make profit over repeated cycles
+- **Losses are not prohibited;** they are contained, audited and learned with strict controls
+- Every operation route (bot loops, cleaning protocols, red button, account readings) prioritizes:
+  - Deterministic inputs (active credential + base asset)
+  - Timestamp fix against Binance server
+  - Traceability in SQLite logs and audit logs
 
 ---
 
-## Mecanismo de Inmortalidad (Hub Dorothy)
+## Immortality Mechanism (Hub Dorothy)
 
-- Las instancias del hub se persisten en SQLite con su **estado deseado** (`desired_running`)
-- Si una instancia estaba marcada para correr, el motor intenta **reanudarla automáticamente** al iniciar y cuando detecta caídas
-- Dorothy aplica **reintentos con backoff** y recrea cliente para recuperar sesión de red
-- Para retomar trabajo tras reinicio de Windows:
-  ```powershell
+- Hub instances are persisted in SQLite with their **desired state** (`desired_running`)
+- If an instance was marked to run, the engine attempts to **automatically resume it** upon startup and when it detects crashes
+- Dorothy applies **retries with backoff** and recreates client to recover network session
+- To resume work after restarting Windows:
+  ``powershell
   powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1
   ```
 
 ---
 
-## Diagrama de flujo simplificado
+## Simplified flowchart
 
 ```mermaid
 flowchart LR
@@ -145,21 +145,21 @@ flowchart LR
 
 ---
 
-## Fases de Migración
+## Migration Phases
 
-| Fase | Estado | Descripción |
+| Phase | Status | Description |
 |------|--------|-------------|
-| 0 | ✅ | Web stack removido; Flutter + engine API es el plan |
+| 0 | ✅ | Web stack removed; Flutter + engine API is the plan |
 | 1 | ✅ | Flutter SDK; `init_flutter_desktop.ps1` → `desktop_shell/` |
-| 2 | ✅ | FastAPI façade en `runtime/api/` conectado con Flutter HTTP client |
-| 3 | ✅ | Pantallas Flutter integradas para vault, instancias de hub y logs |
+| 2 | ✅ | FastAPI façade in `runtime/api/` connected with Flutter HTTP client |
+| 3 | ✅ | Integrated Flutter screens for vault, hub instances and logs |
 
 ---
 
-## Convención de Código
+## Code Convention
 
-- Python: type hints en funciones públicas, docstrings en clases
-- Anti-NaN guards en toda operación con `Decimal`
-- `sanitize_log_message()` en toda salida de log
-- No bare `except:` — siempre especificar tipo de excepción
-- Imports agrupados: stdlib → third party → local
+- Python: type hints in public functions, docstrings in classes
+- Anti-NaN guards on all operations with `Decimal`
+- `sanitize_log_message()` on all log output
+- No bare `except:` — always specify exception type
+- Grouped imports: stdlib → third party → local

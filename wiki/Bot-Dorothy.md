@@ -1,107 +1,107 @@
-# Bot Dorothy — Manual Operativo
+# Bot Dorothy — Operating Manual
 
-> Estrategia: **escalera spot** — detecta ancla SELL LIMIT + compra en caída + nueva SELL LIMIT con beneficio objetivo.
-
----
-
-## Qué hace Dorothy
-
-`Dorothy` opera en un **solo símbolo Spot** con lógica de escalera:
-
-1. Detecta la `SELL LIMIT` activa **más baja** como ancla
-2. Espera una **caída suficiente** respecto a ese ancla
-3. **Compra a mercado** cuando la caída supera el umbral
-4. Coloca una nueva **`SELL LIMIT`** con beneficio objetivo (`profit_factor`)
-
-El ciclo se repite, construyendo una escalera de posiciones hacia abajo con salidas programadas hacia arriba.
+> Strategy: **spot ladder** — detect SELL LIMIT anchor + dip buy + new SELL LIMIT with target profit.
 
 ---
 
-## Módulo y entrypoints
+## What does Dorothy do?
 
-| Concepto | Ruta |
+`Dorothy` trades on a **single Spot symbol** with ladder logic:
+
+1. Detects **lowest** active `SELL LIMIT` as anchor
+2. Wait for **sufficient drop** with respect to that anchor
+3. **Buy from market** when the drop exceeds the threshold
+4. Place a new **`SELL LIMIT`** with target profit (`profit_factor`)
+
+The cycle repeats, building a ladder of positions downward with programmed exits upward.
+
+---
+
+## Module and entrypoints
+
+| Concept | Route |
 |----------|------|
 | Runner | `runtime/modules/bots/dorothy.py` |
 | Hub service | `runtime/api/bot_service.py` |
-| API surface | `/api/v1/hub/bots/*` |
-| UI | Dorothy Hub en `desktop_shell/lib/main.dart` |
+| Surface API | `/api/v1/hub/bots/*` |
+| UI | Dorothy Hub in `desktop_shell/lib/main.dart` |
 | SQLite | `runtime/data/dorothy_hub.sqlite` |
 
 ---
 
-## Parámetros de configuración
+## Configuration parameters
 
-### Parámetros base
+### Base parameters
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `symbol` | Par Spot a operar (ej. `XRPUSDT`) |
-| `loop_interval_sec` | Intervalo entre ciclos (segundos) |
-| `quote_order_qty` | Tamaño de compra en quote (USDT) |
-| `profit_factor` | Objetivo de beneficio por escalón (ej. `1.015` = 1.5%) |
-| `margin_drop_factor` | Margen adicional de caída requerido para nueva compra |
+| `symbol` | Spot pair to trade (e.g. `XRPUSDT`) |
+| `loop_interval_sec` | Interval between cycles (seconds) |
+| `quote_order_qty` | Buy size in quote (USDT) |
+| `profit_factor` | Profit target per step (e.g. `1,015` = 1.5%) |
+| `margin_drop_factor` | Additional drop margin required for new purchase |
 
-### Parámetros de riesgo y métricas (mejoras integradas)
+### Risk parameters and metrics (built-in improvements)
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `max_drawdown_pct` | **Drawdown guard:** bloquea nuevas compras si el drawdown excede este porcentaje |
-| `stop_loss_pct` | **Stop-loss:** salida de protección por posición cuando el precio cae bajo el límite |
-| `metrics_interval_cycles` | Cada cuántos ciclos calcular métricas (Sharpe / win rate / max drawdown) |
+| `max_drawdown_pct` | **Drawdown guard:** blocks new purchases if the drawdown exceeds this percentage |
+| `stop_loss_pct` | **Stop-loss:** position protection exit when the price falls below the limit |
+| `metrics_interval_cycles` | How many cycles to calculate metrics (Sharpe / win rate / max drawdown) |
 
-### Parámetros operativos
+### Operating parameters
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `simulated` | Si `true`, simula sin ejecutar órdenes reales |
-| `trading_enabled` | Si `false`, solo lee estado sin operar |
+| `simulated` | If `true`, simulate without executing real commands |
+| `trading_enabled` | If `false`, only read status without operating |
 
 ---
 
-## Mejoras integradas
+## Integrated improvements
 
-| Mejora | Comportamiento |
+| Improve | Behavior |
 |--------|---------------|
-| **Drawdown guard** | Si el equity cae más del umbral `max_drawdown_pct`, Dorothy entra en estado `WAIT_DRAWDOWN_GUARD` y suspende nuevas compras |
-| **Stop-loss por posición** | Puede cancelar la `SELL LIMIT` ancla y liquidar a mercado si el precio rompe `stop_loss_pct` |
-| **Persistencia robusta** | Estado, snapshots de equity y métricas persisten en SQLite por instancia |
-| **Métricas periódicas** | Sharpe ratio, win rate y max drawdown calculados cada `metrics_interval_cycles` ciclos |
-| **Inmortalidad** | Si el motor reinicia, las instancias marcadas como `desired_running=true` se reanudan automáticamente |
-| **Retry con backoff** | Desconexiones transitorias activan recreación de cliente + backoff exponencial (`bot:retry_in ...`) |
+| **Drawdown save** | If the equity falls more than the `max_drawdown_pct` threshold, Dorothy enters the `WAIT_DRAWDOWN_GUARD` state and suspends new purchases |
+| **Stop-loss per position** | You can cancel the `SELL LIMIT` anchor and liquidate the market if the price breaks `stop_loss_pct` |
+| **Robust persistence** | State, equity snapshots and metrics persist in SQLite per instance |
+| **Periodic metrics** | Sharpe ratio, win rate and max drawdown calculated every `metrics_interval_cycles` cycles |
+| **Immortality** | If the engine restarts, instances marked `desired_running=true` automatically resume |
+| **Retry with backoff** | Transient disconnections trigger client recreation + exponential backoff (`bot:retry_in ...`) |
 
 ---
 
-## Tablas SQLite
+## SQLite tables
 
-**Base de datos:** `runtime/data/dorothy_hub.sqlite`
+**Database:** `runtime/data/dorothy_hub.sqlite`
 
-| Tabla | Contenido |
+| Table | Content |
 |-------|-----------|
-| `dorothy_instances` | Configuración y estado deseado de cada instancia |
-| `dorothy_logs` | Logs de ciclo por instancia |
-| `dorothy_runtime_state` | Estado de runtime persistido (peak equity, ciclos, etc.) |
-| `dorothy_equity_snapshots` | Snapshots periódicos de equity por instancia |
-| `dorothy_metrics_log` | Métricas calculadas (Sharpe, win rate, max drawdown) |
+| `dorothy_instances` | Configuration and desired state of each instance |
+| `dorothy_logs` | Cycle logs per instance |
+| `dorothy_runtime_state` | Persistent runtime state (peak equity, cycles, etc.) |
+| `dorothy_equity_snapshots` | Periodic snapshots of equity per instance |
+| `dorothy_metrics_log` | Calculated metrics (Sharpe, win rate, max drawdown) |
 
-### Consultas útiles
+### Useful queries
 
 ```sql
--- Últimas métricas
+-- Latest metrics
 SELECT * FROM dorothy_metrics_log ORDER BY id DESC LIMIT 20;
 
--- Historial de equity
+-- Equity history
 SELECT * FROM dorothy_equity_snapshots ORDER BY id DESC LIMIT 50;
 
--- Estado actual de instancias
+-- Current status of instances
 SELECT * FROM dorothy_runtime_state;
 
--- Instancias configuradas
+-- Configured instances
 SELECT * FROM dorothy_instances;
 ```
 
 ---
 
-## Ciclo de vida de una instancia
+## Life cycle of an instance
 
 ```
 Crear instancia (POST /api/v1/hub/bots)
@@ -119,22 +119,22 @@ Monitor continuo desde Dorothy Hub en la UI
 
 ---
 
-## Estados del bot
+## Bot States
 
-| Estado | Descripción |
+| Status | Description |
 |--------|-------------|
-| `IDLE` | Sin orden ancla detectada, esperando |
-| `WAIT_DROP` | Ancla detectada, esperando caída suficiente |
-| `BUYING` | Ejecutando compra a mercado |
-| `PLACING_SELL` | Colocando nueva SELL LIMIT |
-| `WAIT_DRAWDOWN_GUARD` | Drawdown superado, compras suspendidas |
+| `IDLE` | No anchor order detected, waiting |
+| `WAIT_DROP` | Anchor detected, waiting for enough drop |
+| `BUYING` | Executing market purchase |
+| `PLACING_SELL` | Placing new SELL LIMIT |
+| `WAIT_DRAWDOWN_GUARD` | Drawdown overcome, purchases suspended |
 
 ---
 
-## Recomendación operativa
+## Operational recommendation
 
-> **Mantener `simulated=true` al calibrar parámetros** y mover a `trading_enabled=true` solo después de validar estabilidad de drawdown y métricas en múltiples sesiones.
+> **Keep `simulated=true` when calibrating parameters** and move to `trading_enabled=true` only after validating drawdown stability and metrics across multiple sessions.
 
-- Empezar con `quote_order_qty` pequeño para verificar el comportamiento
-- Monitorear `dorothy_equity_snapshots` para detectar tendencia de drawdown
-- Ajustar `margin_drop_factor` y `profit_factor` según volatilidad del símbolo operado
+- Start with small `quote_order_qty` to check behavior
+- Monitor `dorothy_equity_snapshots` for drawdown trend
+- Adjust `margin_drop_factor` and `profit_factor` according to volatility of the traded symbol

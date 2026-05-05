@@ -1,94 +1,94 @@
-# Bot Thusnelda — Manual Operativo
+# Thusnelda Bot — Operating Manual
 
-> Estrategia: **cesta de símbolos** — compra por promedio histórico de compras en múltiples pares y evalúa meta de equity global para salida integral.
-
----
-
-## Qué hace Thusnelda
-
-`Thusnelda` opera sobre una **lista de símbolos Spot** (`symbols_csv`) de forma rotativa:
-
-1. Para cada símbolo en la cesta, evalúa si el precio actual está por **debajo del promedio histórico de compras** ajustado por `factor_multiplication`
-2. Si el precio es favorable, **compra** según `quote_order_qty_modulo`
-3. Evalúa periódicamente si el **equity total de la cesta** supera `meta_equity_usdt`
-4. Si se alcanza la meta, puede liquidar posiciones de la cesta hacia USDT
-5. Repite con `between_symbol_sec` de espera entre símbolo y símbolo
+> Strategy: **basket of symbols** — buy by historical average of purchases in multiple pairs and evaluate global equity target for comprehensive exit.
 
 ---
 
-## Módulo y entrypoints
+## What Thusnelda does
 
-| Concepto | Ruta |
+`Thusnelda` operates on a **list of Spot symbols** (`symbols_csv`) on a rotating basis:
+
+1. For each symbol in the basket, evaluate whether the current price is **below the historical buying average** adjusted by `factor_multiplication`
+2. If the price is favorable, **purchase** according to `quote_order_qty_modulo`
+3. Periodically evaluate if the **total equity of the basket** exceeds `meta_equity_usdt`
+4. If the goal is reached, you can liquidate basket positions towards USDT
+5. Repeat with `between_symbol_sec` to wait between symbols
+
+---
+
+## Module and entrypoints
+
+| Concept | Route |
 |----------|------|
 | Runner | `runtime/modules/bots/thusnelda.py` |
 | Hub service | `runtime/api/thusnelda_service.py` |
-| API surface | `/api/v1/thusnelda/bots/*` |
-| UI | Thusnelda Hub en `desktop_shell/lib/main.dart` |
+| Surface API | `/api/v1/thusnelda/bots/*` |
+| UI | Thusnelda Hub in `desktop_shell/lib/main.dart` |
 | SQLite | `runtime/data/thusnelda_hub.sqlite` |
 
 ---
 
-## Parámetros de configuración
+## Configuration parameters
 
-### Parámetros base
+### Base parameters
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `symbols_csv` | Lista CSV de símbolos Spot a operar (ej. `XRPUSDT,ADAUSDT,DOTUSDT`) |
-| `loop_interval_sec` | Intervalo entre ciclos completos de la cesta |
-| `between_symbol_sec` | Pausa entre el procesamiento de cada símbolo de la cesta |
-| `quote_order_qty_modulo` | Tamaño base de compra en quote (puede modularse por símbolo) |
-| `factor_multiplication` | Factor multiplicador sobre el promedio histórico para activar compra |
-| `meta_equity_usdt` | Meta de equity total de la cesta en USDT para evaluar salida |
-| `reference_ts_iso` | Timestamp ISO de referencia para cálculo de promedio histórico |
+| `symbols_csv` | CSV list of Spot symbols to trade (e.g. `XRPUSDT,ADAUSDT,DOTUSDT`) |
+| `loop_interval_sec` | Interval between complete cycles of the basket |
+| `between_symbol_sec` | Pause between processing each basket symbol |
+| `quote_order_qty_modulo` | Base purchase size in quote (can be modulated by symbol) |
+| `factor_multiplication` | Multiplier factor on the historical average to activate purchase |
+| `meta_equity_usdt` | Total basket equity goal in USDT to evaluate exit |
+| `reference_ts_iso` | Reference ISO timestamp for historical average calculation |
 
-### Parámetros de riesgo y métricas
+### Risk parameters and metrics
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `max_drawdown_pct` | **Drawdown guard:** bloquea nuevas compras si el drawdown agregado excede este umbral |
-| `stop_loss_pct` | **Stop-loss por símbolo:** protección contra promedio de compras por símbolo |
-| `metrics_interval_cycles` | Frecuencia de cálculo de métricas (Sharpe / win rate / max drawdown) |
+| `max_drawdown_pct` | **Drawdown guard:** Blocks new purchases if the added drawdown exceeds this threshold |
+| `stop_loss_pct` | **Stop-loss per symbol:** protection against average purchases per symbol |
+| `metrics_interval_cycles` | Metric calculation frequency (Sharpe / win rate / max drawdown) |
 
 ---
 
-## Mejoras integradas
+## Integrated improvements
 
-| Mejora | Comportamiento |
+| Improve | Behavior |
 |--------|---------------|
-| **Drawdown guard agregado** | Evita sobreacumulación en mercados adversos: bloquea compras si el drawdown del portfolio supera `max_drawdown_pct` |
-| **Stop-loss por símbolo** | Protección adicional: si el precio de un símbolo cae bajo `stop_loss_pct` respecto al promedio de compras, activa defensa |
-| **Persistencia robusta** | Estado, equity snapshots y métricas en SQLite por instancia |
-| **Métricas periódicas** | Sharpe ratio, win rate y max drawdown del portfolio |
+| **Drawdown guard added** | Avoid overaccumulation in adverse markets: block purchases if portfolio drawdown exceeds `max_drawdown_pct` |
+| **Stop-loss per symbol** | Additional protection: if the price of a symbol falls below `stop_loss_pct` with respect to the buying average, activate defense |
+| **Robust persistence** | State, equity snapshots and metrics in SQLite per instance |
+| **Periodic metrics** | Sharpe ratio, win rate and max drawdown of the portfolio |
 
 ---
 
-## Tablas SQLite
+## SQLite tables
 
-**Base de datos:** `runtime/data/thusnelda_hub.sqlite`
+**Database:** `runtime/data/thusnelda_hub.sqlite`
 
-| Tabla | Contenido |
+| Table | Content |
 |-------|-----------|
-| `thusnelda_runtime_state` | Estado de runtime persistido por instancia (peak equity, ciclos, etc.) |
-| `thusnelda_equity_snapshots` | Snapshots periódicos de equity total de la cesta |
-| `thusnelda_metrics_log` | Métricas calculadas (Sharpe, win rate, max drawdown) |
+| `thusnelda_runtime_state` | Persistent runtime state per instance (peak equity, cycles, etc.) |
+| `thusnelda_equity_snapshots` | Periodic Snapshots of Total Basket Equity |
+| `thusnelda_metrics_log` | Calculated metrics (Sharpe, win rate, max drawdown) |
 
-### Consultas útiles
+### Useful queries
 
 ```sql
--- Últimas métricas
+-- Latest metrics
 SELECT * FROM thusnelda_metrics_log ORDER BY id DESC LIMIT 20;
 
--- Historial de equity
+-- Equity history
 SELECT * FROM thusnelda_equity_snapshots ORDER BY id DESC LIMIT 50;
 
--- Estado actual
+-- Current status
 SELECT * FROM thusnelda_runtime_state;
 ```
 
 ---
 
-## Lógica de compra por símbolo
+## Buy logic by symbol
 
 ```
 Para cada símbolo en symbols_csv:
@@ -105,24 +105,24 @@ Para cada símbolo en symbols_csv:
 
 ---
 
-## Diferencias clave vs Dorothy/Masha
+## Key Differences vs Dorothy/Masha
 
-| Aspecto | Dorothy | Masha | Thusnelda |
+| Appearance | Dorothy | Masha | Thusnelda |
 |---------|---------|-------|-----------|
-| Símbolos | 1 | 1 | Múltiples (cesta) |
-| Señal de entrada | Caída vs ancla SELL LIMIT | Señal técnica multi-timeframe | Precio vs promedio histórico propio |
-| Salida | SELL LIMIT por escalón | SELL LIMIT DCA consolidada | Meta de equity global de cesta |
-| Scope de riesgo | Por posición | Por posición DCA | Por símbolo + agregado de cesta |
+| Symbols | 1 | 1 | Multiple (basket) |
+| Entrance sign | Fall vs anchor SELL LIMIT | Multi-timeframe technical signal | Price vs own historical average |
+| Output | SELL LIMIT per step | SELL LIMIT consolidated DCA | Basket Global Equity Target |
+| Risk scope | By position | By DCA position | By symbol + basket addition |
 
 ---
 
-## Recomendación operativa
+## Operational recommendation
 
-> **Ajustar `symbols_csv` hacia activos líquidos** y monitorear el drawdown agregado del portfolio para evitar exposición excesiva.
+> **Adjust `symbols_csv` towards liquid assets** and monitor aggregate portfolio drawdown to avoid excessive exposure.
 
-- Comenzar con 3-5 símbolos de alta liquidez (BTC, ETH, XRP pares con USDT)
-- Validar que `meta_equity_usdt` sea alcanzable pero no demasiado agresivo
-- `factor_multiplication` < 1 significa comprar cuando el precio baja respecto al promedio
-- Monitorear `thusnelda_equity_snapshots` para el valor total de la cesta
-- Revisar `thusnelda_metrics_log` para detectar símbolos problemáticos dentro de la cesta
-- En mercados bajistas sostenidos, considerar reducir el tamaño de la cesta o aumentar `max_drawdown_pct` conservadoramente
+- Start with 3-5 highly liquid symbols (BTC, ETH, XRP pairs with USDT)
+- Validate that `meta_equity_usdt` is reachable but not too aggressive
+- `factor_multiplication` < 1 means buy when the price falls relative to the average
+- Monitor `thusnelda_equity_snapshots` for total basket value
+- Check `thusnelda_metrics_log` for problematic symbols within the basket
+- In sustained bear markets, consider reducing basket size or increasing `max_drawdown_pct` conservatively

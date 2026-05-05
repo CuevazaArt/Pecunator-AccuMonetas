@@ -1,134 +1,134 @@
-# Bot Masha — Manual Operativo
+# Bot Masha — Operating Manual
 
-> Estrategia: **DCA multi-timeframe** — señal técnica en `1w` + `1h` para comprar en zonas de debilidad y recalcular DCA con SELL LIMIT consolidada.
-
----
-
-## Qué hace Masha
-
-`Masha` usa señal técnica en **dos timeframes** (`1w` + `1h`) para:
-
-1. Identificar zonas de **debilidad técnica** (precio bajo respecto a media móvil en ambos timeframes)
-2. **Comprar cantidad base** cuando ambas señales confirman zona de entrada
-3. **Recalcular el precio promedio** de todas las compras (DCA)
-4. Colocar una única **`SELL LIMIT` consolidada** sobre el promedio con `profit_factor`
-5. Repetir ciclo esperando nuevas zonas de entrada o la ejecución de la venta
+> Strategy: **multi-timeframe DCA** — technical signal at `1w` + `1h` to buy in areas of weakness and recalculate DCA with consolidated SELL LIMIT.
 
 ---
 
-## Módulo y entrypoints
+## What does Masha do
 
-| Concepto | Ruta |
+`Masha` uses technical signal on **two timeframes** (`1w` + `1h`) to:
+
+1. Identify areas of **technical weakness** (low price compared to the moving average on both timeframes)
+2. **Buy base amount** when both signals confirm entry zone
+3. **Recalculate the average price** of all purchases (DCA)
+4. Place a single consolidated **`SELL LIMIT`** above the average with `profit_factor`
+5. Repeat the cycle waiting for new entry zones or the execution of the sale
+
+---
+
+## Module and entrypoints
+
+| Concept | Route |
 |----------|------|
 | Runner | `runtime/modules/bots/masha.py` |
 | Hub service | `runtime/api/bot_service.py` |
 | SQLite | `runtime/data/masha_hub.sqlite` |
-| UI | Masha Hub en `desktop_shell/lib/main.dart` |
+| UI | Masha Hub in `desktop_shell/lib/main.dart` |
 
 ---
 
-## Parámetros de configuración
+## Configuration parameters
 
-### Parámetros base
+### Base parameters
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `symbol` | Par Spot a operar |
-| `base_asset` | Activo base (ej. `XRP`) |
-| `quote_asset` | Activo quote (ej. `USDT`) |
-| `loop_interval_sec` | Intervalo entre ciclos |
-| `quote_min_free_to_operate` | Quote mínimo libre para operar (umbral de seguridad) |
-| `buy_qty_base` | Cantidad base por compra DCA |
-| `profit_factor` | Objetivo de beneficio sobre el promedio DCA |
+| `symbol` | Spot pair to trade |
+| `base_asset` | Base asset (e.g. `XRP`) |
+| `quote_asset` | Active quote (e.g. `USDT`) |
+| `loop_interval_sec` | Interval between cycles |
+| `quote_min_free_to_operate` | Minimum quote free to operate (safety threshold) |
+| `buy_qty_base` | Base amount per DCA purchase |
+| `profit_factor` | Profit target over average DCA |
 
-### Parámetros técnicos — Timeframe semanal (`1w`)
+### Technical parameters — Weekly timeframe (`1w`)
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `timeframe_w` | Timeframe semanal (ej. `1w`) |
-| `periods_w` | Períodos a analizar en `1w` |
-| `mm_periods_w` | Períodos de media móvil en `1w` |
-| `margin_low_w` | Margen inferior para señal de debilidad en `1w` |
+| `timeframe_w` | Weekly timeframe (e.g. `1w`) |
+| `periods_w` | Periods to analyze in `1w` |
+| `mm_periods_w` | Moving average periods in `1w` |
+| `margin_low_w` | Lower margin for weakness signal at `1w` |
 
-### Parámetros técnicos — Timeframe horario (`1h`)
+### Technical parameters — Hourly timeframe (`1h`)
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `timeframe_h` | Timeframe horario (ej. `1h`) |
-| `periods_h` | Períodos a analizar en `1h` |
-| `mm_periods_h` | Períodos de media móvil en `1h` |
-| `margin_low_h` | Margen inferior para señal de debilidad en `1h` |
+| `timeframe_h` | Hourly timeframe (e.g. `1h`) |
+| `periods_h` | Periods to analyze in `1h` |
+| `mm_periods_h` | Moving average periods in `1h` |
+| `margin_low_h` | Lower margin for weakness signal in `1h` |
 
-### Parámetros de riesgo y métricas
+### Risk parameters and metrics
 
-| Parámetro | Descripción |
+| Parameter | Description |
 |-----------|-------------|
-| `max_drawdown_pct` | **Drawdown guard:** frena nuevas compras si el drawdown excede este umbral |
-| `stop_loss_pct` | **Stop-loss DCA:** protege el DCA si el precio rompe el límite inferior |
-| `metrics_interval_cycles` | Periodicidad de cálculo de métricas |
+| `max_drawdown_pct` | **Drawdown guard:** stops new purchases if the drawdown exceeds this threshold |
+| `stop_loss_pct` | **Stop-loss DCA:** protects the DCA if the price breaks the lower limit |
+| `metrics_interval_cycles` | Metric calculation frequency |
 
 ---
 
-## Mejoras integradas
+## Integrated improvements
 
-| Mejora | Comportamiento |
+| Improve | Behavior |
 |--------|---------------|
-| **Drawdown guard global** | Si el equity cae más del umbral, suspende nuevas compras DCA por instancia |
-| **Stop-loss DCA** | Cancela la `SELL LIMIT` activa y permite liquidación de defensa cuando el precio rompe `stop_loss_pct` respecto al promedio |
-| **Persistencia robusta** | Estado, equity snapshots y métricas en SQLite por instancia |
-| **Métricas periódicas** | Sharpe ratio, win rate y max drawdown calculados periódicamente |
+| **Drawdown save global** | If equity falls below the threshold, suspend new DCA purchases per instance |
+| **Stop-loss DCA** | Cancels the active `SELL LIMIT` and allows defensive liquidation when the price breaks `stop_loss_pct` from the average |
+| **Robust persistence** | State, equity snapshots and metrics in SQLite per instance |
+| **Periodic metrics** | Sharpe ratio, win rate and max drawdown calculated periodically |
 
 ---
 
-## Tablas SQLite
+## SQLite tables
 
-**Base de datos:** `runtime/data/masha_hub.sqlite`
+**Database:** `runtime/data/masha_hub.sqlite`
 
-| Tabla | Contenido |
+| Table | Content |
 |-------|-----------|
-| `masha_runtime_state` | Estado de runtime persistido (peak equity, ciclos, promedio DCA) |
-| `masha_equity_snapshots` | Snapshots periódicos de equity |
-| `masha_metrics_log` | Métricas calculadas (Sharpe, win rate, max drawdown) |
+| `masha_runtime_state` | Persistent runtime state (peak equity, cycles, average DCA) |
+| `masha_equity_snapshots` | Periodic equity snapshots |
+| `masha_metrics_log` | Calculated metrics (Sharpe, win rate, max drawdown) |
 
-### Consultas útiles
+### Useful queries
 
 ```sql
--- Últimas métricas
+-- Latest metrics
 SELECT * FROM masha_metrics_log ORDER BY id DESC LIMIT 20;
 
--- Historial de equity
+-- Equity history
 SELECT * FROM masha_equity_snapshots ORDER BY id DESC LIMIT 50;
 
--- Estado actual
+-- Current status
 SELECT * FROM masha_runtime_state;
 ```
 
 ---
 
-## Lógica de señal técnica
+## Technical signal logic
 
 ```
-Señal semanal (1w):
-  precio_actual < media_movil(mm_periods_w) * (1 - margin_low_w)
+Weekly signal (1w):
+  current_price < moving_average(mm_periods_w) * (1 - margin_low_w)
   
-Señal horaria (1h):
-  precio_actual < media_movil(mm_periods_h) * (1 - margin_low_h)
+Time signal (1h):
+  current_price < moving_average(mm_periods_h) * (1 - margin_low_h)
 
-Condición de compra DCA:
-  señal_1w AND señal_1h AND drawdown_dentro_umbral AND quote_libre >= quote_min_free_to_operate
+DCA Purchase Condition:
+  signal_1w AND signal_1h AND drawdown_within_threshold AND quote_free >= quote_min_free_to_operate
 
-Precio SELL LIMIT:
-  promedio_ponderado_compras * profit_factor
+SELL LIMIT Price:
+  weighted_average_purchases * profit_factor
 ```
 
 ---
 
-## Recomendación operativa
+## Operational recommendation
 
-> **Usar períodos y márgenes conservadores al inicio**, y validar en simulación varias sesiones antes de habilitar ejecución real.
+> **Use conservative periods and margins at the beginning**, and validate several sessions in simulation before enabling real execution.
 
-- Comenzar con `buy_qty_base` mínimo para medir el comportamiento de la señal
-- Los períodos de media móvil deben ser coherentes con la liquidez del símbolo
-- `margin_low_w` más amplio → menos señales → más selectivo (recomendado para mercados laterales)
-- Monitorear `masha_equity_snapshots` para detectar acumulación excesiva en tendencias bajistas
-- Revisar `masha_metrics_log` periódicamente para ajustar parámetros según win rate y Sharpe
+- Start with minimum `buy_qty_base` to measure signal behavior
+- Moving average periods must be consistent with the liquidity of the symbol
+- Wider `margin_low_w` → fewer signals → more selective (recommended for sideways markets)
+- Monitor `masha_equity_snapshots` for excessive accumulation in downtrends
+- Review `masha_metrics_log` periodically to adjust parameters according to win rate and Sharpe
