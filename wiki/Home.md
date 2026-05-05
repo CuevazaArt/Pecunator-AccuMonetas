@@ -46,6 +46,8 @@ The philosophy is direct: **the human operator is sovereign**; the code executes
 ### 🏛️ Basics
 - 📜 **[Manifesto](Manifesto)**  
   Philosophy, 4 pillars, doctrine
+- 🧭 **[L0 Operator Philosophy](L0-Operator-Philosophy)**  
+  Operator investment doctrine and guardrails
 - 🏗️ **[Architecture](Arquitectura)**  
   Flutter + Python, boundaries
 - 🗂️ **[Module Map](Mapa-de-Modulos)**  

@@ -1,27 +1,27 @@
 # Module Map — Pecunator
 
 > Reference of the folder structure, ownership and entrypoints of each module.  
-> Last update: 2026-04-29
+> Last update: 2026-05-05
 
 ---
 
 ## Repository root structure
 
 ```
-PecunatorCore/
+Pecunator/
 │
-├── main.py                    # Bootstrap delgado → runtime/main.py
+├── main.py                    # Thin bootstrap → runtime/main.py
 │
-├── runtime/                   # Motor Python (paquete principal)
-│   ├── main.py                # Startup del engine y servidor API
-│   ├── api/                   # Façade FastAPI + servicios
-│   ├── connectors/            # Gateway Binance y conectores de mercado
-│   ├── core/                  # Primitivas compartidas
-│   ├── modules/               # Módulos de dominio
-│   │   ├── bots/              # Estrategias de bots
-│   │   └── tools/             # Herramientas operativas
-│   ├── bot/                   # Puente de compatibilidad (legacy)
-│   └── data/                  # Vault, SQLite y datos de runtime
+├── runtime/                   # Python engine package (primary)
+│   ├── main.py                # Engine startup and API server lifecycle
+│   ├── api/                   # FastAPI façade + services + routers
+│   ├── connectors/            # Binance gateway and market connectors
+│   ├── core/                  # Shared primitives (state/settings/audit/security)
+│   ├── modules/               # Domain modules
+│   │   ├── bots/              # Bot strategies
+│   │   └── tools/             # Operational tools
+│   ├── bot/                   # Compatibility bridge (legacy imports)
+│   └── data/                  # Vault, SQLite and runtime stores
 │
 ├── bots/                      # Índice raíz de módulos de bots
 │   ├── dorothy/MODULE.md
@@ -43,14 +43,14 @@ PecunatorCore/
 │       ├── widgets/
 │       └── utils/
 │
-├── scripts/                   # Scripts de operación
-│   ├── ui/                    # Arranque/build de Flutter, shortcuts
-│   ├── engine/                # Arranque/parada/watchdog del motor
-│   └── data/                  # Snapshots y colectores offline
+├── scripts/                   # Operation scripts
+│   ├── ui/                    # Flutter run/build and desktop shortcuts
+│   ├── engine/                # Engine start/stop/watchdog/autostart
+│   └── data/                  # Snapshots and offline collectors
 │
-├── docs/                      # Documentación técnica
-├── examples/                  # Referencias históricas (no funcionales)
-└── wiki/                      # Páginas de este wiki
+├── docs/                      # Technical documentation
+├── examples/                  # Historical references (non-runtime)
+└── wiki/                      # Wiki pages
 ```
 
 ---
@@ -63,10 +63,14 @@ API façade and orchestration of services by domain.
 
 | Archive | Responsibility |
 |---------|----------------|
-| `app.py` | FastAPI route composition, middleware |
-| `bot_service.py` | Multi-instance bot hub service |
-| `thusnelda_service.py` | Hub service for Thusnelda |
-| Vault routes, gateway, ops, sandbox, usage | Facades by domain |
+| `app.py` | FastAPI app creation + router composition |
+| `deps.py` | Shared dependency access to context/services |
+| `schemas.py` | Request/response models |
+| `bot_service.py` | Dorothy hub service |
+| `masha_service.py` | Masha hub service |
+| `thusnelda_service.py` | Thusnelda hub service |
+| `earn_service.py` | Earn sync/history persistence service |
+| `routers/*.py` | Domain routes (`vault`, `ops`, `masha`, `thusnelda`, `system`, `sandbox`, `gateway`, `dorothy`) |
 
 ### `runtime/connectors/`
 
@@ -82,7 +86,7 @@ Shared primitives without dependency on higher layers.
 |--------|----------------|
 | `settings.py` | Environment and configuration variables |
 | `vault.py` | Fernet Credential Encryption/Decryption |
-| `state_store.py` | Gateway memory status |
+| `state_store.py` | Gateway state persistence (WAL mode) |
 | `ops_audit_log.py` | Audit of operational protocols (SQLite) |
 | `config_manager.py` | Persistent bot configuration |
 | `security_util.py` | Log sanitization |
@@ -121,7 +125,8 @@ Document indexes with entrypoints, API surface and SQLite stores.
 ### `bots/masha/`
 
 - **Runtime runner:** `runtime/modules/bots/masha.py`
-- **Hub service:** `runtime/api/bot_service.py`
+- **Hub service:** `runtime/api/masha_service.py`
+- **API surface:** `/api/v1/masha/bots/*`
 - **SQLite:** `runtime/data/masha_hub.sqlite`
   - `masha_runtime_state`, `masha_equity_snapshots`, `masha_metrics_log`
 
@@ -140,7 +145,7 @@ Document indexes with entrypoints, API surface and SQLite stores.
 ### `tools/ops-protocols/`
 
 - **Runtime:** `runtime/modules/tools/ops/`
-- **API handlers:** `runtime/api/app.py`
+- **API handlers:** `runtime/api/routers/ops.py`
   - `POST /api/v1/ops/protocol/close`
   - `POST /api/v1/ops/red_button`
   - `GET /api/v1/ops/protocol/status`
@@ -153,13 +158,15 @@ Document indexes with entrypoints, API surface and SQLite stores.
 Queries guided to Binance REST from the UI.
 
 - **API:** `/api/v1/sandbox/rest/catalog`, `/api/v1/sandbox/rest/query`
+- **Curated storage API:** `/api/v1/sandbox/curated/save`, `/api/v1/sandbox/curated/list`
 - Supports: `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
 
 ### `tools/rest-weight-monitor/`
 
 REST weight monitor with history and audit per endpoint.
 
-- **API:** `/api/v1/usage/rest-weight/events`, `/api/v1/usage/rest-weight/report`
+- **API:** `/api/v1/usage/rest-weight/samples`, `/api/v1/usage/rest-weight/events`, `/api/v1/usage/rest-weight/report`
+- **System status API:** `/api/v1/weight-governor/status`, `/api/v1/market-cache/status`, `/api/v1/bot-coordinator/status`
 - Source: Binance header `X-MBX-USED-WEIGHT-1M`
 
 ---

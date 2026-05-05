@@ -1,7 +1,7 @@
 # Development Guide — Pecunator
 
 > Workflow, conventions, tests and CI/CD to contribute to the project.  
-> Active development branch: `refactor/stable-ui-and-tests`
+> Default branch: `main`.
 
 ---
 
@@ -29,21 +29,20 @@ cd desktop_shell && flutter test test/ -v
 
 | Branch | Purpose |
 |--------|-----------|
-| `main` | Stable branch — always deployable. **Direct push blocked.** |
-| `refactor/stable-ui-and-tests` | Active development — all work goes here |
-| `feature/*` | Feature branches derived from `refactor/stable-ui-and-tests` |
+| `main` | Stable/default branch and release baseline |
+| `refactor/stable-ui-and-tests` | Long-lived integration branch for refactor streams |
+| `feature/*` | Feature branches derived from `main` or refactor branch |
 
-###Rules
+### Rules
 
 **✅ DO:**
-- Develop in `refactor/stable-ui-and-tests` or derived feature branches
-- Create PRs towards `refactor/stable-ui-and-tests`
+- Develop in feature branches and open PRs with explicit base branch
+- Use `main` for regular PRs unless refactor stream is required
 - Run tests locally before pushing
 - Document changes in `docs/CHANGELOG.md`
 
 **❌ DON'T:**
-- Direct push to `main` (it is protected)
-- PRs to `main` without explicit authorization
+- Merge large refactor streams to `main` without review and CI green
 - Merge code without tests
 - Ignore GitHub Actions crashes
 
@@ -54,7 +53,7 @@ cd desktop_shell && flutter test test/ -v
 ### 1. Create feature branch
 
 ```bash
-git checkout refactor/stable-ui-and-tests
+git checkout main
 git pull
 git checkout -b feature/nombre-de-la-feature
 ```
@@ -93,8 +92,8 @@ git commit -m "feat(scope): change description"
 ```bash
 git push -u origin feature/feature-name
 
-# Create PR towards refactor/stable-ui-and-tests
-gh pr create --base refactor/stable-ui-and-tests \
+# Create PR towards main (or another agreed base branch)
+gh pr create --base main \
              --head feature/feature-name \
              --title "feat: description" \
              --body "Description of changes"
@@ -105,7 +104,9 @@ gh pr create --base refactor/stable-ui-and-tests \
 GitHub Actions automatically run:
 - ✅ Python tests (pytest in Python 3.11 and 3.12)
 - ✅ Flutter tests (flutter test)
-- ✅ Code analysis (ruff, dart analyzer)
+- ✅ Code analysis (ruff, mypy, dart analyzer)
+- ✅ Changelog discipline check for PRs to `main`/`develop`
+- ✅ Secret scanning for pushes and PRs to main branches
 
 ### 5. Merge a refactor branch
 
@@ -119,7 +120,7 @@ gh pr merge <PR_NUMBER> --merge
 
 ## Tests
 
-###Python
+### Python
 
 ```bash
 # All tests
@@ -131,10 +132,10 @@ pytest runtime/tests/test_dorothy.py -v
 # Specific test by name
 pytest runtime/tests/test_dorothy.py::test_defaults -v
 
-#With duration report
+# With duration report
 pytest runtime/tests/ -v --durations=10
 
-#Covered
+# Coverage
 pytest runtime/tests/ --cov=runtime --cov-report=term-missing
 ```
 
@@ -144,7 +145,7 @@ pytest runtime/tests/ --cov=runtime --cov-report=term-missing
 runtime/
 └── tests/
     ├── __init__.py
-    └── test_dorothy.py    # 25+ tests para Dorothy
+  └── test_dorothy.py    # sample test suite file
 ```
 
 ###Flutter
@@ -192,23 +193,23 @@ runtime/
 
 ```
 desktop_shell/lib/
-├── config/app_config.dart      # Configuración centralizada
-├── providers/app_providers.dart # Estado con Riverpod
+├── config/app_config.dart      # centralized config
+├── providers/app_providers.dart # state with Riverpod
 ├── services/
 │   ├── http_client.dart
 │   ├── exceptions.dart
 │   └── preferences.dart
-├── screens/                    # Pantallas completas
+├── screens/                    # full pages
 │   ├── home_screen.dart
 │   ├── bots_screen.dart
 │   └── spot_account_screen.dart
-├── widgets/                    # Widgets reutilizables
+├── widgets/                    # reusable widgets
 │   ├── error_display.dart
 │   ├── logs_viewer.dart
 │   └── gateway_status.dart
-├── utils/number_formatter.dart # Helpers
-├── api_client.dart             # Cliente HTTP del motor
-└── main.dart                   # Entry point
+├── utils/number_formatter.dart # helpers
+├── api_client.dart             # engine HTTP client
+└── main.dart                   # entrypoint
 ```
 
 ---
@@ -234,7 +235,7 @@ def test_new_feature():
 
 ### Add a Flutter widget
 
-``dart
+```dart
 // desktop_shell/lib/widgets/new_widget.dart
 
 import 'package:flutter/material.dart';
@@ -256,7 +257,7 @@ class NewWidget extends StatelessWidget {
 
 ### Add a Riverpod provider
 
-``dart
+```dart
 // desktop_shell/lib/providers/app_providers.dart
 
 final myDataProvider = FutureProvider<MyData>((ref) async {
@@ -273,17 +274,18 @@ final myDataProvider = FutureProvider<MyData>((ref) async {
 
 | Workflow | Trigger | What it runs |
 |----------|---------|-------------|
-| `test-python.yml` | Push to `refactor/**`, `main`, PR to `main` | pytest (Python 3.11, 3.12) |
-| `test-flutter.yml` | Push to `refactor/**`, `main`, PR to `main` | flutter test + dart analyzer |
-| `protect-main.yml` | PR to `main` | Block PRs from `refactor/*` without authorization |
-| `sync-main.yml` | Push to `main` with changes to `docs/` | Sync docs to `refactor/stable-ui-and-tests` |
-| `secret-scan.yml` | Push and PR to main branches | Gitleaks — secret detection |
+| `test-python.yml` | Push to `refactor/**`, `main`, `develop`; PR to `main` | ruff + mypy + pytest (Python 3.11, 3.12) |
+| `test-flutter.yml` | Push to `refactor/**`, `main`, `develop`; PR to `main` | flutter analyze + format check + flutter test |
+| `protect-main.yml` | PR to `main` | Restricts direct refactor-to-main merges |
+| `sync-main.yml` | Push to `main` when docs change | Sync docs/README from `main` into refactor branch |
+| `secret-scan.yml` | Push and PR to main branches | Gitleaks secret detection |
+| `changelog-discipline.yml` | PR to `main` or `develop` | Enforces updates to `docs/CHANGELOG.md` when code changes |
 
 ### View CI logs
 
 ```bash
 # List latest runs
-gh run list --branch refactor/stable-ui-and-tests -L 10
+gh run list --branch main -L 10
 
 # View logs of an execution
 gh run view <RUN_ID> --log
@@ -297,16 +299,16 @@ gh run view <RUN_ID> --log
 # Get latest docs from main
 git fetch origin
 git merge origin/main -- docs/
-git push origin refactor/stable-ui-and-tests
+git push origin feature/your-branch
 
 # Get code improvements from main
 git fetch origin
 git merge origin/main -- runtime/core/
-git push origin refactor/stable-ui-and-tests
+git push origin feature/your-branch
 
 # Keep feature branch updated
 git fetch origin
-git rebase origin/refactor/stable-ui-and-tests
+git rebase origin/main
 git push --force-with-lease origin feature/your-branch
 ```
 

@@ -82,12 +82,12 @@ powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1
 ### 2.5 Engine Troubleshooting
 
 **Port 8765 occupied by previous process:**
-``powershell
+```powershell
 powershell -ExecutionPolicy Bypass -File scripts/engine/stop_engine_port.ps1
 ```
 
 **Autostart after Windows restart:**
-``powershell
+```powershell
 powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1
 ```
 
@@ -186,6 +186,26 @@ curl http://127.0.0.1:8765/api/v1/credentials/active
 # Gateway connected?
 curl http://127.0.0.1:8765/api/v1/gateway/snapshot
 ```
+
+### 5.1 Extended runtime smoke-check
+
+```bash
+# System health
+curl http://127.0.0.1:8765/health
+curl http://127.0.0.1:8765/health/deep
+
+# Governance and scheduler
+curl http://127.0.0.1:8765/api/v1/weight-governor/status
+curl http://127.0.0.1:8765/api/v1/market-cache/status
+curl http://127.0.0.1:8765/api/v1/bot-coordinator/status
+
+# Hubs discovery
+curl http://127.0.0.1:8765/api/v1/hub/bots
+curl http://127.0.0.1:8765/api/v1/masha/bots
+curl http://127.0.0.1:8765/api/v1/thusnelda/bots
+```
+
+If all endpoints answer with HTTP 200 and valid JSON, the local runtime is healthy for UI operation.
 
 ---
 

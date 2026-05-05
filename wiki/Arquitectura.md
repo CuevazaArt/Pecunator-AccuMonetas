@@ -3,6 +3,8 @@
 > Flutter Desktop + Python Engine. Not web dashboard.  
 > Technical reference of the current state of the system.
 
+Last verified against repository structure: **2026-05-05**
+
 ---
 
 ## Overview
@@ -34,6 +36,7 @@ Flutter **only** talks to the engine via HTTP loopback; you never have API keys 
 |------------|----------------|
 | `runtime/main.py` | Engine entrypoint: startup, API server |
 | `runtime/api/` | Façade FastAPI: routes, schemas, service orchestration |
+| `runtime/api/routers/` | Domain routers: `vault`, `ops`, `masha`, `thusnelda`, `system`, `sandbox`, `gateway`, `dorothy` |
 | `runtime/connectors/` | Gateway Binance — account polling, market streams, equity, REST weight |
 | `runtime/core/` | Shared primitives: vault, settings, state store, audit stores, equity math |
 | `runtime/modules/bots/` | Bot Strategy Modules (Dorothy, Masha, Thusnelda) |
@@ -59,6 +62,13 @@ python -m runtime # boot as package
 | `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Average window for equity rolling |
 | `PECUNATOR_EQUITY_POLL_STRIDE` | `5` | How many cycles to refresh equity |
 | `PECUNATOR_ENGINE_STUB` | — | If `=1`, boot in serverless stub mode |
+
+### Main/runtime boundary
+
+- Root `main.py` is a thin bootstrap for `python main.py`
+- `runtime/main.py` owns engine lifecycle and FastAPI server startup
+- `runtime/api/app.py` composes routers and keeps API as façade
+- Domain strategy code belongs in `runtime/modules/*` and not in bootstrap scripts
 
 ### 2. Flutter Desktop Shell (`desktop_shell/`)
 
@@ -116,9 +126,24 @@ python -m runtime # boot as package
 - If an instance was marked to run, the engine attempts to **automatically resume it** upon startup and when it detects crashes
 - Dorothy applies **retries with backoff** and recreates client to recover network session
 - To resume work after restarting Windows:
-  ``powershell
+  ```powershell
   powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1
   ```
+
+---
+
+## System Observability Endpoints
+
+Current runtime also exposes operational status endpoints for governor/cache/coordinator:
+
+- `GET /health`
+- `GET /health/deep`
+- `GET /api/v1/weight-governor/status`
+- `GET /api/v1/market-cache/status`
+- `GET /api/v1/bot-coordinator/status`
+- `GET /api/v1/usage/rest-weight/samples`
+- `GET /api/v1/usage/rest-weight/events`
+- `GET /api/v1/usage/rest-weight/report`
 
 ---
 
