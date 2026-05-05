@@ -361,15 +361,15 @@ Todos comparten **3 protecciones uniformes** (drawdown guard, stop-loss configur
 
 ---
 
-## 🌍 Convención de Idioma
+## 🌍 Language Convention
 
-| 📍 Contexto | 🗣️ Idioma |
+| 📍 Context | 🗣️ Language |
 |------------|-----------|
-| Coordinación humana, wiki, chats, manuales | 🇪🇸 **Español** |
-| Código fuente, identificadores, commits, logs | 🇬🇧 **Inglés** |
-| API responses (JSON keys, error messages) | 🇬🇧 **Inglés** |
+| **Wiki, documentation, coordination, chat, manuals** | 🇬🇧 **English** |
+| Code source, identifiers, commits, logs | 🇬🇧 **English** |
+| API responses (JSON keys, error messages) | 🇬🇧 **English** |
 
-> Esta separación facilita: (a) onboarding del operador hispanohablante; (b) parseo y búsqueda consistente en logs; (c) compatibilidad con librerías y herramientas estándar.
+> **PROJECT DIRECTIVE**: The wiki must ALWAYS be in English. Any existing Spanish text must be translated to English. This ensures consistency and compatibility with global libraries, standard tools, and LLM processing context. All tests are run in GitHub Actions.
 
 ---
 

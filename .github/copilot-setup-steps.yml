@@ -1,0 +1,6 @@
+steps:
+  - name: Expose wiki write token
+    env:
+      WIKI_WRITE_TOKEN: ${{ secrets.WIKI_WRITE_TOKEN }}
+    run: |
+      echo "WIKI_WRITE_TOKEN=${WIKI_WRITE_TOKEN}" >> "$GITHUB_ENV"
