@@ -14,6 +14,12 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Take environment variables from .env.
+except ImportError:
+    pass
+
 _DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parent.parent / "data"
 
 _GATEWAY_SETTINGS_FILENAME = "gateway_settings.json"

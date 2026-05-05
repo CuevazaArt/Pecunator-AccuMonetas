@@ -51,9 +51,10 @@ async def _capture_chart_img(
     symbol: str,
     interval: str,
     api_key: str,
-    base_url: str = "https://api.chart-img.com/v2/tradingview/advanced-chart",
+    base_url: str = "https://api.chart-img.com/v1/tradingview/advanced-chart",
     width: int = 800,
     height: int = 600,
+    theme: str = "dark",
 ) -> bytes:
     """Capture a chart via the chart-img.com REST API.
 
@@ -71,7 +72,7 @@ async def _capture_chart_img(
 
     # Map interval to chart-img format
     interval_map = {
-        "1m": "1", "5m": "5", "15m": "15", "30m": "30",
+        "1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30",
         "1h": "1h", "2h": "2h", "4h": "4h",
         "1d": "1D", "1w": "1W", "1M": "1M",
     }
@@ -80,7 +81,7 @@ async def _capture_chart_img(
     params = {
         "symbol": f"BINANCE:{symbol}",
         "interval": tv_interval,
-        "theme": "dark",
+        "theme": theme,
         "width": width,
         "height": height,
     }
@@ -185,6 +186,9 @@ async def capture_chart(
     source: str = "auto",
     api_key: str = "",
     base_url: str = "",
+    width: int = 0,
+    height: int = 0,
+    theme: str = "",
     save_dir: Optional[Path] = None,
 ) -> CaptureResult:
     """Capture a TradingView chart with automatic failover.
@@ -203,11 +207,14 @@ async def capture_chart(
     t0 = time.monotonic()
 
     # Resolve config defaults if not provided
-    if not api_key or not base_url:
+    if not api_key or not base_url or not width:
         from runtime.modules.vision.config import get_vmo_config
         cfg = get_vmo_config()
         api_key = api_key or cfg.chart_img_api_key
         base_url = base_url or cfg.chart_img_base_url
+        width = width or cfg.image_width
+        height = height or cfg.image_height
+        theme = theme or cfg.image_theme
         if save_dir is None:
             save_dir = cfg.captures_dir
 
@@ -215,7 +222,8 @@ async def capture_chart(
     if source in ("chart-img", "auto") and api_key:
         try:
             png = await _capture_chart_img(
-                symbol, interval, api_key, base_url=base_url
+                symbol, interval, api_key, base_url=base_url,
+                width=width, height=height, theme=theme,
             )
             elapsed = int((time.monotonic() - t0) * 1000)
             result = CaptureResult(
@@ -245,7 +253,9 @@ async def capture_chart(
     # ── Try Playwright fallback ─────────────────────────────────
     if source in ("playwright", "auto"):
         try:
-            png = await _capture_playwright(symbol, interval)
+            png = await _capture_playwright(
+                symbol, interval, width=width, height=height
+            )
             elapsed = int((time.monotonic() - t0) * 1000)
             result = CaptureResult(
                 ok=True, png=png, source="playwright",
@@ -331,7 +341,7 @@ async def _cli_main() -> None:
     )
 
     if result.ok:
-        print(f"✅ Captured {result.symbol}/{result.interval}")
+        print(f"OK: Captured {result.symbol}/{result.interval}")
         print(f"   Source:  {result.source}")
         print(f"   Size:   {len(result.png):,} bytes")
         print(f"   Time:   {result.elapsed_ms}ms")
@@ -343,7 +353,7 @@ async def _cli_main() -> None:
             out.write_bytes(result.png)
             print(f"   Saved:  {out}")
     else:
-        print(f"❌ Failed: {result.error}")
+        print(f"ERROR: {result.error}")
         sys.exit(1)
 
 

@@ -157,7 +157,7 @@ async def _classify_gemini(
         }],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 512,
+            "maxOutputTokens": 1024,
         },
     }
     headers = {"Content-Type": "application/json"}
@@ -211,7 +211,7 @@ async def _classify_openai(
                 },
             ],
         }],
-        "max_tokens": 512,
+        "max_tokens": 1024,
         "temperature": 0.2,
     }
     headers = {

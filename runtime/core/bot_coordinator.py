@@ -34,9 +34,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Optional
+
+from runtime.core.regime_detector import RegimeDetector
 
 _LOG = logging.getLogger("pecunator.core.bot_coordinator")
 
@@ -109,6 +110,9 @@ class BotCoordinator:
         # Callback to actually start the bot runner
         self._start_callbacks: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
 
+        # VMO Sensor
+        self._regime_detector = RegimeDetector()
+
     # ── Staging ─────────────────────────────────────────────────────
 
     def stage_bot(
@@ -136,6 +140,30 @@ class BotCoordinator:
             status="STAGED",
         )
         self._staged[bot_id] = staged
+
+        # Validate against VMO recommendation (advisory only)
+        try:
+            # We assume bot_id contains the symbol, or we just query it if known.
+            # In Pecunator, bot IDs are often like "dorothy_BTCUSDT".
+            # For a general check, we'll try to extract the symbol.
+            parts = bot_id.split("_")
+            symbol = parts[-1] if len(parts) > 1 else ""
+            if symbol and len(symbol) >= 5: # basic check for pairs like BTCUSDT
+                rec = self._regime_detector.get_recommendation(symbol)
+                if rec.bot != "none" and rec.bot != hub_type:
+                    _LOG.warning(
+                        "VMO ADVISORY: You staged a '%s' bot for %s, but the VMO "
+                        "recommends '%s' based on current %s regime (conf=%.2f).",
+                        hub_type, symbol, rec.bot, rec.regime, rec.confidence
+                    )
+                elif rec.bot == hub_type:
+                    _LOG.info(
+                        "VMO VALIDATED: Staging '%s' for %s aligns with current "
+                        "%s regime (conf=%.2f).",
+                        hub_type, symbol, rec.regime, rec.confidence
+                    )
+        except Exception as e:
+            _LOG.debug("Could not validate bot against VMO: %s", e)
 
         _LOG.info(
             "Bot %s STAGED for launch in %.1fs (interval=%ds, active_bots=%d)",
