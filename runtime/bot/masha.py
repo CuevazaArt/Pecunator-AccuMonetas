@@ -11,22 +11,14 @@ from typing import Any, Callable, Optional
 
 from binance.client import Client
 
+from runtime.bot._decimal_utils import dec as _dec, quantize as _q
+from runtime.bot._panic import check_panic_lock
+from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 from runtime.core.security_util import sanitize_log_message
 
 
-def _dec(x: Any, default: str = "0") -> Decimal:
-    try:
-        return Decimal(str(x))
-    except Exception:
-        return Decimal(default)
-
-
-def _q(x: Decimal, places: int) -> Decimal:
-    if places < 0:
-        places = 0
-    step = Decimal(10) ** Decimal(-places)
-    return x.quantize(step, rounding=ROUND_DOWN)
+# _dec and _q imported from runtime.bot._decimal_utils
 
 
 @dataclass
@@ -493,6 +485,7 @@ class MashaRunner:
             report["execution"] = "SIMULATED"
             report["message"] = "Dry run only; no orders sent."
             self._emit("INFO", "masha:decision", {"report": report})
+            log_paper_trade("masha", symbol, report.get("decision", ""), report)
             self._maybe_emit_metrics()
             return report
 
@@ -595,6 +588,10 @@ class MashaRunner:
 
     async def _loop(self) -> None:
         while not self._stop.is_set():
+            # ── OOB Kill Switch: PANIC.lock ────────────────────────
+            if check_panic_lock():
+                self._emit("CRITICAL", "PANIC.lock detected — halting Masha")
+                break
             sleep_sec = float(self.config.loop_interval_sec)
             # ── Governor permission gate ─────────────────────────
             try:

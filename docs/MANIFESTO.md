@@ -2,7 +2,7 @@
 
 > Documento vivo que define la filosofía, arquitectura, y directrices operativas del proyecto.
 > Toda decisión técnica debe ser trazable a los principios aquí establecidos.
-> Última actualización: 2026-05-04
+> Última actualización: 2026-05-05
 
 ---
 
@@ -54,7 +54,7 @@ sus herramientas analíticas.
 **Qué NO le delegamos:**
 - Decisiones de trading (eso es nuestro)
 - Análisis de portfolio (eso lo hacemos nosotros)
-- Persistencia de largo plazo (eso es GitHub + Flutter DB)
+- Persistencia de largo plazo (eso es GitHub + Runtime SQLite)
 - Políticas operativas (eso vive en el repo)
 
 **Riesgo de contraparte:** Aceptado conscientemente. Binance es el exchange
@@ -88,33 +88,33 @@ de datos ofrece esta trazabilidad con esta simplicidad.
 - `main` — rama estable, siempre deployable
 - Ramas de feature/fix según necesidad, merge vía PR o fast-forward
 
-### Pilar III — Flutter Desktop Shell (Visualización, DB, Simulaciones)
+### Pilar III — Flutter Desktop Shell (Visualización Stateless)
 
-**Rol:** Dashboard visual consolidado, base de datos local de respaldo,
-y plataforma para simulaciones y análisis estadístico.
+**Rol:** Dashboard visual consolidado y capa de presentación pura.
 
-**Principio:** Flutter es el concentrador visual y el repositorio de datos
-operativos. No toma decisiones; presenta información y persiste datos
-para análisis offline.
+**Principio:** Flutter es una **View stateless** que consume datos del
+backend Python vía REST/WebSocket. Si Flutter se cae, el sistema de
+registro, análisis y operación en background NO se inmuta.
 
-**Triple función:**
+**Doble función:**
 
 **A) Hub de bots:** Visualización del estado de N bots simultáneamente,
 cada uno con su subcuenta, estrategia, P&L, y métricas. Control de misión
 estilo Bloomberg terminal para el operador.
 
-**B) DB de respaldo:** SQLite local donde se persisten snapshots de balances,
-trades, métricas de equity, y estados de bots. Esta DB NO es la fuente de
-verdad (eso es Binance); es una réplica de trabajo y un seguro.
+**B) Laboratorio visual:** Con datos servidos por el backend se pueden
+visualizar backtests, análisis estadísticos, correlaciones e hipótesis.
 
-**C) Laboratorio de análisis:** Con datos históricos locales se pueden
-ejecutar backtests, análisis estadísticos, estudiar correlaciones, y probar
-hipótesis sin consumir rate limits de la API de Binance.
+**La DB operativa (SQLite/WAL) vive en el Python Runtime** (`runtime/data/`).
+Flutter puede mantener cache local para UX, pero NO es fuente de
+persistencia ni respaldo. El backend es el dueño absoluto de la
+persistencia, ingesta y almacenamiento.
 
 **Boundaries:**
 - Credenciales NUNCA en Dart. Siempre en el vault de Python.
 - El Flutter shell habla SOLO con el runtime vía HTTP localhost.
-- El UI no es fuente de verdad para balances ni posiciones.
+- El UI no es fuente de verdad para balances, posiciones ni estado.
+- Si Flutter se cierra, el backend sigue operando sin pérdida de datos.
 
 ### Pilar IV — IDE + LLM (Cerebro Operativo)
 
@@ -157,7 +157,7 @@ Los niveles de decisión van de lo más humano a lo más automatizado:
 | 3 | **Scripts Python** | Ejecución determinística aprobada | Segundos |
 | 4 | **Bots autónomos** | Operación continua con parámetros fijos | Ciclo continuo |
 | 5 | **Binance API** | Ejecución de órdenes, custodia | Milisegundos |
-| 6 | **Flutter Shell** | Visualización, persistencia local | Tiempo real |
+| 6 | **Flutter Shell** | Visualización (stateless) | Tiempo real |
 
 Cada nivel solo interactúa con los adyacentes. El LLM nunca toca Binance
 directamente — siempre pasa por scripts. Los bots nunca toman decisiones
@@ -180,7 +180,13 @@ estratégicas — solo ejecutan reglas parametrizadas.
 
 - API keys de bots: solo permisos de trading, NUNCA withdraw.
 - Subcuentas: cada bot opera con su propia key restringida por IP.
-- El LLM solo invoca scripts; los scripts leen secrets del vault.
+- El LLM opera bajo el principio de **Propuesta-Ejecución**:
+  - El LLM puede escribir y proponer código.
+  - El LLM NO tiene permisos de ejecución sobre el runtime de producción
+    sin la invocación de un Task determinístico validado en Git.
+  - Las acciones autónomas del LLM se restringen a Tools tipadas,
+    determinísticas y de solo lectura.
+  - Toda ejecución con efecto financiero requiere confirmación del operador.
 
 ### 4.3 Rotación y Revocación
 
@@ -204,12 +210,12 @@ estratégicas — solo ejecutan reglas parametrizadas.
 
 | Dato | Fuente de verdad | Respaldo |
 |------|------------------|----------|
-| Balances actuales | Binance API (User Data Stream) | Flutter SQLite |
-| Órdenes abiertas | Binance API (User Data Stream) | Flutter SQLite |
+| Balances actuales | Binance API (User Data Stream) | Runtime SQLite WAL |
+| Órdenes abiertas | Binance API (User Data Stream) | Runtime SQLite WAL |
 | Historial de trades | Binance API (`/myTrades`) | CSV logs locales |
 | Tasas de earn/loan | Binance API + monitors | CSV logs en repo |
-| Estado de bots | Runtime StateStore (memoria) | Flutter SQLite |
-| Métricas de equity | Runtime EquityRollingWindow | Flutter SQLite |
+| Estado de bots | Runtime StateStore (SQLite WAL) | — (crash-safe) |
+| Métricas de equity | Runtime EquityRollingWindow | Runtime SQLite WAL |
 | Políticas y doctrina | GitHub repo (`docs/`) | — (el repo ES la verdad) |
 | Configuración de bots | `runtime/core/config_manager.py` | Vault cifrado |
 
@@ -218,7 +224,7 @@ estratégicas — solo ejecutan reglas parametrizadas.
 - **CSV logs** (earn_rates, loan_rates): retención indefinida en repo.
   Son ligeros y la historia es valiosa.
 - **Audit reports** (.txt): retención indefinida. Snapshots de estado.
-- **SQLite Flutter**: retención local, no versionado en git.
+- **SQLite Runtime** (`runtime/data/`): retención local, no versionado en git.
   Incluir en backups periódicos del sistema.
 - **Binance historiales**: depende de las políticas de retención de Binance.
   Se mitiga con snapshots locales periódicos.
@@ -252,19 +258,50 @@ y pedagógicos, en subcuentas aisladas con capital limitado.
   del portfolio sin justificación documentada.
 - **Health factor mínimo:** Préstamos con HF < 1.5 activan alerta;
   HF < 1.3 activa protocolo de emergencia.
-- **Kill switch:** El botón rojo (`/api/v1/ops/red_button`) detiene
-  todos los bots inmediatamente. Disponible en Flutter y vía API.
+- **Kill switch (in-band):** El botón rojo (`/api/v1/ops/red_button`)
+  detiene todos los bots. Disponible en Flutter y vía API.
+- **Kill switch (out-of-band):** Si `runtime/data/PANIC.lock` existe,
+  los bots se detienen al inicio del siguiente ciclo sin depender de
+  FastAPI. Funciona ante event loop bloqueado o deadlock.
+- **Kill switch (OS-level):** `taskkill /F` del proceso Python como
+  último recurso. Funciona siempre.
 - **Circuit breaker:** `ApiFuse` corta el acceso REST automáticamente
   si el peso de API supera umbrales de seguridad.
 
 ### 6.3 Tratamiento de Pérdidas
 
-Las pérdidas son eventos inevitables, no fallos del sistema. Se tratan así:
+Las pérdidas son eventos inevitables, no fallos del sistema.
+
+**Pérdida justa:** resultado de seguir un sistema con esperanza matemática
+positiva, dentro de parámetros definidos, en entorno compatible con la
+estrategia. Aceptable. Se registra y se continúa.
+
+**Pérdida injusta:** resultado de operar sin stop-loss, fuera del entorno
+ideal, con parámetros incorrectos, o por error de código. Inaceptable.
+Requiere corrección antes de reactivar el bot.
+
+Protocolo ante cualquier pérdida:
 1. **Contención** — Limitar la pérdida vía stop-loss o cierre manual
-2. **Registro** — Documentar qué pasó, cuándo, y por qué
-3. **Análisis** — ¿Fue error de estrategia, de ejecución, o de mercado?
-4. **Adaptación** — Ajustar parámetros o estrategia si corresponde
-5. **Continuación** — Seguir operando con los controles actualizados
+2. **Clasificación** — ¿Justa o injusta?
+3. **Registro** — Documentar qué pasó, cuándo, y por qué
+4. **Análisis** — ¿Error de estrategia, ejecución, o mercado?
+5. **Adaptación** — Ajustar parámetros o estrategia si corresponde
+6. **Continuación** — Seguir operando (si justa) o regresar a paper
+   trading (si injusta) con los controles actualizados
+
+Referencia completa: [`docs/loss-framework.md`](loss-framework.md)
+
+### 6.4 Promoción de Bots a Producción
+
+Ningún bot toca capital real sin pasar por tres etapas:
+
+1. **Backtest histórico** — ≥6 meses de datos, ≥100 trades, documentado
+2. **Paper trading en vivo** — ≥2 semanas, comparado contra backtest
+3. **Producción con capital mínimo** — Subcuenta aislada, drawdown guard
+   activo, revisión semanal el primer mes
+
+Escalado de capital solo después de ≥1 mes con PnL positivo.
+Referencia completa: [`docs/loss-framework.md`](loss-framework.md)
 
 ---
 
@@ -302,31 +339,63 @@ El LLM NO debe:
 
 ## 8. Roadmap de Expansión
 
-### Fase Actual — Estabilización CEX
+> Resumen de fases. Detalle completo con prerrequisitos y criterios de
+> promoción en [`docs/evolution-plan.md`](evolution-plan.md).
+
+### Fase 0 (Actual) — Hardening Doctrinal
 
 - [x] Runtime modular con BotCoordinator y WeightGovernor
-- [x] Flutter desktop shell con dashboard de bots
+- [x] Flutter desktop shell como View stateless
 - [x] Vault cifrado para credenciales
 - [x] Monitors de earn/loan rates
 - [x] Audit system y reportes
 - [x] Tasks operativos en IDE
-- [ ] DB SQLite en Flutter para persistencia local
-- [ ] Subcuentas de Binance para aislamiento de bots
+- [x] Pilar III redefinido: DB en Python, Flutter stateless
+- [x] Principio Propuesta-Ejecución del LLM
+- [x] Marco de pérdidas justas/injustas
+- [x] Kill Switch OOB documentado
 
-### Fase Siguiente — Diversificación CEX
+### Fase 1 — Bots en Producción
 
+- [ ] WAL State Hydration en `runtime/core/state_store.py`
+- [ ] PANIC.lock watchdog implementado
+- [ ] Lógica de estrategia ejecutable para Dorothy, Masha, Thusnelda
+- [ ] Pipeline de promoción: backtest → paper → producción
+- [ ] Primer mes de P&L registrado
+
+### Fase 2 — Subcuentas y Aislamiento
+
+- [ ] Subcuentas de Binance (SUB-01 a SUB-05) con API keys aisladas
+- [ ] Métricas por subcuenta activas
+- [ ] Primera rotación de capital mensual ejecutada
+- [ ] Ref: [`docs/subcuentas-architecture.md`](subcuentas-architecture.md)
+
+### Fase 3 — Sensores y Heurísticas (VMO + Rotación Sectorial)
+
+> **Prerrequisito:** Bots operando con parámetros fijos y P&L medible.
+
+- [ ] `runtime/modules/vision/` — Captura, análisis, cache, observer
+- [ ] Integración con `BotCoordinator` para activación/desactivación
+      heurística de bots por régimen de mercado
+- [ ] Sector Strength Scanner y rotación sectorial automatizada
+- [ ] Validación: ¿VMO mejora P&L vs parámetros fijos?
+
+**Concepto:** Sensor heurístico cualitativo que clasifica régimen de
+mercado vía imágenes de gráficos + LLM Vision, sin consumir API weight.
+Complementa datos OHLC numéricos; nunca los sustituye.
+
+### Fase 4 — Multi-CEX (Diversificación)
+
+- [ ] Interfaz `IExchange` extraída del `BinanceGateway` actual
 - [ ] Segundo CEX vía `ccxt` (candidatos: Bybit, OKX)
-- [ ] Abstracción de Gateway para multi-exchange
+- [ ] MockExchange para backtesting inyectable
 - [ ] Comparador de tasas cross-exchange
 
-### Fase Futura — Web3 Multichain
+### Fase 5 — Web3 Multichain (Reservado)
 
-- [ ] `web3_gateway.py` — conector on-chain para EVM
-- [ ] DEX quotes vía agregadores (1inch, 0x)
-- [ ] Spread detector CEX vs DEX
-- [ ] Lending on-chain (Aave V3)
-- [ ] Cross-chain bridges
-- [ ] MEV protection (Flashbots)
+- [ ] Wallet Engine, DEX Execution, On-chain Metrics
+- [ ] Multichain Router, DeFi Strategies
+- [ ] Seguridad extrema: llaves privadas, wallets frías/calientes
 
 **Regla:** Web3 entra como conector secundario que alimenta al mismo hub,
 no como sistema paralelo. Binance sigue siendo el centro de gravedad
@@ -339,7 +408,11 @@ hasta que el capital y la estabilidad justifiquen distribución.
 ```
 docs/
 ├── MANIFESTO.md                    ← Este documento (filosofía + arquitectura)
+├── evolution-plan.md               ← Plan evolutivo por fases con prerrequisitos
 ├── architecture-next.md            ← Estado técnico actual del runtime
+├── hardening-critique.md           ← Análisis de fricciones y resoluciones
+├── subcuentas-architecture.md      ← Subcuentas, permisos, rotación de capital
+├── loss-framework.md               ← Marco de pérdidas y promoción de bots
 ├── repo-modules-map.md             ← Mapa de módulos y ubicaciones
 ├── binance-api-and-compliance.md   ← Límites y compliance de Binance
 ├── CHANGELOG.md                    ← Historial de cambios del proyecto
@@ -364,3 +437,9 @@ docs/
 | **Shell** | El frontend Flutter desktop |
 | **Vault** | Almacenamiento cifrado de credenciales |
 | **Doctrina** | Políticas y principios que rigen la operación |
+| **VMO** | Visual Market Observer — sensor heurístico que clasifica régimen de mercado vía imágenes + LLM Vision, sin consumir API weight |
+| **WAL** | Write-Ahead Logging — modo de SQLite que persiste estado de bots de forma crash-safe |
+| **Pérdida justa** | Pérdida dentro de parámetros definidos, en entorno compatible con la estrategia |
+| **Pérdida injusta** | Pérdida por error de sistema, configuración, o violación de reglas operativas |
+| **OOB Kill Switch** | Mecanismo de parada de emergencia fuera del canal HTTP (archivo centinela, señal de OS) |
+| **Propuesta-Ejecución** | Principio de seguridad: el LLM propone, el operador confirma, el código determinístico ejecuta |
