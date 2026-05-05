@@ -1,11 +1,11 @@
-# Mapa de Módulos — Pecunator
+# Module Map — Pecunator
 
-> Referencia de la estructura de carpetas, ownership y entrypoints de cada módulo.  
-> Última actualización: 2026-04-29
+> Reference of the folder structure, ownership and entrypoints of each module.  
+> Last update: 2026-04-29
 
 ---
 
-## Estructura raíz del repositorio
+## Repository root structure
 
 ```
 PecunatorCore/
@@ -55,59 +55,59 @@ PecunatorCore/
 
 ---
 
-## Módulos del motor Python (`runtime/`)
+## Python engine modules (`runtime/`)
 
 ### `runtime/api/`
 
-API façade y orquestación de servicios por dominio.
+API façade and orchestration of services by domain.
 
-| Archivo | Responsabilidad |
+| Archive | Responsibility |
 |---------|----------------|
-| `app.py` | Composición de rutas FastAPI, middleware |
-| `bot_service.py` | Servicio del hub multi-instancia de bots |
-| `thusnelda_service.py` | Hub service para Thusnelda |
-| Rutas de vault, gateway, ops, sandbox, usage | Façades por dominio |
+| `app.py` | FastAPI route composition, middleware |
+| `bot_service.py` | Multi-instance bot hub service |
+| `thusnelda_service.py` | Hub service for Thusnelda |
+| Vault routes, gateway, ops, sandbox, usage | Facades by domain |
 
 ### `runtime/connectors/`
 
-| Archivo | Responsabilidad |
+| Archive | Responsibility |
 |---------|----------------|
-| `binance_gateway.py` | Polling de cuenta, market streams, REST weight tracking, equity refresh |
+| `binance_gateway.py` | Account polling, market streams, REST weight tracking, equity refresh |
 
 ### `runtime/core/`
 
-Primitivas compartidas sin dependencia de capas superiores.
+Shared primitives without dependency on higher layers.
 
-| Módulo | Responsabilidad |
+| Module | Responsibility |
 |--------|----------------|
-| `settings.py` | Variables de entorno y configuración |
-| `vault.py` | Cifrado/descifrado de credenciales Fernet |
-| `state_store.py` | Estado en memoria del gateway |
-| `ops_audit_log.py` | Auditoría de protocolos operativos (SQLite) |
-| `config_manager.py` | Configuración persistente de bots |
-| `security_util.py` | Sanitización de logs |
+| `settings.py` | Environment and configuration variables |
+| `vault.py` | Fernet Credential Encryption/Decryption |
+| `state_store.py` | Gateway memory status |
+| `ops_audit_log.py` | Audit of operational protocols (SQLite) |
+| `config_manager.py` | Persistent bot configuration |
+| `security_util.py` | Log sanitization |
 
 ### `runtime/modules/bots/`
 
-Módulos de estrategia de bots (imports canónicos desde esta ruta).
+Bot strategy modules (canonical imports from this route).
 
-| Módulo | Bot | Descripción |
+| Module | Bot | Description |
 |--------|-----|-------------|
-| `dorothy.py` | Dorothy | Escalera spot — SELL LIMIT + compra en caída |
-| `masha.py` | Masha | DCA multi-timeframe con señal técnica (`1w`+`1h`) |
-| `thusnelda.py` | Thusnelda | Cesta de símbolos con meta de equity global |
+| `dorothy.py` | Dorothy | Spot ladder — SELL LIMIT + dip buy |
+| `masha.py` | Masha | Multi-timeframe DCA with technical signal (`1w`+`1h`) |
+| `thusnelda.py` | Thusnelda | Symbol basket with global equity goal |
 
 ### `runtime/modules/tools/`
 
-| Módulo | Herramienta | Descripción |
+| Module | Tool | Description |
 |--------|-------------|-------------|
-| `ops/` | Ops Protocols | Implementación de close protocol y red button |
+| `ops/` | Ops Protocols | Implementation of close protocol and red button |
 
 ---
 
-## Módulos de bots en raíz (`bots/`)
+## Bot modules in root (`bots/`)
 
-Índices documentales con entrypoints, superficie API y stores SQLite.
+Document indexes with entrypoints, API surface and SQLite stores.
 
 ### `bots/dorothy/`
 
@@ -135,7 +135,7 @@ Módulos de estrategia de bots (imports canónicos desde esta ruta).
 
 ---
 
-## Módulos de herramientas en raíz (`tools/`)
+## Tool modules in root (`tools/`)
 
 ### `tools/ops-protocols/`
 
@@ -150,23 +150,23 @@ Módulos de estrategia de bots (imports canónicos desde esta ruta).
 
 ### `tools/sandbox-rest/`
 
-Queries guiadas a Binance REST desde la UI.
+Queries guided to Binance REST from the UI.
 
 - **API:** `/api/v1/sandbox/rest/catalog`, `/api/v1/sandbox/rest/query`
-- Soporta: `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
+- Supports: `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
 
 ### `tools/rest-weight-monitor/`
 
-Monitor de peso REST con historial y auditoría por endpoint.
+REST weight monitor with history and audit per endpoint.
 
 - **API:** `/api/v1/usage/rest-weight/events`, `/api/v1/usage/rest-weight/report`
-- Fuente: header Binance `X-MBX-USED-WEIGHT-1M`
+- Source: Binance header `X-MBX-USED-WEIGHT-1M`
 
 ---
 
 ## Scripts (`scripts/`)
 
-| Carpeta | Scripts clave |
+| Folder | Key scripts |
 |---------|--------------|
 | `scripts/ui/` | `init_flutter_desktop.ps1`, `run_dashboard.ps1`, `run_dashboard.cmd`, `PecunatorDesktopLauncher.ps1`, `InstallDesktopShortcut.ps1` |
 | `scripts/engine/` | `run_engine.ps1`, `run_engine_immortal.ps1`, `stop_engine_port.ps1`, `InstallImmortalStartup.ps1` |
@@ -174,7 +174,7 @@ Monitor de peso REST con historial y auditoría por endpoint.
 
 ---
 
-## Nota de compatibilidad
+## Compatibility note
 
-- `runtime/bot/*` permanece disponible como puente de compatibilidad mientras los imports migran a `runtime/modules/bots/*`
-- El código nuevo debe importar runners/configs desde `runtime.modules.bots`
+- `runtime/bot/*` remains available as a compatibility bridge while imports migrate to `runtime/modules/bots/*`
+- New code must import runners/configs from `runtime.modules.bots`

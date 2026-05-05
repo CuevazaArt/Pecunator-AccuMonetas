@@ -25,8 +25,8 @@
 
 **Pecunator** *(from Latin* pecunia *—wealth, minted money)* is a **personal financial workstation** designed for a single operator. It is not an exchange, it is not a fund, it is not a SaaS: it is a **local runtime** that combines:
 
-| 🧩 Component | 🛠️ Technology | 🎯 Role |
-|---------------|--------|--------|
+| 🧩 Component | 🛠️ Technology | 🎯Role |
+|--------|--------|--------|
 | 🐍 **Engine** | Python · FastAPI · python-binance | Bot logic, vault, Binance connection |
 | 🦋 **UI** | Flutter Desktop (Windows) | Dashboard, control, visualization |
 | 🗄️ **Persistence** | SQLite + CSV + Vault Fernet | Status, metrics, encrypted credentials |
@@ -78,7 +78,7 @@ The philosophy is direct: **the human operator is sovereign**; the code executes
 <tr>
 <td width="33%" valign="top">
 
-### 🔒 Security
+### 🔒Security
 - 🔐 **[Security and Credentials](Security-and-Credentials)**  
   Vault Fernet, rotation
 
@@ -199,7 +199,7 @@ Bot Hub + Backup DB
 *Operating brain*
 
 Analysis and orchestration.  
-**Proposes**, not decides.
+**Proposes**, not decide.
 
 </td>
 </tr>
@@ -250,7 +250,7 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 > 2. 🛡️ **Contain losses** — not prohibited; they contain, audit and learn.
 > 3. 👑 **Operational sovereignty** — the operator retains absolute control over funds and data.
 > 4. 🔍 **Full traceability** — each operation is recorded and auditable.
-> 5. 🤖 **The LLM proposes, the code disposes** — the AI ​​analyzes; execution is deterministic.
+> 5. 🤖 **The LLM proposes, the code disposes** — the AI ​​​​analyzes; execution is deterministic.
 > 6. 🔐 **Least privilege** — keys only with strictly necessary permissions; never *withdraw*.
 
 ---
@@ -273,7 +273,7 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 
 ### 📐 Risk management and financial mathematics
 
-| 🧠 Concept | 🧾 Origin | 📍 Where does it appear in Pecunator |
+| 🧠Concept | 🧾Origin | 📍Where does it appear in Pecunator |
 |------------|----------|----------------------------|
 | **Sharpe Ratio** | William F. Sharpe (1966), *"Mutual Fund Performance"*, *Journal of Business* | Calculated per instance in `*_metrics_log` every `metrics_interval_cycles` |
 | **Kelly Criterion** | J. L. Kelly Jr. (1956), *"A New Interpretation of Information Rate"*, *Bell System Tech. J.* — [Classic PDF](https://www.princeton.edu/~wbialek/rome/refs/kelly_56.pdf) | Mental framework for sizing `quote_order_qty` vs total equity |
@@ -296,7 +296,7 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 
 ### 🔐 Cryptography and security
 
-| 📋Standard/Resource | 🔗 Link | 📍 Application |
+| 📋Standard/Resource | 🔗 Link | 📍Application |
 |-----------------------|----------|---------------|
 | **Fernet (symmetric encryption)** | [cryptography.io · Fernet spec](https://cryptography.io/en/latest/fernet/) | Vault encryption `credentials.enc` |
 | **NIST SP 800-57** — Key Management | [NIST publication](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final) | Rotation policy every 90 days |
@@ -307,8 +307,8 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 
 ### 🌐 Stack APIs and libraries
 
-| 🧰 Resource | 🔗 Official documentation |
-|-----------|------------------------|
+| 🧰 Resource | 🔗Official documentation |
+|--------|------------------------|
 | 🟡 **Binance Spot API** (REST) ​​| [developers.binance.com — REST](https://developers.binance.com/docs/binance-spot-api-docs/rest-api) |
 | 🟡 **Binance WebSocket Streams** | [github.com/binance/binance-spot-api-docs](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md) |
 | 🟡 **Binance API FAQ** (rate limits, WAF, bans) | [Binance Support FAQ](https://www.binance.com/en/support/faq/detail/360004492232) |
@@ -322,7 +322,7 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 
 ### 📊 Market and product concepts
 
-| 🪙 Concept | 📚 Introductory reference |
+| 🪙Concept | 📚 Introductory reference |
 |------------|----------------------------|
 | **Dollar-Cost Averaging (DCA)** | [Investopedia · DCA](https://www.investopedia.com/terms/d/dollarcostaveraging.asp) |
 | **Grid trading / Ladder strategy** | [Investopedia · Grid Trading](https://www.investopedia.com/articles/forex/06/gridtrading.asp) |
@@ -349,7 +349,7 @@ They all share **3 uniform protections** (drawdown guard, configurable stop-loss
 | **Gateway** | Connector against a specific exchange (today Binance; tomorrow CCXT) |
 | **Vault** | Fernet encrypted store of credentials (`runtime/data/credentials.enc`) |
 | **Fuse** | *Circuit breaker* that cuts REST if the weight exceeds thresholds |
-| **Governor** | Smooth cadence regulator to avoid saturating the rate limit |
+| **Governor** | Smooth cadence regulation to avoid saturating the rate limit |
 | **Coordinator** | Bot Lifecycle Orchestrator (start/stop/desired_running) |
 | **Shell** | The Flutter Desktop frontend |
 | **Doctrine** | Set of policies written in `docs/` that govern the operation |

@@ -31,7 +31,7 @@
 
 ### Base parameters
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `symbol` | Spot pair to trade |
 | `base_asset` | Base asset (e.g. `XRP`) |
@@ -43,7 +43,7 @@
 
 ### Technical parameters — Weekly timeframe (`1w`)
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `timeframe_w` | Weekly timeframe (e.g. `1w`) |
 | `periods_w` | Periods to analyze in `1w` |
@@ -52,7 +52,7 @@
 
 ### Technical parameters — Hourly timeframe (`1h`)
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `timeframe_h` | Hourly timeframe (e.g. `1h`) |
 | `periods_h` | Periods to analyze in `1h` |
@@ -61,7 +61,7 @@
 
 ### Risk parameters and metrics
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `max_drawdown_pct` | **Drawdown guard:** stops new purchases if the drawdown exceeds this threshold |
 | `stop_loss_pct` | **Stop-loss DCA:** protects the DCA if the price breaks the lower limit |
@@ -111,7 +111,7 @@ SELECT * FROM masha_runtime_state;
 Weekly signal (1w):
   current_price < moving_average(mm_periods_w) * (1 - margin_low_w)
   
-Time signal (1h):
+Signal time (1h):
   current_price < moving_average(mm_periods_h) * (1 - margin_low_h)
 
 DCA Purchase Condition:

@@ -1,21 +1,21 @@
-# Instalación y Arranque — Pecunator
+# Installation and Startup — Pecunator
 
-> Guía completa para instalar, configurar y arrancar el motor Python y la UI Flutter Desktop.
+> Complete guide to install, configure and start Python engine and Flutter Desktop UI.
 
 ---
 
-## Requisitos
+## Requirements
 
-| Componente | Versión mínima |
+| Component | Minimum version |
 |------------|---------------|
 | Python | 3.11+ |
 | Flutter SDK | Latest stable |
-| Windows | Para producción desktop |
-| Git | Cualquier versión reciente |
+| Windows | For desktop production |
+| Git | Any recent version |
 
 ---
 
-## 1. Clonar el Repositorio
+## 1. Clone the Repository
 
 ```bash
 git clone https://github.com/CuevazaArt/Pecunator.git
@@ -24,21 +24,21 @@ cd Pecunator
 
 ---
 
-## 2. Motor Python
+## 2. Python Engine
 
-### 2.1 Instalar dependencias
+### 2.1 Install dependencies
 
 ```bash
-# Dependencias de producción
+# Production dependencies
 pip install -r requirements.txt
 
-# Dependencias de desarrollo (tests, linters)
+# Development dependencies (tests, linters)
 pip install -r requirements-dev.txt
 ```
 
-### 2.2 Configurar credenciales
+### 2.2 Configure credentials
 
-**Opción A — Variables de entorno (arranque rápido):**
+**Option A — Environment variables (fast boot):**
 
 ```bash
 # Windows PowerShell
@@ -46,92 +46,92 @@ $env:PECUNATOR_BINANCE_API_KEY = "tu_api_key"
 $env:PECUNATOR_BINANCE_API_SECRET = "tu_api_secret"
 ```
 
-**Opción B — Vault cifrado (recomendado para producción):**  
-Gestionar desde la UI Flutter (ver sección Vault en la UI).
+**Option B — Encrypted Vault (recommended for production):**  
+Manage from the Flutter UI (see Vault section in the UI).
 
-> ⚠️ Usar **una sola fuente activa** por sesión para evitar mezclar cuentas.
+> ⚠️ Use **a single active source** per session to avoid mixing accounts.
 
-### 2.3 Arrancar el motor
+### 2.3 Start the engine
 
 ```bash
-# Arranque directo
+# Direct boot
 python main.py
 
-# Con PowerShell (venv + arranque)
+# With PowerShell (venv + boot)
 powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
 
-# Motor inmortal (supervisor que reinicia si el proceso cae)
+# Immortal engine (supervisor that restarts if the process crashes)
 powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1
 ```
 
-**Motor disponible en:** `http://127.0.0.1:8765`  
-**OpenAPI interactivo:** `http://127.0.0.1:8765/docs`
+**Engine available at:** `http://127.0.0.1:8765`  
+**Interactive OpenAPI:** `http://127.0.0.1:8765/docs`
 
-### 2.4 Variables de entorno opcionales
+### 2.4 Optional environment variables
 
-| Variable | Default | Descripción |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `PECUNATOR_API_HOST` | `127.0.0.1` | Host de la API |
-| `PECUNATOR_API_PORT` | `8765` | Puerto de la API |
-| `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | Límite de referencia de peso REST para la barra UI |
-| `PECUNATOR_EQUITY_BASE_ASSET` | `USDT` | Activo base para métricas de equity |
-| `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Ventana de promedio rolling de equity |
-| `PECUNATOR_EQUITY_POLL_STRIDE` | `5` | Cada cuántos ciclos refrescar equity |
-| `PECUNATOR_ENGINE_STUB` | — | Si `=1`, modo stub sin servidor (solo log) |
+| `PECUNATOR_API_HOST` | `127.0.0.1` | API Host |
+| `PECUNATOR_API_PORT` | `8765` | API Port |
+| `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | REST weight reference limit for UI bar |
+| `PECUNATOR_EQUITY_BASE_ASSET` | `USDT` | Base asset for equity metrics |
+| `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Equity rolling average window |
+| `PECUNATOR_EQUITY_POLL_STRIDE` | `5` | How many cycles to refresh equity |
+| `PECUNATOR_ENGINE_STUB` | — | If `=1`, serverless stub mode (log only) |
 
-### 2.5 Solución de problemas del motor
+### 2.5 Engine Troubleshooting
 
-**Puerto 8765 ocupado por proceso anterior:**
-```powershell
+**Port 8765 occupied by previous process:**
+``powershell
 powershell -ExecutionPolicy Bypass -File scripts/engine/stop_engine_port.ps1
 ```
 
-**Autoarranque tras reinicio de Windows:**
-```powershell
+**Autostart after Windows restart:**
+``powershell
 powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1
 ```
 
 ---
 
-## 3. UI Flutter Desktop
+## 3. Flutter Desktop UI
 
-### 3.1 Instalar Flutter SDK
+### 3.1 Install Flutter SDK
 
-Instalar [Flutter SDK para Windows](https://docs.flutter.dev/get-started/install/windows).
+Install [Flutter SDK for Windows](https://docs.flutter.dev/get-started/install/windows).
 
-### 3.2 Inicializar Flutter Desktop
+### 3.2 Initialize Flutter Desktop
 
 ```powershell
 # Desde la raíz del repo
 powershell -ExecutionPolicy Bypass -File scripts/ui/init_flutter_desktop.ps1
 ```
 
-Esto instala dependencias y configura `desktop_shell/`.
+This installs dependencies and configures `desktop_shell/`.
 
-### 3.3 Ejecutar la UI
+### 3.3 Run the UI
 
 ```bash
-# Opción 1: Flutter directo
+#Option 1: Direct Flutter
 cd desktop_shell
 flutter run -d windows
 
-# Opción 2: Script PowerShell (PATH recargado + flutter run)
+# Option 2: PowerShell Script (PATH reloaded + flutter run)
 powershell -ExecutionPolicy Bypass -File scripts/ui/run_dashboard.ps1
 
-# Opción 3: Doble clic en
+# Option 3: Double click
 scripts/ui/run_dashboard.cmd
 ```
 
-### 3.4 Crear acceso directo en escritorio
+### 3.4 Create desktop shortcut
 
 ```powershell
 # Crea PecunatorCore.lnk en el escritorio (motor + app)
 powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1
 ```
 
-El lanzador se encuentra en `scripts/ui/PecunatorDesktopLauncher.ps1`.
+The launcher is located in `scripts/ui/PecunatorDesktopLauncher.ps1`.
 
-### 3.5 Build para producción
+### 3.5 Build for production
 
 ```bash
 cd desktop_shell
@@ -139,9 +139,9 @@ flutter build windows
 # Ejecutable: desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe
 ```
 
-### 3.6 Limpiar caché y recompilar
+### 3.6 Clear cache and recompile
 
-> ⚠️ Cerrar `pecunator_desktop.exe` primero para liberar DLLs.
+> ⚠️ Close `pecunator_desktop.exe` first to free DLLs.
 
 ```bash
 cd desktop_shell
@@ -150,40 +150,40 @@ flutter pub get
 flutter build windows     # o flutter run -d windows
 ```
 
-**Datos del hub en SQLite:** `runtime/data/dorothy_hub.sqlite`  
-Eliminar este archivo solo si se quiere resetear logs/config del hub (hacer copia antes).
+**Hub data in SQLite:** `runtime/data/dorothy_hub.sqlite`  
+Delete this file only if you want to reset the hub's logs/config (make a copy first).
 
 ---
 
-## 4. Flujo de Inicio Recomendado
+## 4. Recommended Startup Flow
 
 ```
-1. Arrancar motor Python:
+1. Start Python engine:
    powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
 
-2. Verificar que la API responde:
+2. Verify that the API responds:
    curl http://127.0.0.1:8765/api/v1/vault/status
 
-3. Arrancar UI Flutter:
+3. Start UI Flutter:
    scripts/ui/run_dashboard.cmd
 
-4. Configurar credenciales desde la UI (pestaña Vault)
+4. Configure credentials from the UI (Vault tab)
 
-5. Arrancar instancias de bots desde los Hubs
+5. Start bot instances from Hubs
 ```
 
 ---
 
-## 5. Verificación rápida
+## 5. Quick Check
 
 ```bash
-# ¿Motor corriendo?
+# Engine running?
 curl http://127.0.0.1:8765/api/v1/vault/status
 
-# ¿Credenciales activas?
+# Active credentials?
 curl http://127.0.0.1:8765/api/v1/credentials/active
 
-# ¿Gateway conectado?
+# Gateway connected?
 curl http://127.0.0.1:8765/api/v1/gateway/snapshot
 ```
 
@@ -192,16 +192,16 @@ curl http://127.0.0.1:8765/api/v1/gateway/snapshot
 ## 6. Tests
 
 ```bash
-# Python
+#Python
 pytest runtime/tests/ -v
 
-# Python (test específico)
+# Python (specific test)
 pytest runtime/tests/test_dorothy.py -v
 
-# Flutter
+#Flutter
 cd desktop_shell
 flutter test test/ -v
 
-# Análisis Flutter
+# Flutter Analysis
 flutter analyze lib/
 ```

@@ -1,97 +1,97 @@
 <div align="center">
 
-# 🔑 Guía: Darle permiso de escritura al agente Copilot sobre el Wiki
+# 🔑 Guide: Give the Copilot agent write permission on the Wiki
 
-### *Cómo conceder a GitHub Copilot Coding Agent el token necesario para editar `Pecunator.wiki.git`*
+### *How to grant GitHub Copilot Coding Agent the token needed to edit `Pecunator.wiki.git`*
 
 ![GitHub](https://img.shields.io/badge/GitHub-PAT-181717?style=for-the-badge&logo=github)
 ![Security](https://img.shields.io/badge/Scope-wiki%20write-orange?style=for-the-badge&logo=githubactions)
-![Difficulty](https://img.shields.io/badge/dificultad-fácil-brightgreen?style=for-the-badge)
+![Difficulty](https://img.shields.io/badge/difficulty-easy-brightgreen?style=for-the-badge)
 
 </div>
 
 ---
 
-## 🧩 ¿Por qué es necesario?
+## 🧩 Why is it necessary?
 
-El **GitHub Copilot Coding Agent** recibe un token de instalación automático (`GITHUB_TOKEN`) que — por diseño de seguridad de GitHub — **no incluye permisos de escritura sobre el Wiki**.
+The **GitHub Copilot Coding Agent** receives an automatic installation token (`GITHUB_TOKEN`) which — by GitHub security design — **does not include write permissions to the Wiki**.
 
-El Wiki en GitHub es un repositorio Git separado (`<tu-repo>.wiki.git`) y requiere un token con scope específico o un PAT del propietario del repositorio. Sin él, cualquier `git push` al wiki falla con:
+The Wiki on GitHub is a separate Git repository (`<your-repo>.wiki.git`) and requires a specific scoped token or PAT from the repository owner. Without it, any `git push` to the wiki fails with:
 
 ```
 remote: Permission to CuevazaArt/Pecunator.wiki.git denied
 fatal: unable to access '...': The requested URL returned error: 403
 ```
 
-> 📖 Referencia oficial: [GitHub Docs — About wikis](https://docs.github.com/en/communities/documenting-your-project-with-wikis/about-wikis) · [GitHub Apps Permissions](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps)
+> 📖 Official reference: [GitHub Docs — About wikis](https://docs.github.com/en/communities/documenting-your-project-with-wikis/about-wikis) · [GitHub Apps Permissions](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps)
 
 ---
 
-## 🗺️ Resumen de opciones
+## 🗺️ Options Overview
 
-| Opción | Esfuerzo | Seguridad | Recomendada |
+| Option | Effort | Security | Recommended |
 |--------|----------|-----------|:-----------:|
-| **A — PAT clásico `repo`** | ⚡ 5 min | 🟡 Media (scope amplio) | Para empezar rápido |
-| **B — Fine-grained PAT** | ⚡ 8 min | 🟢 Alta (scope mínimo) | ✅ **Recomendada** |
-| **C — Sync manual desde PR** | 🐢 manual | 🟢 Alta | Para uso ocasional |
+| **A — classic PAT `repo`** | ⚡ 5 min | 🟡 Medium (wide scope) | To start quickly |
+| **B — Fine-grained PAT** | ⚡ 8 min | 🟢 High (minimum scope) | ✅ **Recommended** |
+| **C — Manual Sync from PR** | 🐢 manual | 🟢 High | For occasional use |
 
 ---
 
-## ✅ Opción B — Fine-Grained PAT *(recomendada)*
+## ✅ Option B — Fine-Grained PAT *(recommended)*
 
-### Paso 1 — Crear el token en GitHub
+### Step 1 — Create the token on GitHub
 
-1. Ve a **[github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens](https://github.com/settings/tokens?type=beta)**.
+1. Go to **[github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens](https://github.com/settings/tokens?type=beta)**.
 
-   > Ruta directa: `https://github.com/settings/tokens?type=beta`
+> Direct path: `https://github.com/settings/tokens?type=beta`
 
-2. Pulsa **"Generate new token"**.
+2. Press **"Generate new token"**.
 
-3. Rellena los campos:
+3. Fill in the fields:
 
-   | Campo | Valor |
+| Field | Value |
    |-------|-------|
    | **Token name** | `pecunator-wiki-write` |
-   | **Expiration** | 90 días (o el que prefieras) |
-   | **Resource owner** | `CuevazaArt` |
+   | **Expiration** | 90 days (or whatever you prefer) |
+   | **Resource owner** | `CaveArt` |
    | **Repository access** | ✅ Only selected repositories → **Pecunator** |
 
-4. En **Repository permissions** busca **"Contents"** y selecciona **"Read and write"**.
+4. In **Repository permissions** search for **"Contents"** and select **"Read and write"**.
 
-   > ⚠️ El wiki vive bajo el scope `Contents` (es un repositorio git). **No** necesitas habilitar "Pages", "Issues" ni ningún otro.
+> ⚠️ The wiki lives under the `Contents` scope (it is a git repository). **You don't** need to enable "Pages", "Issues" or anything else.
 
-5. Haz clic en **"Generate token"**.
+5. Click **"Generate token"**.
 
-6. 🟥 **COPIA el token ahora** — GitHub no lo vuelve a mostrar.
+6. 🟥 **COPY token now** — GitHub doesn't show it again.
 
-   El token se verá así:
+The token will look like this:
    ```
-   github_pat_11AAAAAAA_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   github_pat_11AAAAAAA_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 
 ---
 
-### Paso 2 — Guardar el token como Secret del repositorio
+### Step 2 — Save the token as the repository's Secret
 
-1. Ve a la página del repositorio:  
+1. Go to the repository page:  
    `https://github.com/CuevazaArt/Pecunator/settings/secrets/actions`
 
-2. Pulsa **"New repository secret"**.
+2. Press **"New repository secret"**.
 
-3. Rellena:
+3. Fill:
 
-   | Campo | Valor |
+| Field | Value |
    |-------|-------|
    | **Name** | `WIKI_WRITE_TOKEN` |
-   | **Secret** | Pega el token del paso anterior |
+   | **Secret** | Paste the token from the previous step |
 
-4. Pulsa **"Add secret"**.
+4. Press **"Add secret"**.
 
 ---
 
-### Paso 3 — Exponerlo al agente en `copilot-setup-steps.yml`
+### Step 3 — Expose it to the agent in `copilot-setup-steps.yml`
 
-El agente Copilot sólo tiene acceso a los secrets que se le exponen explícitamente en el archivo de configuración del entorno. Edita (o crea) el archivo `.github/copilot-setup-steps.yml`:
+The Copilot agent only has access to secrets that are explicitly exposed to it in the environment configuration file. Edit (or create) the `.github/copilot-setup-steps.yml` file:
 
 ```yaml
 # .github/copilot-setup-steps.yml
@@ -103,13 +103,13 @@ steps:
       echo "WIKI_WRITE_TOKEN=${WIKI_WRITE_TOKEN}" >> "$GITHUB_ENV"
 ```
 
-> 📖 Referencia: [GitHub Docs — Copilot coding agent setup steps](https://docs.github.com/en/copilot/managing-copilot/managing-github-copilot-in-your-organization/customizing-copilot-coding-agent-with-mcp/configuring-copilot-coding-agent-setup-steps)
+> 📖 Reference: [GitHub Docs — Copilot coding agent setup steps](https://docs.github.com/en/copilot/managing-copilot/managing-github-copilot-in-your-organization/customizing-copilot-coding-agent-with-mcp/configuring-copilot-coding-agent-setup-steps)
 
 ---
 
-### Paso 4 — Verificar que el agente puede hacer push
+### Step 4 — Verify that the agent can push
 
-La próxima vez que el agente necesite publicar el wiki, usará el token así:
+The next time the agent needs to publish the wiki, it will use the token like this:
 
 ```bash
 git clone "https://x-access-token:${WIKI_WRITE_TOKEN}@github.com/CuevazaArt/Pecunator.wiki.git" /tmp/wiki
@@ -120,65 +120,65 @@ git commit -m "Sync wiki from main"
 git push origin master
 ```
 
-Con el token correcto, el push tendrá éxito en lugar del error 403.
+With the correct token, the push will succeed instead of the 403 error.
 
 ---
 
-## ⚡ Opción A — PAT clásico `repo` *(más rápida)*
+## ⚡ Option A — Classic PAT `repo` *(faster)*
 
-> Úsala si quieres empezar en 5 minutos sin preocuparte por la granularidad.  
-> Limitación: el scope `repo` da acceso de escritura a **todos** tus repositorios privados, no sólo a Pecunator.
+> Use it if you want to get started in 5 minutes without worrying about granularity.  
+> Limitation: the `repo` scope gives write access to **all** your private repositories, not just Pecunator.
 
-1. Ve a **[github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)**.
-2. Pulsa **"Generate new token (classic)"**.
-3. Marca el scope **`repo`** (incluye `repo:status`, `repo_deployment`, `public_repo`, `repo:invite`, `security_events`).
-4. Copia el token y guárdalo como secret `WIKI_WRITE_TOKEN` igual que en la Opción B, Paso 2.
-5. Agrega el mismo bloque en `.github/copilot-setup-steps.yml`.
+1. Go to **[github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)**.
+2. Press **"Generate new token (classic)"**.
+3. Check the **`repo`** scope (includes `repo:status`, `repo_deployment`, `public_repo`, `repo:invite`, `security_events`).
+4. Copy the token and save it as secret `WIKI_WRITE_TOKEN` same as Option B, Step 2.
+5. Add the same block in `.github/copilot-setup-steps.yml`.
 
 ---
 
-## 🐢 Opción C — Sync manual desde el PR *(sin configuración)*
+## 🐢 Option C — Manual Sync from the PR *(no configuration)*
 
-Si prefieres no crear tokens adicionales, el flujo es:
+If you prefer not to create additional tokens, the flow is:
 
-1. El agente escribe los archivos `.md` en `wiki/` dentro del branch del PR (como lo hace hoy).
-2. Tú los copias al wiki manualmente en tu máquina:
+1. The agent writes the `.md` files to `wiki/` within the PR branch (as it does today).
+2. You copy them to the wiki manually on your machine:
 
 ```bash
-# Clona el wiki una sola vez
+# Clone the wiki only once
 git clone https://github.com/CuevazaArt/Pecunator.wiki.git
 
-# Después de cada PR, copia los archivos
-cp <ruta-a-PR>/wiki/*.md Pecunator.wiki/
+# After each PR, copy the files
+cp <path-to-PR>/wiki/*.md Pecunator.wiki/
 
-# Publica
+# Publish
 cd Pecunator.wiki
 git add .
-git commit -m "Sync wiki desde PR #X"
+git commit -m "Sync wiki from PR #X"
 git push
 ```
 
-O más rápido, directamente desde el editor web:  
-`https://github.com/CuevazaArt/Pecunator/wiki/<Nombre-de-Pagina>/_edit`
+Or faster, directly from the web editor:  
+`https://github.com/CuevazaArt/Pecunator/wiki/<Page-Name>/_edit`
 
 ---
 
-## 🔒 Buenas prácticas de seguridad
+## 🔒 Good security practices
 
-| ✅ Hacer | ❌ Evitar |
+| ✅ Make | ❌ Avoid |
 |---------|---------|
-| Usar fine-grained PAT con scope mínimo | PAT clásico con scope `admin` |
-| Establecer expiración (90 días) | Tokens sin expiración |
-| Guardar el token como Secret, no en código | Poner el token en `copilot-setup-steps.yml` en texto plano |
-| Revocar el token si no está en uso | Dejar tokens activos indefinidamente |
-| Rotar el token antes de su expiración | Olvidar la fecha de expiración |
+| Use fine-grained PAT with minimal scope | Classic PAT with scope `admin` |
+| Set expiration (90 days) | Tokens without expiration |
+| Save the token as Secret, not in code | Put token in `copilot-setup-steps.yml` in plain text |
+| Revoke token if not in use | Leave tokens active indefinitely |
+| Rotate token before expiration | Forget the expiration date |
 
-> 📖 Ver también: **[Seguridad y Credenciales](Seguridad-y-Credenciales)** en este wiki.  
-> 📖 NIST SP 800-57 (gestión de claves): [csrc.nist.gov](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final)
+> 📖 See also: **[Security and Credentials](Security-and-Credentials)** in this wiki.  
+> 📖 NIST SP 800-57 (key management): [csrc.nist.gov](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final)
 
 ---
 
-## 🔍 Cómo verificar que el token está activo
+## 🔍 How to verify that the token is active
 
 ```bash
 # Desde tu terminal local, comprueba que el token tiene acceso
@@ -187,11 +187,11 @@ curl -H "Authorization: token <tu-token>" \
      | python3 -m json.tool | grep '"permissions"' -A 10
 ```
 
-Deberías ver `"push": true`. Si ves `"push": false` el token no tiene los permisos correctos.
+You should see `"push": true`. If you see `"push": false` the token does not have the correct permissions.
 
 ---
 
-## 📋 Checklist de implementación
+## 📋 Deployment checklist
 
 ```
 □ Paso 1 — Creado fine-grained PAT con Contents: Read and Write
@@ -205,8 +205,8 @@ Deberías ver `"push": true`. Si ves `"push": false` el token no tiene los permi
 
 <div align="center">
 
-**[⬆️ Inicio](Home)** · **[🔐 Seguridad y Credenciales](Seguridad-y-Credenciales)** · **[🛠️ Guía de Desarrollo](Guia-de-Desarrollo)**
+**[⬆️ Home](Home)** · **[🔐 Security and Credentials](Security-and-Credentials)** · **[🛠️ Development Guide](Development-Guide)**
 
-<sub>📌 Esta guía sólo aplica al propietario del repositorio (<strong>CuevazaArt</strong>). Los tokens nunca deben compartirse.</sub>
+<sub>📌 This guide only applies to the owner of the repository (<strong>CuevazaArt</strong>). Tokens should never be shared.</sub>
 
 </div>

@@ -1,245 +1,245 @@
-# Manifiesto Arquitectónico — Pecunator
+# Architectural Manifesto — Pecunator
 
-> Documento vivo que define la filosofía, arquitectura y directrices operativas del proyecto.  
-> Toda decisión técnica es trazable a los principios aquí establecidos.  
-> Última actualización: 2026-05-04
-
----
-
-## 1. Visión del Proyecto
-
-Pecunator es un **hub de operaciones financieras algorítmicas** diseñado para un operador individual. Su objetivo es componer beneficio a través de ciclos repetidos de trading, yield farming y gestión de portfolio, con control total sobre la lógica de decisión y la trazabilidad de cada operación.
-
-No es un exchange. No es un fondo. Es una **estación de trabajo financiera personal** que combina automatización, análisis y supervisión humana.
-
-### Principios Fundacionales
-
-| # | Principio | Descripción |
-|---|-----------|-------------|
-| 1 | **Componer beneficio** | El objetivo es crecimiento compuesto, no apuestas únicas |
-| 2 | **Contener pérdidas** | Las pérdidas no se prohíben; se contienen, auditan y aprenden con controles estrictos |
-| 3 | **Soberanía operativa** | El operador mantiene control total sobre fondos, estrategias y datos |
-| 4 | **Trazabilidad total** | Cada operación, decisión y cambio queda registrado y es auditable |
+> Living document that defines the philosophy, architecture and operational guidelines of the project.  
+> Every technical decision is traceable to the principles established here.  
+> Last update: 2026-05-04
 
 ---
 
-## 2. El Modelo de 4 Pilares
+## 1. Project Vision
 
-### Pilar I — Binance CEX (Ejecución y Custodia)
+Pecunator is an algorithmic financial trading hub designed for an individual trader. Its objective is to compound profit through repeated cycles of trading, yield farming and portfolio management, with full control over the decision logic and traceability of each operation.
 
-**Rol:** Proveedor central de ejecución de órdenes, custodia de activos, datos de mercado en tiempo real e historiales de trading.
+It is not an exchange. It is not a background. It is a **personal financial workstation** that combines automation, analysis and human oversight.
 
-**Binance es infraestructura, no producto.** Pecunator consume la API de Binance como servicio.
+### Founding Principles
 
-**Qué le delegamos:**
-- Ejecución de órdenes (Spot, Futures, Margin)
-- Custodia de fondos (wallets)
-- Datos de mercado (tickers, orderbook, trades vía WebSocket)
-- Productos financieros (Earn, Loans, Staking)
-- Gestión de subcuentas
-- Historiales de trades y transacciones
+| # | Principle | Description |
+|---|--------|-------------|
+| 1 | **Compose profit** | The goal is compound growth, not one-time bets |
+| 2 | **Contain losses** | Losses are not prohibited; are contained, audited and learned with strict controls |
+| 3 | **Operational sovereignty** | The trader maintains full control over funds, strategies and data |
+| 4 | **Full traceability** | Every operation, decision and change is recorded and auditable |
 
-**Qué NO le delegamos:**
-- Decisiones de trading
-- Análisis de portfolio
-- Persistencia de largo plazo
-- Políticas operativas
+---
 
-### Pilar II — GitHub Repository (Conocimiento y Doctrina)
+## 2. The 4 Pillar Model
 
-**Rol:** Sistema de gestión de conocimiento versionado, código fuente, políticas operativas y memoria institucional.
+### Pillar I — Binance CEX (Execution and Custody)
 
-**El repo no es solo código; es la mente del proyecto.**
+**Role:** Central provider of order execution, asset custody, real-time market data and trading histories.
 
-Contiene:
-- Código fuente (runtime, bots, tools, scripts, desktop shell)
-- Documentación arquitectónica (`docs/`)
-- Políticas de seguridad (`docs/policies/`)
-- Directrices de contexto para el LLM (`docs/context/`)
-- Tasks operativos (`tools/ops-protocols/tasks/`)
-- Changelog y decisiones históricas
+**Binance is infrastructure, not product.** Pecunator consumes the Binance API as a service.
 
-**Convención de ramas:**
-- `main` — rama estable, siempre deployable
-- Ramas de feature/fix por PR
+**What we delegate to you:**
+- Order execution (Spot, Futures, Margin)
+- Custody of funds (wallets)
+- Market data (tickers, orderbook, trades via WebSocket)
+- Financial products (Earn, Loans, Staking)
+- Subaccount management
+- Trade and transaction histories
 
-### Pilar III — Flutter Desktop Shell (Visualización, DB, Simulaciones)
+**What we DO NOT delegate to you:**
+- Trading decisions
+- Portfolio analysis
+- Long term persistence
+- Operational policies
 
-**Rol:** Dashboard visual consolidado, base de datos local de respaldo y plataforma para simulaciones y análisis estadístico.
+### Pillar II — GitHub Repository (Knowledge and Doctrine)
 
-**Triple función:**
+**Role:** Versioned knowledge management system, source code, operational policies and institutional memory.
 
-| Función | Descripción |
+**The repo is not just code; is the mind of the project.**
+
+Contains:
+- Source code (runtime, bots, tools, scripts, desktop shell)
+- Architectural documentation (`docs/`)
+- Security policies (`docs/policies/`)
+- Context guidelines for the LLM (`docs/context/`)
+- Operational tasks (`tools/ops-protocols/tasks/`)
+- Changelog and historical decisions
+
+**Branch convention:**
+- `main` — stable branch, always deployable
+- Feature/fix branches by PR
+
+### Pillar III — Flutter Desktop Shell (Visualization, DB, Simulations)
+
+**Role:** Consolidated visual dashboard, local backup database and platform for simulations and statistical analysis.
+
+**Triple function:**
+
+| Function | Description |
 |---------|-------------|
-| **Hub de bots** | Visualización simultánea de N bots con estado, P&L y métricas |
-| **DB de respaldo** | SQLite local con snapshots de balances, trades, equity y estados |
-| **Laboratorio de análisis** | Backtests e hipótesis sin consumir rate limits de Binance |
+| **Bot Hub** | Simultaneous visualization of N bots with status, P&L and metrics |
+| **Backup DB** | Local SQLite with snapshots of balances, trades, equity and states |
+| **Analysis laboratory** | Backtests and hypotheses without consuming Binance rate limits |
 
-**Boundaries críticos:**
-- Credenciales **NUNCA** en Dart — siempre en el vault Python
-- Flutter habla **solo** con el runtime vía HTTP localhost
-- La UI **no es** fuente de verdad para balances ni posiciones
+**Critical boundaries:**
+- Credentials **NEVER** in Dart — always in the Python vault
+- Flutter talks **only** to the runtime via HTTP localhost
+- The UI is **not** a source of truth for balance sheets or positions
 
-### Pilar IV — IDE + LLM (Cerebro Operativo)
+### Pillar IV — IDE + LLM (Operational Brain)
 
-**Rol:** Capa cognitiva para análisis, orquestación de tareas complejas, generación de reportes y ejecución de protocolos operativos.
+**Role:** Cognitive layer for analysis, orchestration of complex tasks, generation of reports and execution of operational protocols.
 
-**El LLM propone, el código dispone.**
+**The LLM proposes, the code disposes.**
 
-**Qué hace el LLM:**
-- Analizar reportes y cruzar datos de múltiples fuentes
-- Ejecutar Tasks operativos (briefings, auditorías, health checks)
-- Generar código y scripts según directrices del repo
-- Detectar patrones y proponer acciones
-- Formalizar conocimiento en documentos `.md`
+**What the LLM does:**
+- Analyze reports and cross-reference data from multiple sources
+- Execute operational tasks (briefings, audits, health checks)
+- Generate code and scripts according to repo guidelines
+- Detect patterns and propose actions
+- Formalize knowledge in `.md` documents
 
-**Qué NO hace el LLM:**
-- Ejecutar trades sin aprobación explícita
-- Acceder directamente a private keys o secrets
-- Tomar decisiones finales sobre fondos
-- Reemplazar lógica determinística de bots
+**What the LLM DOES NOT do:**
+- Execute trades without explicit approval
+- Directly access private keys or secrets
+- Make final funding decisions
+- Replace deterministic bot logic
 
-**Limitaciones conocidas:** no-determinístico, amnesia entre sesiones, latencia 5–30 s. Mitigación: Tasks codifican protocolos reproducibles; directrices en `docs/context/` proveen contexto persistente.
+**Known limitations:** non-deterministic, amnesia between sessions, latency 5–30 s. Mitigation: Tasks encode reproducible protocols; Guidelines in `docs/context/` provide persistent context.
 
 ---
 
-## 3. Jerarquía de Decisión
+## 3. Decision Hierarchy
 
-| Nivel | Agente | Responsabilidad | Horizonte |
+| Level | Agent | Responsibility | Horizon |
 |-------|--------|----------------|-----------|
-| 1 | **Operador humano** | Estrategia, qué hacer, cuándo escalar | Días/Semanas |
-| 2 | **LLM (IDE)** | Análisis, briefings, propuestas de acción | Minutos/Horas |
-| 3 | **Scripts Python** | Ejecución determinística aprobada | Segundos |
-| 4 | **Bots autónomos** | Operación continua con parámetros fijos | Ciclo continuo |
-| 5 | **Binance API** | Ejecución de órdenes, custodia | Milisegundos |
-| 6 | **Flutter Shell** | Visualización, persistencia local | Tiempo real |
+| 1 | **Human operator** | Strategy, what to do, when to scale | Days/Weeks |
+| 2 | **LLM (IDE)** | Analysis, briefings, action proposals | Minutes/Hours |
+| 3 | **Python Scripts** | Deterministic execution approved | Seconds |
+| 4 | **Autonomous bots** | Continuous operation with fixed parameters | Continuous cycle |
+| 5 | **Binance API** | Execution of orders, custody | Milliseconds |
+| 6 | **Flutter Shell** | Visualization, local persistence | Real time |
 
-Cada nivel solo interactúa con los adyacentes.
-
----
-
-## 4. Política de Seguridad y Credenciales
-
-### Almacenamiento de Secretos
-
-- **API keys de Binance:** Vault cifrado en `runtime/data/` (AES via `cryptography`). Nunca en texto plano, nunca en variables de entorno sin cifrar en producción.
-- **Private keys Web3** (futuro): `.env` local con `chmod 600` + vault cifrado. Nunca en el repo.
-- **Tokens de GitHub:** Credential manager del sistema operativo.
-
-### Principio de Menor Privilegio
-
-- API keys de bots: solo permisos de trading, **NUNCA withdraw**
-- Subcuentas: cada bot opera con su propia key restringida por IP
-- El LLM solo invoca scripts; los scripts leen secrets del vault
-
-### Rotación y Revocación
-
-- API keys se rotan **cada 90 días** como mínimo
-- Si hay sospecha de compromiso: **revocar INMEDIATAMENTE** desde Binance antes de cualquier diagnóstico técnico
-
-### Sanitización de Logs
-
-- Toda salida de log pasa por `security_util.sanitize_log_message()`
-- Patrones de signature, API keys y secrets se redactan automáticamente
+Each level only interacts with adjacent ones.
 
 ---
 
-## 5. Política de Datos y Persistencia
+## 4. Security and Credentials Policy
 
-### Fuentes de Verdad
+### Secret Storage
 
-| Dato | Fuente de verdad | Respaldo |
-|------|------------------|----------|
-| Balances actuales | Binance API (User Data Stream) | Flutter SQLite |
-| Órdenes abiertas | Binance API (User Data Stream) | Flutter SQLite |
-| Historial de trades | Binance API (`/myTrades`) | CSV logs locales |
-| Tasas de earn/loan | Binance API + monitors | CSV logs en repo |
-| Estado de bots | Runtime StateStore (memoria) | Flutter SQLite |
-| Métricas de equity | Runtime EquityRollingWindow | Flutter SQLite |
-| Políticas y doctrina | GitHub repo (`docs/`) | — (el repo ES la verdad) |
-| Configuración de bots | `runtime/core/config_manager.py` | Vault cifrado |
+- **Binance API keys:** Vault encrypted in `runtime/data/` (AES via `cryptography`). Never in plain text, never in unencrypted environment variables in production.
+- **Private keys Web3** (future): local `.env` with `chmod 600` + encrypted vault. Never in repo.
+- **GitHub tokens:** Credential manager of the operating system.
 
-### Formatos
+### Least Privilege Principle
 
-| Tipo | Formato |
+- Bot API keys: trading permissions only, **NEVER withdraw**
+- Subaccounts: each bot operates with its own IP-restricted key
+- The LLM only invokes scripts; scripts read secrets from vault
+
+### Rotation and Revocation
+
+- API keys are rotated **every 90 days** at least
+- If compromise is suspected: **IMMEDIATELY revoke** from Binance prior to any technical diagnosis
+
+### Log Sanitization
+
+- All log output goes through `security_util.sanitize_log_message()`
+- Signature patterns, API keys and secrets are written automatically
+
+---
+
+## 5. Data and Persistence Policy
+
+### Sources of Truth
+
+| Data | Source of truth | Backup |
+|------|-------|----------|
+| Current balances | Binance API (User Data Stream) | Flutter SQLite |
+| Open orders | Binance API (User Data Stream) | Flutter SQLite |
+| Trade history | Binance API (`/myTrades`) | CSV local logs |
+| Earn/loan rates | Binance API + monitors | CSV logs in repo |
+| Bot Status | Runtime StateStore (memory) | Flutter SQLite |
+| Equity metrics | Runtime EquityRollingWindow | Flutter SQLite |
+| Policies and doctrine | GitHub repo (`docs/`) | — (the repo IS the truth) |
+| Bot Configuration | `runtime/core/config_manager.py` | Encrypted Vault |
+
+### Formats
+
+| Type | Format |
 |------|---------|
-| Reportes humanos | `.txt` o `.md` |
-| Datos tabulares | `.csv` (parseables con pandas) |
-| Datos estructurados | `.json` o SQLite |
-| Políticas y documentación | `.md` (versionado en git) |
+| Human reports | `.txt` or `.md` |
+| Tabular data | `.csv` (parseable with pandas) |
+| Structured data | `.json` or SQLite |
+| Policies and documentation | `.md` (versioned in git) |
 
 ---
 
-## 6. Filosofía de Trading
+## 6. Trading Philosophy
 
-### Horizonte Temporal
+### Time Horizon
 
-Pecunator **NO** es un sistema de HFT ni scalping. Enfoque:
+Pecunator is **NOT** an HFT or scalping system. Approach:
 
-- **Gestión de portfolio** — horizonte de horas a días
-- **Yield optimization** — horizonte de días a semanas
-- **Arbitraje** — solo si la ventana es cómoda (segundos a minutos)
-- **Auditoría y rebalanceo** — bajo demanda o periódico
+- **Portfolio management** — horizon from hours to days
+- **Yield optimization** — horizon from days to weeks
+- **Arbitration** — only if the window is comfortable (seconds to minutes)
+- **Audit and rebalancing** — on demand or periodic
 
-### Gestión de Riesgo
+### Risk Management
 
-| Control | Detalle |
+| Control | Detail |
 |---------|---------|
-| **Concentración máxima** | Ningún token individual debe superar el 25% del portfolio sin justificación documentada |
-| **Health factor mínimo** | Préstamos con HF < 1.5 activan alerta; HF < 1.3 activa protocolo de emergencia |
-| **Kill switch** | Botón rojo (`/api/v1/ops/red_button`) detiene todos los bots inmediatamente |
-| **Circuit breaker** | `ApiFuse` corta el acceso REST automáticamente si el peso de API supera umbrales |
+| **Maximum concentration** | No individual token should exceed 25% of the portfolio without documented justification |
+| **Minimum health factor** | Loans with HF < 1.5 activate alert; HF < 1.3 activates emergency protocol |
+| **Kill switch** | Red button (`/api/v1/ops/red_button`) stops all bots immediately |
+| **Circuit breaker** | `ApiFuse` automatically cuts REST access if API weight exceeds thresholds |
 
-### Tratamiento de Pérdidas
+### Loss Treatment
 
-Las pérdidas son eventos inevitables, no fallos del sistema:
+Losses are unavoidable events, not system failures:
 
-1. **Contención** — Limitar la pérdida vía stop-loss o cierre manual
-2. **Registro** — Documentar qué pasó, cuándo y por qué
-3. **Análisis** — ¿Error de estrategia, ejecución o mercado?
-4. **Adaptación** — Ajustar parámetros o estrategia si corresponde
-5. **Continuación** — Seguir operando con controles actualizados
+1. **Containment** — Limit loss via stop-loss or manual closing
+2. **Recording** — Document what happened, when and why
+3. **Analysis** — Strategy, execution or market error?
+4. **Adaptation** — Adjust parameters or strategy if applicable
+5. **Continued** — Continue operating with updated controls
 
 ---
 
-## 7. Roadmap de Expansión
+## 7. Expansion Roadmap
 
-### Fase Actual — Estabilización CEX
+### Current Phase — CEX Stabilization
 
-- [x] Runtime modular con BotCoordinator y WeightGovernor
-- [x] Flutter desktop shell con dashboard de bots
-- [x] Vault cifrado para credenciales
-- [x] Monitors de earn/loan rates
-- [x] Audit system y reportes
-- [x] Tasks operativos en IDE
-- [ ] DB SQLite en Flutter para persistencia local
-- [ ] Subcuentas de Binance para aislamiento de bots
+- [x] Modular runtime with BotCoordinator and WeightGovernor
+- [x] Flutter desktop shell with bot dashboard
+- [x] Encrypted Vault for credentials
+- [x] Earn/loan rates monitors
+- [x] Audit system and reports
+- [x] Operational tasks in IDE
+- [ ] SQLite DB in Flutter for local persistence
+- [ ] Binance subaccounts for bot isolation
 
-### Fase Siguiente — Diversificación CEX
+### Next Phase — CEX Diversification
 
-- [ ] Segundo CEX vía `ccxt` (candidatos: Bybit, OKX)
-- [ ] Abstracción de Gateway para multi-exchange
-- [ ] Comparador de tasas cross-exchange
+- [ ] Second CEX via `ccxt` (candidates: Bybit, OKX)
+- [ ] Gateway abstraction for multi-exchange
+- [ ] Cross-exchange rate comparator
 
-### Fase Futura — Web3 Multichain
+### Future Phase — Web3 Multichain
 
-- [ ] `web3_gateway.py` — conector on-chain para EVM
-- [ ] DEX quotes vía agregadores (1inch, 0x)
+- [ ] `web3_gateway.py` — on-chain connector for EVM
+- [ ] DEX quotes via aggregators (1inch, 0x)
 - [ ] Spread detector CEX vs DEX
 - [ ] Lending on-chain (Aave V3)
 
 ---
 
-## 8. Glosario
+## 8. Glossary
 
-| Término | Definición en contexto de Pecunator |
+| Term | Definition in context of Pecunator |
 |---------|-------------------------------------|
-| **Hub** | El runtime central que orquesta bots, APIs y estado |
-| **Gateway** | Conector a un exchange o blockchain específico |
-| **Task** | Protocolo operativo ejecutable por el LLM |
-| **Fuse** | Circuit breaker que corta acceso ante exceso de uso |
-| **Governor** | Regulador de peso/rate limit de API |
-| **Coordinator** | Orquestador del ciclo de vida de bots |
-| **Shell** | El frontend Flutter desktop |
-| **Vault** | Almacenamiento cifrado de credenciales |
-| **Doctrina** | Políticas y principios que rigen la operación |
+| **Hub** | The central runtime that orchestrates bots, APIs and state |
+| **Gateway** | Connector to a specific exchange or blockchain |
+| **Task** | Operational protocol executable by the LLM |
+| **Fuse** | Circuit breaker that cuts off access due to excessive use |
+| **Governor** | API weight/rate limit regulator |
+| **Coordinator** | Bot Lifecycle Orchestrator |
+| **Shell** | The Flutter desktop frontend |
+| **Vault** | Encrypted credential storage |
+| **Doctrine** | Policies and principles that govern the operation |

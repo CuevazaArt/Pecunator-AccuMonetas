@@ -8,7 +8,7 @@
 
 `Dorothy` trades on a **single Spot symbol** with ladder logic:
 
-1. Detects **lowest** active `SELL LIMIT` as anchor
+1. Detects **lowest** activate `SELL LIMIT` as anchor
 2. Wait for **sufficient drop** with respect to that anchor
 3. **Buy from market** when the drop exceeds the threshold
 4. Place a new **`SELL LIMIT`** with target profit (`profit_factor`)
@@ -33,7 +33,7 @@ The cycle repeats, building a ladder of positions downward with programmed exits
 
 ### Base parameters
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `symbol` | Spot pair to trade (e.g. `XRPUSDT`) |
 | `loop_interval_sec` | Interval between cycles (seconds) |
@@ -43,7 +43,7 @@ The cycle repeats, building a ladder of positions downward with programmed exits
 
 ### Risk parameters and metrics (built-in improvements)
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `max_drawdown_pct` | **Drawdown guard:** blocks new purchases if the drawdown exceeds this percentage |
 | `stop_loss_pct` | **Stop-loss:** position protection exit when the price falls below the limit |
@@ -51,7 +51,7 @@ The cycle repeats, building a ladder of positions downward with programmed exits
 
 ### Operating parameters
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `simulated` | If `true`, simulate without executing real commands |
 | `trading_enabled` | If `false`, only read status without operating |
@@ -66,7 +66,7 @@ The cycle repeats, building a ladder of positions downward with programmed exits
 | **Stop-loss per position** | You can cancel the `SELL LIMIT` anchor and liquidate the market if the price breaks `stop_loss_pct` |
 | **Robust persistence** | State, equity snapshots and metrics persist in SQLite per instance |
 | **Periodic metrics** | Sharpe ratio, win rate and max drawdown calculated every `metrics_interval_cycles` cycles |
-| **Immortality** | If the engine restarts, instances marked `desired_running=true` automatically resume |
+| **Immortality** | If the engine restarts, instances marked `desired_running=true` automatically resumes |
 | **Retry with backoff** | Transient disconnections trigger client recreation + exponential backoff (`bot:retry_in ...`) |
 
 ---
@@ -127,7 +127,7 @@ Monitor continuo desde Dorothy Hub en la UI
 | `WAIT_DROP` | Anchor detected, waiting for enough drop |
 | `BUYING` | Executing market purchase |
 | `PLACING_SELL` | Placing new SELL LIMIT |
-| `WAIT_DRAWDOWN_GUARD` | Drawdown overcome, purchases suspended |
+| `WAIT_DRAWDOWN_GUARD` | Drawdown overcomes, purchases suspended |
 
 ---
 

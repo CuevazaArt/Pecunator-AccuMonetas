@@ -1,4 +1,4 @@
-# Binance — Limits and Compliance
+#Binance—Limits and Compliance
 
 > Operational reference for PecunatorCore on Binance REST and WebSocket rate limits.  
 > The limits **change**; Binance is the source of truth.  
@@ -6,7 +6,7 @@
 
 ---
 
-## Official Sources
+##OfficialSources
 
 | Theme | URL |
 |------|-----|
@@ -31,7 +31,7 @@ Each REST endpoint has a **different weight** — it's not "one request = one un
 - **HTTP 429** = limit exceeded
 - **HTTP 418** = IP ban for insisting without backoff (scalable duration)
 
-> ⚠️ Don't set limits as constants in code — the exact values ​​change.
+> ⚠️ Don't set limits as constants in code — the exact values ​​​​change.
 
 ### Orders (`ORDERS`)
 
@@ -40,13 +40,13 @@ Each REST endpoint has a **different weight** — it's not "one request = one un
 
 ### Web Application Firewall (WAF)
 
-- Suspicious traffic patterns produce **403** with typical block duration of minutes (mild abuse)
+- Suspicious traffic patterns produces **403** with typical block duration of minutes (mild abuse)
 - **Don't** try to evade limits — reduce frequency and use streams
 
-### WebSocket — Market Streams
+### WebSocket—Market Streams
 
-| Parameter | Typical value (check current doc) |
-|-----------|-------------------------------|
+| Parameters | Typical value (check current doc) |
+|-----------|------------------------|
 | Maximum connection duration | ~24 hours (expect reconnection) |
 | Control messages (subscribe/unsubscribe) | ~5 per second per connection |
 | Streams per connection | Up to 1024 |

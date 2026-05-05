@@ -116,7 +116,7 @@ Queries guided to the Binance API for exploration and diagnosis.
 
 ---
 
-## REST Weight Monitor
+##REST Weight Monitor
 
 REST weight consumption audit per endpoint/action.
 
@@ -133,7 +133,7 @@ REST weight consumption audit per endpoint/action.
 |--------|-------------|
 | `200` | Success |
 | `400` | Invalid parameters |
-| `401` | No active credentials |
+| `401` | Do not activate credentials |
 | `404` | Resource not found |
 | `429` | Binance rate limit reached |
 | `500` | Internal engine error |

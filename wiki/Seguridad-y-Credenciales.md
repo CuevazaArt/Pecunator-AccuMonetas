@@ -1,27 +1,27 @@
-# Seguridad y Credenciales — Pecunator
+# Security and Credentials — Pecunator
 
-> Política de seguridad, gestión del vault cifrado y buenas prácticas de credenciales.
+> Security policy, encrypted vault management and good credential practices.
 
 ---
 
-## Vault de Credenciales
+## Credential Vault
 
-### Almacenamiento
+### Storage
 
-| Archivo | Descripción |
+| Archive | Description |
 |---------|-------------|
-| `runtime/data/credentials.enc` | Credenciales cifradas con Fernet (AES 128-CBC + HMAC-SHA256) |
-| `runtime/data/vault_local.key` | Clave del vault (machine-local, nunca en git) |
+| `runtime/data/credentials.enc` | Credentials encrypted with Fernet (AES 128-CBC + HMAC-SHA256) |
+| `runtime/data/vault_local.key` | Vault key (machine-local, never in git) |
 
-El vault usa **Fernet** de la librería `cryptography`. Solo hacen falta **API key** y **secret**.
+The vault uses **Fernet** from the `cryptography` library. You only need **API key** and **secret**.
 
-### Gestión desde la UI Flutter
+### Management from the Flutter UI
 
-1. Abrir la sección **Vault** en la UI
-2. Añadir nueva credencial (API key + secret) → se activa automáticamente
-3. Para eliminar: seleccionar y borrar (la última credencial añadida se activa)
+1. Open the **Vault** section in the UI
+2. Add new credential (API key + secret) → activates automatically
+3. To delete: select and delete (the last added credential becomes active)
 
-### Gestión vía variables de entorno
+### Management via environment variables
 
 ```bash
 # Windows PowerShell
@@ -29,40 +29,40 @@ $env:PECUNATOR_BINANCE_API_KEY = "tu_api_key"
 $env:PECUNATOR_BINANCE_API_SECRET = "tu_api_secret"
 ```
 
-> ⚠️ **Usar una sola fuente activa por sesión** — vault O variables de entorno, no ambas al mismo tiempo.
+> ⚠️ **Use a single active source per session** — vault OR environment variables, not both at the same time.
 
 ---
 
-## Principios de Seguridad
+## Security Principles
 
-### Principio de Menor Privilegio
+### Least Privilege Principle
 
-| Componente | Permisos |
+| Component | Permissions |
 |------------|----------|
-| **API keys de bots** | Solo trading (spot) — **NUNCA withdraw** |
-| **Subcuentas** | Cada bot opera con su propia key restringida por IP |
-| **Flutter** | Nunca tiene API keys; habla solo con el motor Python |
-| **LLM/IDE** | Solo invoca scripts; los scripts leen secrets del vault |
+| **bot API keys** | Only trading (spot) — **NEVER withdraw** |
+| **Subaccounts** | Each bot operates with its own IP-restricted key |
+| **Flutter** | It never has API keys; talks only to the Python engine |
+| **LLM/IDE** | It only invokes scripts; scripts read secrets from vault |
 
-### Reglas absolutas
+### Absolute rules
 
-- API keys **NUNCA** en texto plano en el repositorio
-- API keys **NUNCA** en código fuente ni en Flutter
-- Private keys **NUNCA** en contexto del LLM
-- Los logs **NUNCA** se publican sin revisión de sanitización
+- API keys **NEVER** in plain text in the repository
+- API keys **NEVER** in source code or in Flutter
+- Private keys **NEVER** in the context of the LLM
+- Logs are **NEVER** published without a sanitization review
 
 ---
 
-## Rotación y Revocación
+## Rotation and Revocation
 
-### Rotación periódica
+### Periodic rotation
 
-- Rotar API keys **cada 90 días** como mínimo
-- Mantener documentados los identificadores de keys activas (sin sus valores) con fecha de creación
+- Rotate API keys **every 90 days** at least
+- Keep active key identifiers documented (without their values) with creation date
 
-### Revocación de emergencia
+### Emergency revocation
 
-> ⛔ Si hay **sospecha de compromiso**, revocar **INMEDIATAMENTE** desde la web de Binance **ANTES** de cualquier diagnóstico técnico.
+> ⛔ If there is **suspicion of compromise**, revoke **IMMEDIATELY** from the Binance website **BEFORE** any technical diagnosis.
 
 ```
 1. Ir a: https://www.binance.com/en/my/settings/api-management
@@ -74,16 +74,16 @@ $env:PECUNATOR_BINANCE_API_SECRET = "tu_api_secret"
 
 ---
 
-## Sanitización de Logs
+## Log Sanitization
 
-Toda salida de log del motor pasa por `security_util.sanitize_log_message()` que redacta automáticamente:
+All log output from the engine goes through `security_util.sanitize_log_message()` which automatically writes:
 
-- Patrones de firma Binance (`signature=...`)
-- Valores de API keys
-- Otros patrones de secrets configurados
+- Binance signature patterns (`signature=...`)
+- API key values
+- Other configured secret patterns
 
 ```python
-# Ejemplo de uso en código
+# Example of use in code
 from runtime.core.security_util import sanitize_log_message
 
 log.info(sanitize_log_message(f"Calling API with params: {params}"))
@@ -91,45 +91,45 @@ log.info(sanitize_log_message(f"Calling API with params: {params}"))
 
 ---
 
-## Escaneo Automático de Secretos (CI)
+## Automatic Secret Scanning (CI)
 
-El repositorio incluye escaneo automático de secretos en CI:
+The repository includes automatic scanning of secrets in CI:
 
 - **Workflow:** `.github/workflows/secret-scan.yml`
-- **Herramienta:** Gitleaks
-- **Triggers:** Push y PR a ramas principales
-- **Objetivo:** Detectar y bloquear exposición accidental de API keys, tokens u otros secrets
+- **Tool:** Gitleaks
+- **Triggers:** Push and PR to main branches
+- **Goal:** Detect and block accidental exposure of API keys, tokens or other secrets
 
 ---
 
-## Backup del Vault
+## Vault Backup
 
-> ⚠️ Si se pierde `vault_local.key`, las credenciales en `credentials.enc` **no pueden recuperarse**.
+> ⚠️ If `vault_local.key` is lost, the credentials in `credentials.enc` **cannot be recovered**.
 
-**Recomendación:** Guardar backup de `runtime/data/vault_local.key` en un lugar seguro fuera del repositorio (gestor de contraseñas, almacenamiento cifrado offline).
+**Recommendation:** Save backup of `runtime/data/vault_local.key` in a safe place outside the repository (password manager, offline encrypted storage).
 
 ---
 
-## Resumen de Archivos Sensibles
+## Summary of Sensitive Files
 
-| Archivo | ¿En git? | Descripción |
+| Archive | In git? | Description |
 |---------|----------|-------------|
-| `runtime/data/credentials.enc` | ❌ No | Credenciales cifradas |
-| `runtime/data/vault_local.key` | ❌ No | Clave del vault |
-| `runtime/data/*.sqlite` | ❌ No | Bases de datos locales |
-| `.env` (si existe) | ❌ No | Variables de entorno locales |
-| `docs/` | ✅ Sí | Documentación (sin secrets) |
-| `runtime/**/*.py` | ✅ Sí | Código fuente (sin hardcoded secrets) |
+| `runtime/data/credentials.enc` | ❌ No | Encrypted credentials |
+| `runtime/data/vault_local.key` | ❌ No | Vault Key |
+| `runtime/data/*.sqlite` | ❌ No | Local databases |
+| `.env` (if exists) | ❌ No | Local environment variables |
+| `docs/` | ✅ Yes | Documentation (without secrets) |
+| `runtime/**/*.py` | ✅ Yes | Source code (without hardcoded secrets) |
 
 ---
 
-## API Keys de Binance — Configuración Recomendada
+## Binance API Keys — Recommended Configuration
 
-Al crear una API key en Binance para Pecunator:
+When creating an API key on Binance for Pecunator:
 
-1. **Habilitar:** Lectura de cuenta, Trading Spot
-2. **Deshabilitar:** Retiro, Futures (si no se usa), Margin (si no se usa)
-3. **Restricción por IP:** Configurar la IP del servidor/máquina que corre el motor
-4. **Sin restricción de subdomain:** Solo para la máquina local de ejecución
+1. **Enable:** Account Reading, Spot Trading
+2. **Disable:** Withdrawal, Futures (if not used), Margin (if not used)
+3. **IP restriction:** Configure the IP of the server/machine that runs the engine
+4. **No subdomain restriction:** Only for the local execution machine
 
-Esta configuración minimiza el daño en caso de compromiso.
+This configuration minimizes damage in the event of a compromise.

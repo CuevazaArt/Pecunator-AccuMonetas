@@ -32,7 +32,7 @@
 
 ### Base parameters
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `symbols_csv` | CSV list of Spot symbols to trade (e.g. `XRPUSDT,ADAUSDT,DOTUSDT`) |
 | `loop_interval_sec` | Interval between complete cycles of the basket |
@@ -44,7 +44,7 @@
 
 ### Risk parameters and metrics
 
-| Parameter | Description |
+| Parameters | Description |
 |-----------|-------------|
 | `max_drawdown_pct` | **Drawdown guard:** Blocks new purchases if the added drawdown exceeds this threshold |
 | `stop_loss_pct` | **Stop-loss per symbol:** protection against average purchases per symbol |
@@ -109,7 +109,7 @@ Para cada símbolo en symbols_csv:
 
 | Appearance | Dorothy | Masha | Thusnelda |
 |---------|---------|-------|-----------|
-| Symbols | 1 | 1 | Multiple (basket) |
+| Symbols | 1 | 1 | Multiple (basketball) |
 | Entrance sign | Fall vs anchor SELL LIMIT | Multi-timeframe technical signal | Price vs own historical average |
 | Output | SELL LIMIT per step | SELL LIMIT consolidated DCA | Basket Global Equity Target |
 | Risk scope | By position | By DCA position | By symbol + basket addition |

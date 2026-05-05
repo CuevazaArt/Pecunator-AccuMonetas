@@ -33,7 +33,7 @@ cd desktop_shell && flutter test test/ -v
 | `refactor/stable-ui-and-tests` | Active development — all work goes here |
 | `feature/*` | Feature branches derived from `refactor/stable-ui-and-tests` |
 
-### Rules
+###Rules
 
 **✅ DO:**
 - Develop in `refactor/stable-ui-and-tests` or derived feature branches
@@ -81,8 +81,8 @@ git commit -m "feat(scope): change description"
 
 | Prefix | When to use |
 |---------|-------------|
-| `feat(scope):` | New functionality |
-| `fix(scope):` | Bug fix |
+| `feat(scope):` | New features |
+| `fix(scope):` | Bugfix |
 | `docs:` | Documentation only |
 | `refactor(scope):` | Refactoring without functional change |
 | `test:` | Tests |
@@ -131,10 +131,10 @@ pytest runtime/tests/test_dorothy.py -v
 # Specific test by name
 pytest runtime/tests/test_dorothy.py::test_defaults -v
 
-# With duration report
+#With duration report
 pytest runtime/tests/ -v --durations=10
 
-# Covered
+#Covered
 pytest runtime/tests/ --cov=runtime --cov-report=term-missing
 ```
 

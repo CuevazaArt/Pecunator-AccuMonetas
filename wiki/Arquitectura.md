@@ -1,6 +1,6 @@
 # Architecture — Pecunator
 
-> Flutter Desktop + Python Engine. No web dashboard.  
+> Flutter Desktop + Python Engine. Not web dashboard.  
 > Technical reference of the current state of the system.
 
 ---
@@ -50,8 +50,8 @@ python -m runtime # boot as package
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PECUNATOR_API_HOST` | `127.0.0.1` | API Host |
-| `PECUNATOR_API_PORT` | `8765` | API Port |
+| `PECUNATOR_API_HOST` | `127.0.0.1` | Host API |
+| `PECUNATOR_API_PORT` | `8765` | APIPort |
 | `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | REST Weight Reference Limit |
 | `PECUNATOR_BINANCE_API_KEY` | — | Binance API key (alternative to vault) |
 | `PECUNATOR_BINANCE_API_SECRET` | — | Binance secret API (alternative to vault) |
@@ -69,7 +69,7 @@ python -m runtime # boot as package
 | `lib/services/` | HTTP client, exceptions, preferences |
 | `lib/screens/` | Screens: home, bots, spot account |
 | `lib/widgets/` | Reusable widgets: error display, logs viewer, gateway status |
-| `lib/utils/` | Helpers: number formatters |
+| `lib/utils/` | Helpers: number formats |
 | `lib/api_client.dart` | Engine HTTP Client |
 | `lib/main.dart` | UI entry point |
 
