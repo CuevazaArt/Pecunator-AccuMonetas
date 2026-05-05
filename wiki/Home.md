@@ -95,6 +95,8 @@ La filosofía es directa: **el operador humano es soberano**; el código ejecuta
 ### 🧪 Desarrollo
 - 🛠️ **[Guía de Desarrollo](Guia-de-Desarrollo)**  
   Git, tests, CI/CD
+- 🔑 **[Permiso Wiki Token](Permiso-Wiki-Token)**  
+  Dar al agente permisos de escritura
 - 📝 **[Changelog](Changelog)**  
   Historial de cambios
 
