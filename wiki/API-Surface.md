@@ -1,4 +1,4 @@
-#API Surface—Pecunator
+# API Surface—Pecunator
 
 > Complete Python Engine REST Endpoints Reference.  
 > Base URL: `http://127.0.0.1:8765`  
@@ -21,7 +21,7 @@ Binance credentials encrypted vault management.
 
 ---
 
-##Binance Gateway
+## Binance Gateway
 
 Control of the connector with Binance and account status.
 
@@ -90,6 +90,21 @@ Lifecycle management of Dorothy bot instances.
 
 ---
 
+## Masha Hub (Multi-instance)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/masha/bots` | List Masha instances |
+| `POST` | `/api/v1/masha/bots` | Create Masha instance |
+| `PATCH` | `/api/v1/masha/bots/{bot_id}` | Update instance configuration |
+| `DELETE` | `/api/v1/masha/bots/{bot_id}` | Delete instance |
+| `POST` | `/api/v1/masha/bots/{bot_id}/start` | Start instance |
+| `POST` | `/api/v1/masha/bots/{bot_id}/stop` | Stop instance |
+| `POST` | `/api/v1/masha/bots/{bot_id}/run_once` | Single cycle |
+| `GET` | `/api/v1/masha/bots/{bot_id}/logs` | Instance logs |
+
+---
+
 ## Thusnelda Hub (Multi-instance)
 
 | Method | Endpoint | Description |
@@ -114,14 +129,43 @@ Queries guided to the Binance API for exploration and diagnosis.
 
 **Available queries:** `get_exchange_info`, `get_account`, `get_open_orders`, `get_my_trades`
 
+### Curated sandbox records
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/sandbox/curated/save` | Save curated sandbox result |
+| `GET` | `/api/v1/sandbox/curated/list` | List curated sandbox records |
+
 ---
 
-##REST Weight Monitor
+## Earn monitoring
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/earn/history/{symbol}` | Retrieve persisted Earn rate history by symbol |
+| `POST` | `/api/v1/earn/sync` | Force Earn sync from Binance |
+
+---
+
+## System and governance observability
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Lightweight overall health/status |
+| `GET` | `/health/deep` | Deep health with gateway/hubs details |
+| `GET` | `/api/v1/weight-governor/status` | WeightGovernor status and zone |
+| `GET` | `/api/v1/market-cache/status` | Market cache status |
+| `GET` | `/api/v1/bot-coordinator/status` | Bot coordinator status |
+
+---
+
+## REST Weight Monitor
 
 REST weight consumption audit per endpoint/action.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `GET` | `/api/v1/usage/rest-weight/samples` | Historical usage samples |
 | `GET` | `/api/v1/usage/rest-weight/events` | Weight events per endpoint |
 | `GET` | `/api/v1/usage/rest-weight/report` | Consumption report (`top_actions`, historical) |
 

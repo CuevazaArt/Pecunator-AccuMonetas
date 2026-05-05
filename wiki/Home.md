@@ -46,20 +46,20 @@ The philosophy is direct: **the human operator is sovereign**; the code executes
 ### 🏛️ Basics
 - 📜 **[Manifesto](Manifesto)**  
   Philosophy, 4 pillars, doctrine
-- 🏗️ **[Architecture](Architecture)**  
+- 🏗️ **[Architecture](Arquitectura)**  
   Flutter + Python, boundaries
-- 🗂️ **[Module Map](Module-Map)**  
+- 🗂️ **[Module Map](Mapa-de-Modulos)**  
   Complete repo structure
 
 </td>
 <td width="33%" valign="top">
 
 ### ⚙️ Operation
-- 🚀 **[Installation and Startup](Installation-and-Startup)**  
+- 🚀 **[Installation and Startup](Instalacion-y-Arranque)**  
   Step by step setup
 - 🔌 **[API Surface](API-Surface)**  
   Complete REST reference
-- 🚨 **[Operational Protocols](Operational-Protocols)**  
+- 🚨 **[Operational Protocols](Protocolos-Operativos)**  
   Red button, runbooks
 
 </td>
@@ -79,23 +79,23 @@ The philosophy is direct: **the human operator is sovereign**; the code executes
 <td width="33%" valign="top">
 
 ### 🔒Security
-- 🔐 **[Security and Credentials](Security-and-Credentials)**  
+- 🔐 **[Security and Credentials](Seguridad-y-Credenciales)**  
   Vault Fernet, rotation
 
 </td>
 <td width="33%" valign="top">
 
 ### 📡 Compliance
-- ⚖️ **[Binance — Limits](Binance-Limits-and-Compliance)**  
+- ⚖️ **[Binance — Limits](Binance-Limites-y-Cumplimiento)**  
   Rate limits REST/WS
 
 </td>
 <td width="33%" valign="top">
 
 ### 🧪 Development
-- 🛠️ **[Development Guide](Development-Guide)**  
+- 🛠️ **[Development Guide](Guia-de-Desarrollo)**  
   Git, tests, CI/CD
-- 🔑 **[Wiki Token Permission](Wiki-Token-Permission)**  
+- 🔑 **[Wiki Token Permission](Permiso-Wiki-Token)**  
   Give the agent write permissions
 - 📝 **[Changelog](Changelog)**  
   Change history
@@ -225,7 +225,7 @@ flutter run -d windows
 powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1
 ```
 
-> 📘 Complete guide: **[Installation and Startup](Installation-and-Startup)**
+> 📘 Complete guide: **[Installation and Startup](Instalacion-y-Arranque)**
 
 ---
 
@@ -408,23 +408,23 @@ section 🔮 Phase 3 — Web3
 
 ### 🆕 First time?
 1. 📜 [Manifesto](Manifesto)
-2. 🏗️ [Architecture](Architecture)
-3. 🚀 [Installation](Installation-and-Startup)
+2. 🏗️ [Architecture](Arquitectura)
+3. 🚀 [Installation](Instalacion-y-Arranque)
 
 </td>
 <td width="33%" align="center">
 
 ### ⚙️ Are you going to operate?
-1. 🚀 [Installation](Installation-and-Startup)
+1. 🚀 [Installation](Instalacion-y-Arranque)
 2. 🤖 [Bot Dorothy](Bot-Dorothy) (simpler)
-3. 🚨 [Protocols] (Operational Protocols)
+3. 🚨 [Protocols](Protocolos-Operativos)
 
 </td>
 <td width="33%" align="center">
 
 ### 🛠️ Are you going to contribute?
-1. 🗂️ [Module Map](Module-Map)
-2. 🛠️ [Development Guide](Development-Guide)
+1. 🗂️ [Module Map](Mapa-de-Modulos)
+2. 🛠️ [Development Guide](Guia-de-Desarrollo)
 3. 🔌 [API Surface](API-Surface)
 
 </td>
@@ -437,7 +437,7 @@ section 🔮 Phase 3 — Web3
 
 ### 🌟 *«Pecunia non olet, be discipline yes it remains.»*
 
-**[⬆️ Back to top](#-pecunator--official-wiki)** · **[📜 Manifesto](Manifesto)** · **[🚀 Get Started](Installation-and-Startup)** · **[🔌 API](API-Surface)**
+**[⬆️ Back to top](#-pecunator--official-wiki)** · **[📜 Manifesto](Manifesto)** · **[🚀 Get Started](Instalacion-y-Arranque)** · **[🔌 API](API-Surface)**
 
 <sub>📌 Home last update: 2026-05-05 · 🌐 Repo: [github.com/CuevazaArt/Pecunator](https://github.com/CuevazaArt/Pecunator)</sub>
 

@@ -173,7 +173,7 @@ Or faster, directly from the web editor:
 | Revoke token if not in use | Leave tokens active indefinitely |
 | Rotate token before expiration | Forget the expiration date |
 
-> 📖 See also: **[Security and Credentials](Security-and-Credentials)** in this wiki.  
+> 📖 See also: **[Security and Credentials](Seguridad-y-Credenciales)** in this wiki.  
 > 📖 NIST SP 800-57 (key management): [csrc.nist.gov](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final)
 
 ---
@@ -205,7 +205,7 @@ You should see `"push": true`. If you see `"push": false` the token does not hav
 
 <div align="center">
 
-**[⬆️ Home](Home)** · **[🔐 Security and Credentials](Security-and-Credentials)** · **[🛠️ Development Guide](Development-Guide)**
+**[⬆️ Home](Home)** · **[🔐 Security and Credentials](Seguridad-y-Credenciales)** · **[🛠️ Development Guide](Guia-de-Desarrollo)**
 
 <sub>📌 This guide only applies to the owner of the repository (<strong>CuevazaArt</strong>). Tokens should never be shared.</sub>
 

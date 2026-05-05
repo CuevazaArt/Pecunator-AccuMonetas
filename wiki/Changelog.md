@@ -1,4 +1,4 @@
-#Changelog—Pecunator
+# Changelog—Pecunator
 
 > History of architectural, API and operational changes.  
 > Changes that touch `runtime/`, `desktop_shell/`, or `.github/workflows/` should be logged here.
@@ -48,6 +48,23 @@
 
 - **Storage:** `credentials.enc` encrypted with Fernet + `vault_local.key`
 - **UX/API:** Flow reduced to add/delete with automatic activation of the last saved key
+
+---
+
+## 2026-05-05
+
+### Runtime state durability and tools
+
+- **Added:** WAL-backed persistence for runtime state storage
+- **Added:** Paper P&L reporting tool for operator analysis
+- **Changed:** Router extraction from monolith `runtime/api/app.py` to dedicated modules (including vault and ops)
+- **Impact:** Better crash resilience, cleaner API layering, and easier maintenance
+
+### Wiki and documentation operations
+
+- **Added:** New wiki page `L0-Operator-Philosophy.md` with accepted operational guardrails
+- **Changed:** Wiki translation process and content moved to full English operational baseline
+- **Impact:** Clearer doctrine for operators and more consistent documentation language
 
 ---
 
