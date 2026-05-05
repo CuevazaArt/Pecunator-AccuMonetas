@@ -63,6 +63,7 @@ from runtime.api.routers import system as _system_router
 from runtime.api.routers import masha as _masha_router
 from runtime.api.routers import thusnelda as _thusnelda_router
 from runtime.api.routers import vault as _vault_router
+from runtime.api.routers import ops as _ops_router
 
 from runtime.core.settings import (
     account_poll_interval_sec,
@@ -185,6 +186,7 @@ def create_app() -> FastAPI:
     app.include_router(_masha_router.router)
     app.include_router(_thusnelda_router.router)
     app.include_router(_vault_router.router)
+    app.include_router(_ops_router.router)
 
     # ── NOTE: The routes below remain here temporarily.
     # ── They will be extracted to routers in future iterations.
@@ -538,101 +540,7 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
 
-    @app.get("/api/v1/ops/protocol/status")
-    async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
-        audit = get_ops_audit_log(ctx.config.data_dir)
-        return {
-            "close_protocol": audit.last("close_protocol"),
-            "red_button": audit.last("red_button"),
-            "cancel_limit_orders_cleanup": audit.last("cancel_limit_orders_cleanup"),
-            "cancel_stop_orders_cleanup": audit.last("cancel_stop_orders_cleanup"),
-            "cancel_all_orders_cleanup": audit.last("cancel_all_orders_cleanup"),
-            "hub_stats": deps.get_bot().hub_stats(),
-            "masha_hub_stats": deps.get_masha().hub_stats(),
-            "thusnelda_hub_stats": deps.get_thusnelda().hub_stats(),
-        }
-
-    @app.post("/api/v1/ops/protocol/close")
-    async def ops_protocol_close(
-        base_asset: str = "USDT",
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        summary = await _execute_close_protocol(ctx, base_asset=base_asset)
-        rec = get_ops_audit_log(ctx.config.data_dir).record(
-            op_name="close_protocol",
-            status=str(summary.get("status", "unknown")),
-            summary=summary,
-            error=str(summary.get("error", "")).strip() or None,
-        )
-        return {"record": rec, "summary": summary}
-
-    @app.post("/api/v1/ops/red_button")
-    async def ops_red_button(
-        base_asset: str = "USDT",
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        summary = await _execute_red_button(ctx, base_asset=base_asset)
-        rec = get_ops_audit_log(ctx.config.data_dir).record(
-            op_name="red_button",
-            status=str(summary.get("status", "unknown")),
-            summary=summary,
-            error=str(summary.get("error", "")).strip() or None,
-        )
-        return {"record": rec, "summary": summary}
-
-    @app.post("/api/v1/ops/orders/cleanup/limit")
-    async def ops_cleanup_limit_orders(
-        base_asset: str = "USDT",
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        summary = await _execute_order_cleanup(
-            ctx,
-            base_asset=base_asset,
-            mode="limit",
-        )
-        rec = get_ops_audit_log(ctx.config.data_dir).record(
-            op_name="cancel_limit_orders_cleanup",
-            status=str(summary.get("status", "unknown")),
-            summary=summary,
-            error=str(summary.get("error", "")).strip() or None,
-        )
-        return {"record": rec, "summary": summary}
-
-    @app.post("/api/v1/ops/orders/cleanup/stop")
-    async def ops_cleanup_stop_orders(
-        base_asset: str = "USDT",
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        summary = await _execute_order_cleanup(
-            ctx,
-            base_asset=base_asset,
-            mode="stop",
-        )
-        rec = get_ops_audit_log(ctx.config.data_dir).record(
-            op_name="cancel_stop_orders_cleanup",
-            status=str(summary.get("status", "unknown")),
-            summary=summary,
-            error=str(summary.get("error", "")).strip() or None,
-        )
-        return {"record": rec, "summary": summary}
-
-    @app.post("/api/v1/ops/orders/cleanup/all")
-    async def ops_cleanup_all_orders(
-        base_asset: str = "USDT",
-        ctx: AppContext = Depends(deps.get_ctx),
-    ) -> dict[str, Any]:
-        summary = await _execute_order_cleanup(
-            ctx,
-            base_asset=base_asset,
-            mode="all",
-        )
-        rec = get_ops_audit_log(ctx.config.data_dir).record(
-            op_name="cancel_all_orders_cleanup",
-            status=str(summary.get("status", "unknown")),
-            summary=summary,
-            error=str(summary.get("error", "")).strip() or None,
-        )
-        return {"record": rec, "summary": summary}
+    # ── Ops routes moved to routers/ops.py ──
 
     @app.post("/api/v1/sandbox/curated/save")
     async def sandbox_curated_save(
