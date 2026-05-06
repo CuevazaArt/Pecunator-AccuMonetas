@@ -60,7 +60,7 @@ class TestActiveBotTracking:
     def test_report_cycle_updates_timestamp(self, coord):
         coord.register_active("bot1", loop_interval_sec=450)
         before = coord._active["bot1"].last_cycle_ts
-        time.sleep(0.01)
+        time.sleep(0.05)
         coord.report_cycle("bot1")
         after = coord._active["bot1"].last_cycle_ts
         assert after > before
