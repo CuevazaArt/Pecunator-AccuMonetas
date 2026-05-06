@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "account_id": "dorothy",
+      "email": "dorothybot_virtual@j7tmq9bmnoemail.com",
+      "role": "bot",
+      "bot_type": "dorothy",
+      "description": "Trend-following scalper — rides momentum breakouts",
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT"
+      ],
+      "max_equity_usdt": "500",
+      "enabled": true,
+      "api_key_label": "DOROTHY_API"
+    },
+    {
+      "account_id": "masha",
+      "email": "mashabot_virtual@js13xxewnoemail.com",
+      "role": "bot",
+      "bot_type": "masha",
+      "description": "DCA range bot — accumulates in sideways markets",
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT"
+      ],
+      "max_equity_usdt": "500",
+      "enabled": true,
+      "api_key_label": "MASHA_API"
+    },
+    {
+      "account_id": "thusnelda",
+      "email": "xrpacum_virtual@6nfrqwurnoemail.com",
+      "role": "bot",
+      "bot_type": "thusnelda",
+      "description": "Opportunistic multi-symbol — quick snipes on volatility spikes",
+      "symbols": [
+        "XRPUSDT",
+        "ADAUSDT",
+        "DOGEUSDT",
+        "AVAXUSDT"
+      ],
+      "max_equity_usdt": "300",
+      "enabled": true,
+      "api_key_label": "THUSNELDA_API"
+    },
+    {
+      "account_id": "bluechip",
+      "email": "etfbluechipexpert_virtual@vfu3gqt4noemail.com",
+      "role": "strategy",
+      "bot_type": "",
+      "description": "ETF/BlueChip passive strategy — Earn, staking, long-term holds",
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT",
+        "SOLUSDT"
+      ],
+      "max_equity_usdt": "0",
+      "enabled": true,
+      "api_key_label": "BLUECHIP_API"
+    },
+    {
+      "account_id": "reserve",
+      "email": "arq.valenteochoa@gmail.com",
+      "role": "personal",
+      "bot_type": "",
+      "description": "Personal/Reserve account — emergency capital, manual operations",
+      "symbols": [],
+      "max_equity_usdt": "0",
+      "enabled": true,
+      "api_key_label": "RESERVE_API"
+    }
+  ]
+}
