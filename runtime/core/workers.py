@@ -17,7 +17,7 @@ import time
 from typing import Any, Optional
 
 from runtime.core.account_monitor import get_account_monitor
-from runtime.core.api_governor import get_api_governor, P_MONITOR
+from runtime.core.api_governor import get_api_governor, P_MONITORING
 from runtime.core.exception_zoo import get_exception_zoo
 from runtime.core.subaccount_registry import get_subaccount_registry
 from runtime.core.telemetry_vault import get_telemetry_vault
@@ -86,7 +86,7 @@ class AccountMonitorLoop:
                 for acct in accounts:
                     # Check governor for budget
                     allowed, wait = governor.request_token(
-                        "binance", units=10, priority=P_MONITOR,
+                        "binance", units=10, priority=P_MONITORING,
                         caller=f"acct_monitor:{acct.account_id}",
                     )
                     if not allowed:
@@ -102,7 +102,7 @@ class AccountMonitorLoop:
                         governor.record_usage(
                             "binance",
                             action=f"snapshot:{acct.account_id}",
-                            units=10, priority=P_MONITOR,
+                            units=10, priority=P_MONITORING,
                             caller="account_monitor_loop",
                             latency_ms=int((t_snap - t0) * 1000),
                             success=snapshot.get("ok", False),

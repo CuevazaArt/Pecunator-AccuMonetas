@@ -9,6 +9,7 @@ on:
       - 'develop'
     paths:
       - 'runtime/**'
+      - 'tests/**'
       - 'requirements-dev.txt'
       - '.github/workflows/test-python.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'main'
     paths:
       - 'runtime/**'
+      - 'tests/**'
       - 'requirements-dev.txt'
 
 jobs:
@@ -56,9 +58,9 @@ jobs:
         run: |
           mypy runtime/modules/bots/dorothy.py --ignore-missing-imports
 
-      - name: Run pytest
+      - name: Run pytest (runtime + e2e)
         run: |
-          pytest runtime/tests/ -v --tb=short --cov=runtime --cov-report=xml
+          pytest runtime/tests/ tests/ -v --tb=short --cov=runtime --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
