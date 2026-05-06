@@ -96,6 +96,42 @@ class RegimeCache:
         finally:
             conn.close()
 
+    def store_many(
+        self,
+        items: list[tuple[MarketRegime, Optional[str]]]
+    ) -> int:
+        """Insert multiple regime snapshots efficiently. Returns number of rows."""
+        if not items:
+            return 0
+        conn = open_db(self._db_path)
+        try:
+            cur = conn.executemany(
+                """
+                INSERT OR REPLACE INTO regime_snapshots
+                    (symbol, timeframe, trend, trend_strength, volatility,
+                     regime, confidence, recommended_bot, risk_level, notes,
+                     capture_source, capture_path, captured_at, analyzed_at,
+                     llm_provider, llm_model, elapsed_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        r.symbol, r.timeframe, r.trend,
+                        r.trend_strength, r.volatility, r.regime,
+                        r.confidence, r.recommended_bot,
+                        r.risk_level, r.notes,
+                        r.capture_source, path,
+                        r.captured_at, r.analyzed_at,
+                        r.llm_provider, r.llm_model,
+                        r.elapsed_ms,
+                    ) for r, path in items
+                ]
+            )
+            conn.commit()
+            return cur.rowcount
+        finally:
+            conn.close()
+
     def get_latest(
         self,
         symbol: str = "",

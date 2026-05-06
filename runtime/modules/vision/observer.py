@@ -60,27 +60,35 @@ class VMObserver:
         )
 
         t0 = time.monotonic()
-        completed = 0
-        failed = 0
-
-        for symbol in cfg.symbols:
-            for timeframe in cfg.timeframes:
+        
+        # Concurrency limit to respect free tier rate limits while speeding up
+        # Gemini 2.5 Flash can handle ~15 RPM for free tier.
+        # chart-img has ~100 RPM.
+        # We use a semaphore of 3 to be safe.
+        sem = asyncio.Semaphore(3)
+        
+        async def _bounded_capture(sym: str, tf: str) -> Optional[MarketRegime]:
+            async with sem:
                 try:
-                    regime = await self._capture_and_classify(
-                        symbol, timeframe
-                    )
-                    results.append(regime)
-                    completed += 1
+                    return await self._capture_and_classify(sym, tf)
                 except Exception as e:
-                    _LOG.error(
-                        "VMO cycle error for %s/%s: %s",
-                        symbol, timeframe, e,
-                    )
-                    failed += 1
-
-                # Respect rate limits between captures
-                if cfg.capture_delay_sec > 0:
-                    await asyncio.sleep(cfg.capture_delay_sec)
+                    _LOG.error("VMO cycle error for %s/%s: %s", sym, tf, e)
+                    return None
+                finally:
+                    if cfg.capture_delay_sec > 0:
+                        await asyncio.sleep(cfg.capture_delay_sec)
+                        
+        tasks = [
+            _bounded_capture(symbol, timeframe)
+            for symbol in cfg.symbols
+            for timeframe in cfg.timeframes
+        ]
+        
+        raw_results = await asyncio.gather(*tasks)
+        results = [r for r in raw_results if r is not None]
+        
+        completed = len(results)
+        failed = total - completed
 
         elapsed = round(time.monotonic() - t0, 1)
         self._last_cycle_at = datetime.now(timezone.utc).isoformat()
@@ -107,44 +115,60 @@ class VMObserver:
         """Capture one chart and classify it."""
         cfg = self.config
 
-        # Step 1: Capture
-        cap = await capture_chart(
-            symbol, timeframe,
-            source=cfg.capture_source,
-            api_key=cfg.chart_img_api_key,
-            base_url=cfg.chart_img_base_url,
-            save_dir=cfg.captures_dir,
-        )
+        # Resilience: Circuit Breaker / Exponential Backoff
+        max_retries = 3
+        base_delay = 5.0
 
-        if not cap.ok:
-            _LOG.warning(
-                "Capture failed for %s/%s: %s", symbol, timeframe, cap.error
-            )
-            # Return a "no data" regime
-            regime = MarketRegime(
-                symbol=symbol, timeframe=timeframe,
-                trend="LATERAL", trend_strength="WEAK",
-                volatility="NORMAL", regime="RANGING",
-                confidence=0.0, recommended_bot="none",
-                risk_level="HIGH",
-                notes=f"Capture failed: {cap.error}",
-                captured_at=cap.captured_at,
-                capture_source=cap.source,
-                llm_provider="none", llm_model="none",
-            )
-            self._cache.store(regime, capture_path=cap.saved_path)
-            return regime
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Step 1: Capture
+                cap = await capture_chart(
+                    symbol, timeframe,
+                    source=cfg.capture_source,
+                    api_key=cfg.chart_img_api_key,
+                    base_url=cfg.chart_img_base_url,
+                    save_dir=cfg.captures_dir,
+                )
 
-        # Step 2: Classify
-        regime = await classify_chart(
-            cap.png, symbol, timeframe,
-            provider=cfg.llm_provider,
-            model=cfg.llm_model,
-            gemini_api_key=cfg.gemini_api_key,
-            openai_api_key=cfg.openai_api_key,
-            captured_at=cap.captured_at,
-            capture_source=cap.source,
-        )
+                if not cap.ok:
+                    raise RuntimeError(f"Capture failed: {cap.error}")
+
+                # Step 2: Classify
+                regime = await classify_chart(
+                    cap.png, symbol, timeframe,
+                    provider=cfg.llm_provider,
+                    model=cfg.llm_model,
+                    gemini_api_key=cfg.gemini_api_key,
+                    openai_api_key=cfg.openai_api_key,
+                    captured_at=cap.captured_at,
+                    capture_source=cap.source,
+                )
+                
+                # Success
+                break
+
+            except Exception as e:
+                _LOG.warning(
+                    "VMO _capture_and_classify attempt %d failed for %s/%s: %s", 
+                    attempt, symbol, timeframe, e
+                )
+                if attempt == max_retries:
+                    # Return safe default after max retries
+                    regime = MarketRegime(
+                        symbol=symbol, timeframe=timeframe,
+                        trend="LATERAL", trend_strength="WEAK",
+                        volatility="NORMAL", regime="RANGING",
+                        confidence=0.0, recommended_bot="none",
+                        risk_level="HIGH",
+                        notes=f"All {max_retries} attempts failed. Last error: {e}",
+                        captured_at=datetime.now(timezone.utc).isoformat(),
+                        capture_source=cfg.capture_source,
+                        llm_provider="none", llm_model="none",
+                    )
+                    self._cache.store(regime, capture_path="")
+                    return regime
+                else:
+                    await asyncio.sleep(base_delay * attempt)
 
         # Step 3: Store
         self._cache.store(regime, capture_path=cap.saved_path)
