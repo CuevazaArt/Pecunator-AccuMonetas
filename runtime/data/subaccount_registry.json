@@ -44,7 +44,7 @@
         "AVAXUSDT"
       ],
       "max_equity_usdt": "300",
-      "enabled": true,
+      "enabled": false,
       "api_key_label": "THUSNELDA_API"
     },
     {
@@ -71,7 +71,7 @@
       "description": "Personal/Reserve account — emergency capital, manual operations",
       "symbols": [],
       "max_equity_usdt": "0",
-      "enabled": true,
+      "enabled": false,
       "api_key_label": "RESERVE_API"
     }
   ]
