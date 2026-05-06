@@ -121,12 +121,16 @@ class BotCoordinator:
         hub_type: str,
         loop_interval_sec: float,
         credential_ref: str = "",
+        override_vmo: bool = True,
     ) -> dict[str, Any]:
         """Stage a bot for coordinated launch.
 
         Returns immediately with the computed launch delay.
         Credentials are NOT stored here — the caller retains them and
         uses launch_delay_sec to sleep before actually starting the bot.
+        
+        If override_vmo is False, the VMO heuristic will block staging
+        if the market regime is hostile to the requested bot type.
         """
         delay = self._compute_optimal_delay(loop_interval_sec)
 
@@ -141,27 +145,38 @@ class BotCoordinator:
         )
         self._staged[bot_id] = staged
 
-        # Validate against VMO recommendation (advisory only)
+        # Validate against VMO recommendation
         try:
-            # We assume bot_id contains the symbol, or we just query it if known.
-            # In Pecunator, bot IDs are often like "dorothy_BTCUSDT".
-            # For a general check, we'll try to extract the symbol.
             parts = bot_id.split("_")
             symbol = parts[-1] if len(parts) > 1 else ""
-            if symbol and len(symbol) >= 5: # basic check for pairs like BTCUSDT
+            if symbol and len(symbol) >= 5:
                 rec = self._regime_detector.get_recommendation(symbol)
-                if rec.bot != "none" and rec.bot != hub_type:
-                    _LOG.warning(
-                        "VMO ADVISORY: You staged a '%s' bot for %s, but the VMO "
-                        "recommends '%s' based on current %s regime (conf=%.2f).",
-                        hub_type, symbol, rec.bot, rec.regime, rec.confidence
-                    )
+                is_hostile = rec.bot != "none" and rec.bot != hub_type
+                
+                if is_hostile:
+                    if not override_vmo:
+                        msg = (
+                            f"VMO BLOCK: '{hub_type}' is blocked for {symbol}. "
+                            f"Regime is {rec.regime} (conf={rec.confidence:.2f}). "
+                            f"Recommended: {rec.bot}"
+                        )
+                        _LOG.warning(msg)
+                        # We delete the staging so it never executes
+                        del self._staged[bot_id]
+                        raise ValueError(msg)
+                    else:
+                        _LOG.warning(
+                            "VMO OVERRIDE: Staging '%s' for %s despite VMO "
+                            "recommending '%s' (%s regime). External injection prioritized.",
+                            hub_type, symbol, rec.bot, rec.regime
+                        )
                 elif rec.bot == hub_type:
                     _LOG.info(
-                        "VMO VALIDATED: Staging '%s' for %s aligns with current "
-                        "%s regime (conf=%.2f).",
-                        hub_type, symbol, rec.regime, rec.confidence
+                        "VMO ALIGNED: '%s' is the optimal bot for %s (%s).",
+                        hub_type, symbol, rec.regime
                     )
+        except ValueError:
+            raise
         except Exception as e:
             _LOG.debug("Could not validate bot against VMO: %s", e)
 
