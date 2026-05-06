@@ -352,5 +352,13 @@ class EngineApi {
 
   Future<Map<String, dynamic>> apiLogDbStats() =>
       _client.get('/api-log/db-stats');
+
+  // ── Vision / VMO endpoints ──────────────────────────────────────
+
+  Future<Map<String, dynamic>> visionStatus() =>
+      _client.get('/api/v1/vision/status');
+
+  Future<Map<String, dynamic>> visionRegimesLatest() =>
+      _client.get('/api/v1/vision/regimes/latest');
 }
 

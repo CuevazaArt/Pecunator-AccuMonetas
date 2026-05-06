@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -13,8 +13,8 @@ import '../widgets/compact_weight_gauge.dart';
 import 'masha_hub_page.dart';
 import 'thusnelda_hub_page.dart';
 import 'bot_guide_page.dart';
-import 'spot_account_page.dart';
 import '../widgets/weight_monitor_dialog.dart';
+import '../widgets/vmo_dashboard.dart';
 import '../utils.dart';
 class BotControlPage extends StatefulWidget {
   const BotControlPage({
@@ -1620,6 +1620,17 @@ class _BotControlPageState extends State<BotControlPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_loadingHub) const LinearProgressIndicator(),
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: [
+              // Left Column: Main Hub Info
+              SizedBox(
+                width: 400,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
           if (_gatewayRunning &&
               _apiWeightUsed != null &&
                 _apiWeightLimit > 0)
@@ -1689,6 +1700,18 @@ class _BotControlPageState extends State<BotControlPage> {
                   style: const TextStyle(color: Colors.redAccent, fontSize: 12),
                 ),
               ),
+                  ],
+                ),
+              ),
+              
+              // Right Column: VMO Sensor Dashboard
+              SizedBox(
+                height: 280, // Constrain height so it doesn't take infinite space
+                child: VmoDashboard(api: _api),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
             Card(
               child: ExpansionTile(
                 title: const Text('Herramientas de Protocolo y Cleanup (RED BUTTON)', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.redAccent)),
