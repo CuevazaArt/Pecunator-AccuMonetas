@@ -38,7 +38,7 @@ import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -153,16 +153,24 @@ class AutoTuner:
         if confidence < self._conf_threshold:
             return {
                 "adjusted": False,
-                "reason": f"Confidence {confidence:.2f} below threshold {self._conf_threshold}",
+                "reason": (
+                    f"Confidence {confidence:.2f} below "
+                    f"threshold {self._conf_threshold}"
+                ),
                 "params": current_params,
             }
 
         regime_adj = REGIME_ADJUSTMENTS.get(regime, REGIME_ADJUSTMENTS["RANGING"])
-        vol_adj = VOLATILITY_MULTIPLIERS.get(volatility, VOLATILITY_MULTIPLIERS["NORMAL"])
+        vol_adj = VOLATILITY_MULTIPLIERS.get(
+            volatility, VOLATILITY_MULTIPLIERS["NORMAL"]
+        )
 
         # Merge adjustments
         combined: dict[str, float] = {}
-        for key in ("profit_factor", "stop_loss", "margin_drop", "interval_sec", "quote_order_qty"):
+        params = ("profit_factor", "stop_loss",
+                  "margin_drop", "interval_sec",
+                  "quote_order_qty")
+        for key in params:
             r_mult = regime_adj.get(key, 1.0)
             v_mult = vol_adj.get(key, 1.0)
             combined[key] = r_mult * v_mult
@@ -201,7 +209,10 @@ class AutoTuner:
 
         result = {
             "adjusted": len(adjustments_made) > 0,
-            "reason": f"Regime={regime}, Volatility={volatility}, Confidence={confidence:.2f}",
+            "reason": (
+                f"Regime={regime}, Volatility={volatility}, "
+                f"Confidence={confidence:.2f}"
+            ),
             "adjustments": adjustments_made,
             "params": new_params,
             "regime": regime,
@@ -236,7 +247,9 @@ class AutoStager:
         self._cooldown_sec = 600  # 10 minutes between actions per symbol
         self._tuner = AutoTuner()
 
-    async def evaluate_and_act(self, regimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def evaluate_and_act(
+        self, regimes: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Evaluate VMO regime results and auto-stage/unstage bots.
 
         Args:
@@ -318,7 +331,9 @@ class AutoStager:
                             symbol=symbol,
                             reason=(
                                 f"Regime={regime_name} conf={confidence:.2f} "
-                                f"→ staging {rec_bot} with {len(tune_result.get('adjustments', []))} tuning adjustments"
+                                f"→ staging {rec_bot} with "
+                                f"{len(tune_result.get('adjustments', []))} "
+                                f"tuning adjustments"
                             ),
                             context=action,
                         )
@@ -349,7 +364,10 @@ class AutoStager:
                                 bot_id="autopilot", bot_type="system",
                                 decision="AUTO_UNSTAGE", action_taken=True,
                                 symbol=symbol,
-                                reason=f"CHOPPY regime (conf={confidence:.2f}) → unregistering {bid}",
+                                reason=(
+                                    f"CHOPPY regime (conf={confidence:.2f}) "
+                                    f"→ unregistering {bid}"
+                                ),
                                 context=action,
                             )
                             _LOG.info(
@@ -358,7 +376,10 @@ class AutoStager:
                             )
 
             except Exception as exc:
-                zoo.register(exc, module="autopilot.autostager", context=f"evaluate:{symbol}")
+                zoo.register(
+                    exc, module="autopilot.autostager",
+                    context=f"evaluate:{symbol}",
+                )
 
         return actions
 
@@ -410,7 +431,9 @@ class ProcessWatchdog:
             try:
                 health = self._check_health()
 
-                if not health["flutter_alive"] and self._flutter_restarts < self._max_flutter_restarts:
+                flut_dead = not health["flutter_alive"]
+                can_restart = self._flutter_restarts < self._max_flutter_restarts
+                if flut_dead and can_restart:
                     _LOG.warning(
                         "Flutter process died (restart #%d/%d)",
                         self._flutter_restarts + 1, self._max_flutter_restarts,
@@ -615,7 +638,10 @@ class AutoPilot:
 
             # Wait for next VMO cycle
             wait = observer.config.interval_minutes * 60
-            _LOG.info("Next VMO+AutoStage cycle in %d minutes", observer.config.interval_minutes)
+            _LOG.info(
+                "Next VMO+AutoStage cycle in %d minutes",
+                observer.config.interval_minutes,
+            )
             try:
                 await asyncio.sleep(wait)
             except asyncio.CancelledError:

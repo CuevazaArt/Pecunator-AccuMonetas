@@ -97,7 +97,9 @@ class AccountMonitorLoop:
                         continue
 
                     try:
-                        snapshot = await self._take_snapshot(acct.account_id, acct.email)
+                        snapshot = await self._take_snapshot(
+                            acct.account_id, acct.email,
+                        )
                         t_snap = time.monotonic()
                         governor.record_usage(
                             "binance",
