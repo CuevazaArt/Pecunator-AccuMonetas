@@ -99,29 +99,31 @@ _SCHEMA_EXAMPLE = """{
 _SYSTEM_PROMPT = """You are a market regime classifier for a crypto trading system.
 Analyze this TradingView chart image and return a JSON classification.
 
-Rules:
-- You are classifying for BOT SELECTION, not trade timing.
-- "TRENDING" = clear directional movement with higher highs/lows (or lower lows/highs).
-- "RANGING" = price oscillating between visible support/resistance bounds.
-- "CHOPPY" = no clear structure, erratic price action, frequent direction changes.
-- "BREAKOUT" = emerging from a compression or consolidation zone.
-- recommended_bot mapping:
-  - TRENDING → "dorothy" (scalp with the trend)
-  - RANGING → "masha" (DCA within the range)
-  - BREAKOUT → "thusnelda" (multi-symbol opportunistic)
-  - CHOPPY → "none" (sit out, too risky)
-- If you are unsure, set confidence below 0.5 and recommend "none".
-- risk_level reflects the current danger for a bot operating in this market.
+CRITICAL INSTRUCTIONS:
+1. Technical Indicators: The chart contains RSI, MACD, and Bollinger Bands. You MUST use them:
+   - RSI (Relative Strength Index): Check for extreme overbought (>70) or oversold (<30) conditions.
+   - MACD: Check for momentum crossovers or divergence against price.
+   - Bollinger Bands (BB): Check for squeeze/compression (low volatility) or expansion (high volatility).
+2. Context: You will be provided with the last known regimes. Use this to determine if the market is shifting.
+3. Bot Selection (Strict Mapping):
+   - "TRENDING" → "dorothy" (scalp with the trend)
+   - "RANGING" → "masha" (DCA within the range bounds)
+   - "BREAKOUT" → "thusnelda" (opportunistic multi-symbol)
+   - "CHOPPY" → "none" (erratic, sit out)
+4. If indicators contradict price action or you are unsure, lower confidence (<0.5) and recommend "none".
+5. risk_level should reflect technical danger (e.g., trading trending near massive resistance = HIGH).
 
-Respond ONLY with valid JSON matching this schema (no markdown, no explanation outside the JSON):
-"""
+Respond ONLY with valid JSON matching the schema (no markdown, no explanations outside the JSON)."""
 
 
-def _build_prompt(symbol: str, timeframe: str) -> str:
-    return (
+def _build_prompt(symbol: str, timeframe: str, history_context: str = "") -> str:
+    prompt = (
         f"{_SYSTEM_PROMPT}\n{_SCHEMA_EXAMPLE}\n\n"
         f"Chart: {symbol} on {timeframe} timeframe."
     )
+    if history_context:
+        prompt += f"\n\nHistorical Context (Previous Regimes):\n{history_context}"
+    return prompt
 
 
 # ── Gemini client ───────────────────────────────────────────────────
@@ -132,6 +134,7 @@ async def _classify_gemini(
     timeframe: str,
     api_key: str,
     model: str = "gemini-2.0-flash",
+    history_context: str = "",
 ) -> dict[str, Any]:
     """Classify chart using Google Gemini Vision API."""
     try:
@@ -140,7 +143,7 @@ async def _classify_gemini(
         raise RuntimeError("httpx required: pip install httpx") from e
 
     b64_image = base64.b64encode(png_bytes).decode("utf-8")
-    prompt = _build_prompt(symbol, timeframe)
+    prompt = _build_prompt(symbol, timeframe, history_context)
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = {
@@ -185,6 +188,7 @@ async def _classify_openai(
     timeframe: str,
     api_key: str,
     model: str = "gpt-4o-mini",
+    history_context: str = "",
 ) -> dict[str, Any]:
     """Classify chart using OpenAI Vision API."""
     try:
@@ -193,7 +197,7 @@ async def _classify_openai(
         raise RuntimeError("httpx required: pip install httpx") from e
 
     b64_image = base64.b64encode(png_bytes).decode("utf-8")
-    prompt = _build_prompt(symbol, timeframe)
+    prompt = _build_prompt(symbol, timeframe, history_context)
 
     url = "https://api.openai.com/v1/chat/completions"
     payload = {
@@ -272,6 +276,7 @@ async def classify_chart(
     openai_api_key: str = "",
     captured_at: str = "",
     capture_source: str = "",
+    history_context: str = "",
 ) -> MarketRegime:
     """Classify a chart image into a MarketRegime.
 
@@ -296,6 +301,7 @@ async def classify_chart(
             result_dict = await _classify_gemini(
                 png_bytes, symbol, timeframe, gemini_api_key,
                 model=model or "gemini-2.0-flash",
+                history_context=history_context,
             )
             used_provider = "gemini"
             used_model = model or "gemini-2.0-flash"
@@ -306,6 +312,7 @@ async def classify_chart(
             result_dict = await _classify_openai(
                 png_bytes, symbol, timeframe, openai_api_key,
                 model=model or "gpt-4o-mini",
+                history_context=history_context,
             )
             used_provider = "openai"
             used_model = model or "gpt-4o-mini"
@@ -317,6 +324,7 @@ async def classify_chart(
         try:
             result_dict = await _classify_gemini(
                 png_bytes, symbol, timeframe, gemini_api_key,
+                history_context=history_context,
             )
             used_provider = "gemini"
             used_model = "gemini-2.0-flash"
@@ -327,6 +335,7 @@ async def classify_chart(
         try:
             result_dict = await _classify_openai(
                 png_bytes, symbol, timeframe, openai_api_key,
+                history_context=history_context,
             )
             used_provider = "openai"
             used_model = "gpt-4o-mini"

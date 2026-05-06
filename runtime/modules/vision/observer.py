@@ -53,10 +53,25 @@ class VMObserver:
         """
         cfg = self.config
         results: list[MarketRegime] = []
-        total = cfg.total_captures_per_cycle
+        total = len(cfg.symbols) * len(cfg.timeframes)
+        # Dynamically calculate which timeframes to process now
+        now_utc = datetime.now(timezone.utc)
+        active_pairs = []
+        for tf in cfg.timeframes:
+            # For 1d timeframe, only process around midnight UTC (00:xx)
+            if tf == "1d" and now_utc.hour != 0:
+                _LOG.info("Skipping 1d timeframe (only runs at 00:xx UTC)")
+                continue
+            for symbol in cfg.symbols:
+                active_pairs.append((symbol, tf))
+
+        if not active_pairs:
+            _LOG.info("No timeframes scheduled for current hour. Cycle skipped.")
+            return []
+
         _LOG.info(
-            "Starting VMO cycle: %d symbols × %d timeframes = %d captures",
-            len(cfg.symbols), len(cfg.timeframes), total,
+            "Starting VMO cycle: %d symbols × dynamic timeframes = %d captures scheduled",
+            len(cfg.symbols), len(active_pairs),
         )
 
         t0 = time.monotonic()
@@ -65,7 +80,7 @@ class VMObserver:
         # Gemini 2.5 Flash can handle ~15 RPM for free tier.
         # chart-img has ~100 RPM.
         # We use a semaphore of 3 to be safe.
-        sem = asyncio.Semaphore(3)
+        sem = asyncio.Semaphore(1)
         
         async def _bounded_capture(sym: str, tf: str) -> Optional[MarketRegime]:
             async with sem:
@@ -80,8 +95,7 @@ class VMObserver:
                         
         tasks = [
             _bounded_capture(symbol, timeframe)
-            for symbol in cfg.symbols
-            for timeframe in cfg.timeframes
+            for symbol, timeframe in active_pairs
         ]
         
         raw_results = await asyncio.gather(*tasks)
@@ -133,6 +147,12 @@ class VMObserver:
                 if not cap.ok:
                     raise RuntimeError(f"Capture failed: {cap.error}")
 
+                # Step 1.5: Retrieve Historical Context
+                past_regimes = self._cache.get_latest(symbol, timeframe, limit=3)
+                history_context = "\n".join(
+                    [f"- {r.captured_at}: {r.regime} (Bot: {r.recommended_bot})" for r in past_regimes]
+                ) if past_regimes else "No history available."
+
                 # Step 2: Classify
                 regime = await classify_chart(
                     cap.png, symbol, timeframe,
@@ -142,6 +162,7 @@ class VMObserver:
                     openai_api_key=cfg.openai_api_key,
                     captured_at=cap.captured_at,
                     capture_source=cap.source,
+                    history_context=history_context,
                 )
                 
                 # Success

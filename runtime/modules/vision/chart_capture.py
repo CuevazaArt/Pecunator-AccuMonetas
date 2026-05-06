@@ -55,6 +55,7 @@ async def _capture_chart_img(
     width: int = 800,
     height: int = 600,
     theme: str = "dark",
+    indicators: list[str] | None = None,
 ) -> bytes:
     """Capture a chart via the chart-img.com REST API.
 
@@ -78,13 +79,17 @@ async def _capture_chart_img(
     }
     tv_interval = interval_map.get(interval, interval)
 
-    params = {
-        "symbol": f"BINANCE:{symbol}",
-        "interval": tv_interval,
-        "theme": theme,
-        "width": width,
-        "height": height,
-    }
+    params = [
+        ("symbol", f"BINANCE:{symbol}"),
+        ("interval", tv_interval),
+        ("theme", theme),
+        ("width", width),
+        ("height", height),
+    ]
+    if indicators:
+        for ind in indicators:
+            params.append(("studies", ind))
+
     headers = {"x-api-key": api_key}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -221,9 +226,16 @@ async def capture_chart(
     # ── Try chart-img first ─────────────────────────────────────
     if source in ("chart-img", "auto") and api_key:
         try:
+            # Resolve indicators if missing
+            if "indicators" not in locals() or indicators is None:
+                from runtime.modules.vision.config import get_vmo_config
+                cfg = get_vmo_config()
+                indicators = getattr(cfg, "indicators", None)
+
             png = await _capture_chart_img(
                 symbol, interval, api_key, base_url=base_url,
                 width=width, height=height, theme=theme,
+                indicators=indicators,
             )
             elapsed = int((time.monotonic() - t0) * 1000)
             result = CaptureResult(
