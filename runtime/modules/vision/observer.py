@@ -264,8 +264,15 @@ class VMObserver:
     # ── Continuous loop ─────────────────────────────────────────────
 
     async def run_forever(self) -> None:
-        """Run VMO cycles on the configured interval until stopped."""
+        """Run VMO cycles on the configured interval until stopped.
+
+        Post-cycle hooks:
+          1. Prune old PNG captures (configurable retention)
+          2. Marginal kline collection (uses leftover Binance weight)
+          3. Register any unhandled errors in ExceptionZoo
+        """
         self._running = True
+        zoo = get_exception_zoo()
         _LOG.info(
             "VMO observer starting (interval=%dm, symbols=%d, timeframes=%d)",
             self.config.interval_minutes,
@@ -276,8 +283,34 @@ class VMObserver:
         while self._running:
             try:
                 await self.run_cycle()
-            except Exception:
+            except Exception as exc:
+                zoo.register(exc, module="vmo.observer", context="run_cycle_unhandled")
                 _LOG.exception("VMO cycle failed unexpectedly")
+
+            # Post-cycle: marginal kline collection
+            try:
+                from runtime.core.kline_collector import get_kline_collector
+                collector = get_kline_collector()
+                if collector._client is not None:
+                    result = await collector.collect_marginal(budget=30)
+                    if result.get("total_candles", 0) > 0:
+                        _LOG.info(
+                            "Post-cycle kline collection: %d candles (%d weight)",
+                            result["total_candles"], result["total_weight"],
+                        )
+            except Exception as exc:
+                zoo.register(exc, module="vmo.observer", context="post_cycle_klines")
+
+            # Post-cycle: telemetry purge (once per day, check by cycle count)
+            if self._total_cycles % 24 == 0 and self._total_cycles > 0:
+                try:
+                    vault = get_telemetry_vault()
+                    purged = vault.purge_old_data(
+                        kline_days=365, decision_days=90, capture_days=30,
+                    )
+                    _LOG.info("Telemetry purge: %s", purged)
+                except Exception as exc:
+                    zoo.register(exc, module="vmo.observer", context="post_cycle_purge")
 
             # Wait for next cycle
             wait_sec = self.config.interval_minutes * 60

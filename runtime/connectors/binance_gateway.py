@@ -31,6 +31,8 @@ from runtime.core.settings import (
     equity_poll_stride,
 )
 from runtime.core.state_store import StateStore
+from runtime.core.exception_zoo import get_exception_zoo
+from runtime.core.api_governor import get_api_governor, P_TRADING
 
 WS_BASE = "wss://stream.binance.com:9443/stream"
 LOG_TOPIC = "runtime.log"
@@ -112,6 +114,17 @@ class BinanceGateway:
                 # Feed the API Fuse — trips if weight exceeds threshold.
                 fuse = get_api_fuse()
                 fuse.check_weight(used)
+                # Feed the API Governor for unified tracking
+                try:
+                    gov = get_api_governor()
+                    gov.record_usage(
+                        "binance", action=action,
+                        units=max(1, used - getattr(self, '_last_gov_weight', 0)),
+                        priority=P_TRADING, caller="gateway",
+                    )
+                    self._last_gov_weight = used
+                except Exception:
+                    pass
         except (TypeError, ValueError, AttributeError):
             pass
 
