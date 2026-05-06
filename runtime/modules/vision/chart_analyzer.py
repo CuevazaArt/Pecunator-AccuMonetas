@@ -384,3 +384,166 @@ async def classify_chart(
         regime.recommended_bot, used_provider, elapsed,
     )
     return regime
+
+
+# ── Batch Classification (multiple images, 1 API call) ──────────────
+
+_BATCH_SYSTEM_PROMPT = """You are a market regime classifier for a crypto trading system.
+You will receive MULTIPLE TradingView chart images. Analyze EACH one independently.
+
+For EACH chart, return a JSON object with these fields:
+{
+    "symbol": "the symbol shown",
+    "timeframe": "the timeframe shown",
+    "trend": "UP | DOWN | LATERAL",
+    "trend_strength": "STRONG | MODERATE | WEAK",
+    "volatility": "HIGH | NORMAL | LOW | COMPRESSED",
+    "regime": "TRENDING | RANGING | CHOPPY | BREAKOUT",
+    "confidence": 0.75,
+    "recommended_bot": "dorothy | masha | thusnelda | none",
+    "risk_level": "LOW | MODERATE | HIGH | EXTREME",
+    "notes": "Brief explanation"
+}
+
+Bot Selection Rules:
+- "TRENDING" → "dorothy" (scalp with trend)
+- "RANGING" → "masha" (DCA within range)
+- "BREAKOUT" → "thusnelda" (opportunistic)
+- "CHOPPY" → "none" (sit out)
+
+Technical Indicators: Charts contain RSI, MACD, and Bollinger Bands. USE THEM.
+
+CRITICAL: Return a JSON ARRAY of objects, one per image, in the SAME ORDER as provided.
+Example: [{"symbol": "BTCUSDT", ...}, {"symbol": "ETHUSDT", ...}]
+Respond ONLY with the JSON array (no markdown, no explanations outside the array)."""
+
+
+async def classify_charts_batch(
+    charts: list[dict[str, Any]],
+    *,
+    gemini_api_key: str,
+    model: str = "gemini-2.0-flash",
+    history_context: str = "",
+) -> list[MarketRegime]:
+    """Classify multiple charts in a single Gemini API call.
+
+    Args:
+        charts: List of dicts with keys: "png" (bytes), "symbol", "timeframe"
+        gemini_api_key: Gemini API key
+        model: Gemini model to use
+        history_context: Optional historical regime context
+
+    Returns:
+        List of MarketRegime objects, one per input chart.
+
+    This reduces N API calls to 1, saving RPM quota.
+    Gemini Flash supports up to ~16 images per request.
+    """
+    if not charts:
+        return []
+
+    try:
+        import httpx
+    except ImportError as e:
+        raise RuntimeError("httpx required: pip install httpx") from e
+
+    t0 = time.monotonic()
+
+    # Build multi-image prompt
+    chart_descriptions = []
+    parts: list[dict[str, Any]] = []
+
+    prompt_text = _BATCH_SYSTEM_PROMPT
+    if history_context:
+        prompt_text += f"\n\nHistorical Context:\n{history_context}"
+
+    prompt_text += f"\n\nYou are receiving {len(charts)} chart images:"
+    for i, chart in enumerate(charts):
+        prompt_text += f"\n  Image {i+1}: {chart['symbol']} on {chart['timeframe']}"
+        chart_descriptions.append(f"{chart['symbol']}/{chart['timeframe']}")
+
+    parts.append({"text": prompt_text})
+
+    # Add each image as inline_data
+    for chart in charts:
+        b64 = base64.b64encode(chart["png"]).decode("utf-8")
+        parts.append({
+            "inline_data": {
+                "mime_type": "image/png",
+                "data": b64,
+            }
+        })
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 4096,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            url, json=payload,
+            headers={"Content-Type": "application/json"},
+            params={"key": gemini_api_key},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    # Extract text
+    try:
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError) as e:
+        raise ValueError(f"Unexpected Gemini batch response: {e}") from e
+
+    # Parse JSON array
+    parsed = _parse_json_response(text)
+    elapsed = int((time.monotonic() - t0) * 1000)
+
+    # Handle single object (Gemini might return one object instead of array)
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+
+    if not isinstance(parsed, list):
+        _LOG.error("Batch response is not a list: %s", type(parsed))
+        parsed = []
+
+    # Build MarketRegime objects
+    results: list[MarketRegime] = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for i, chart in enumerate(charts):
+        if i < len(parsed) and isinstance(parsed[i], dict):
+            r = parsed[i]
+        else:
+            r = {}
+
+        regime = MarketRegime(
+            symbol=chart["symbol"],
+            timeframe=chart["timeframe"],
+            trend=r.get("trend", "LATERAL"),
+            trend_strength=r.get("trend_strength", "WEAK"),
+            volatility=r.get("volatility", "NORMAL"),
+            regime=r.get("regime", "RANGING"),
+            confidence=float(r.get("confidence", 0.3)),
+            recommended_bot=r.get("recommended_bot", "none"),
+            risk_level=r.get("risk_level", "MODERATE"),
+            notes=r.get("notes", "batch classification"),
+            captured_at=now,
+            capture_source="batch",
+            llm_provider="gemini",
+            llm_model=model,
+            elapsed_ms=elapsed,
+        )
+        regime = _validate_regime(regime)
+        results.append(regime)
+
+    _LOG.info(
+        "Batch classified %d charts in %dms (1 API call): %s",
+        len(results), elapsed,
+        ", ".join(chart_descriptions),
+    )
+    return results
+
