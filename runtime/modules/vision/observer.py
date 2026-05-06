@@ -29,6 +29,9 @@ from runtime.modules.vision.chart_capture import (
 from runtime.modules.vision.chart_analyzer import MarketRegime, classify_chart
 from runtime.modules.vision.config import get_vmo_config, VMOConfig
 from runtime.modules.vision.regime_cache import RegimeCache
+from runtime.core.api_governor import get_api_governor, P_DIAGNOSIS
+from runtime.core.exception_zoo import get_exception_zoo
+from runtime.core.telemetry_vault import get_telemetry_vault
 
 _LOG = logging.getLogger("pecunator.vmo.observer")
 
@@ -133,9 +136,25 @@ class VMObserver:
         max_retries = 3
         base_delay = 5.0
 
+        governor = get_api_governor()
+        zoo = get_exception_zoo()
+        vault = get_telemetry_vault()
+
         for attempt in range(1, max_retries + 1):
             try:
+                # Step 0: Ask ApiGovernor for Chart-Img permission
+                allowed, wait = governor.request_token(
+                    "chart-img", units=1, priority=P_DIAGNOSIS,
+                    caller=f"vmo:{symbol}/{timeframe}",
+                )
+                if not allowed:
+                    if wait == float('inf'):
+                        raise RuntimeError("Chart-Img daily quota exhausted")
+                    _LOG.info("VMO: Chart-Img throttled, waiting %.1fs", wait)
+                    await asyncio.sleep(wait)
+
                 # Step 1: Capture
+                t_cap = time.monotonic()
                 cap = await capture_chart(
                     symbol, timeframe,
                     source=cfg.capture_source,
@@ -143,9 +162,27 @@ class VMObserver:
                     base_url=cfg.chart_img_base_url,
                     save_dir=cfg.captures_dir,
                 )
+                cap_ms = int((time.monotonic() - t_cap) * 1000)
+                governor.record_usage(
+                    "chart-img", action=f"capture:{symbol}/{timeframe}",
+                    units=1, priority=P_DIAGNOSIS,
+                    caller="vmo", latency_ms=cap_ms,
+                    success=cap.ok, error_type=cap.error or "",
+                )
 
                 if not cap.ok:
                     raise RuntimeError(f"Capture failed: {cap.error}")
+
+                # Index capture in TelemetryVault
+                if cap.path:
+                    vault.index_capture(
+                        symbol=symbol, timeframe=timeframe,
+                        captured_at=cap.captured_at,
+                        file_path=str(cap.path),
+                        file_size=len(cap.png) if cap.png else 0,
+                        source=cap.source,
+                        indicators="RSI:14,MACD,BB:20,2",
+                    )
 
                 # Step 1.5: Retrieve Historical Context
                 past_regimes = self._cache.get_latest(symbol, timeframe, limit=3)
@@ -153,7 +190,18 @@ class VMObserver:
                     [f"- {r.captured_at}: {r.regime} (Bot: {r.recommended_bot})" for r in past_regimes]
                 ) if past_regimes else "No history available."
 
-                # Step 2: Classify
+                # Step 2: Ask ApiGovernor for LLM permission
+                llm_svc = "gemini" if cfg.llm_provider != "openai" else "openai"
+                allowed, wait = governor.request_token(
+                    llm_svc, units=1, priority=P_DIAGNOSIS,
+                    caller=f"vmo:{symbol}/{timeframe}",
+                )
+                if not allowed and wait != float('inf'):
+                    _LOG.info("VMO: %s throttled, waiting %.1fs", llm_svc, wait)
+                    await asyncio.sleep(wait)
+
+                # Step 2b: Classify
+                t_llm = time.monotonic()
                 regime = await classify_chart(
                     cap.png, symbol, timeframe,
                     provider=cfg.llm_provider,
@@ -164,11 +212,29 @@ class VMObserver:
                     capture_source=cap.source,
                     history_context=history_context,
                 )
-                
+                llm_ms = int((time.monotonic() - t_llm) * 1000)
+                governor.record_usage(
+                    llm_svc, action=f"classify:{symbol}/{timeframe}",
+                    units=1, priority=P_DIAGNOSIS,
+                    caller="vmo", latency_ms=llm_ms, success=True,
+                )
+
+                # Update capture index with regime result
+                if cap.path:
+                    vault.index_capture(
+                        symbol=symbol, timeframe=timeframe,
+                        captured_at=cap.captured_at,
+                        file_path=str(cap.path),
+                        regime=regime.regime,
+                        confidence=regime.confidence,
+                        recommended_bot=regime.recommended_bot,
+                    )
+
                 # Success
                 break
 
             except Exception as e:
+                zoo.register(e, module="vmo.observer", context=f"{symbol}/{timeframe}/attempt={attempt}")
                 _LOG.warning(
                     "VMO _capture_and_classify attempt %d failed for %s/%s: %s", 
                     attempt, symbol, timeframe, e
