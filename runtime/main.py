@@ -26,6 +26,14 @@ def _configure_logging() -> None:
 def main() -> None:
     _configure_logging()
     lo = logging.getLogger("pecunator.engine")
+
+    # ── AutoPilot mode: full autonomous operation ──
+    if "--autopilot" in sys.argv or os.environ.get("PECUNATOR_AUTOPILOT", "").strip().lower() in ("1", "true"):
+        lo.info("Starting in AUTOPILOT mode (full autonomous)")
+        from runtime.core.autopilot import run_autopilot
+        run_autopilot()
+        return
+
     if os.environ.get("PECUNATOR_ENGINE_STUB", "").strip().lower() in ("1", "true", "yes"):
         lo.info(
             "PECUNATOR_ENGINE_STUB set: engine exits without HTTP API. "
