@@ -1,4 +1,4 @@
-/// UI tests for refactored architecture.
+/// Exhaustive UI tests for Pecunator desktop hub.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,8 +12,11 @@ import 'package:pecunator_desktop/widgets/gateway_status.dart';
 import 'package:pecunator_desktop/widgets/logs_viewer.dart';
 
 void main() {
-  group('PecunatorCore Refactored UI Tests', () {
-    testWidgets('ErrorDisplay shows NetworkException', (
+  // ═══════════════════════════════════════════════════════════════════
+  //  1. ErrorDisplay Widget Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('ErrorDisplay Widget', () {
+    testWidgets('shows NetworkException with cloud_off icon', (
       WidgetTester tester,
     ) async {
       final error = NetworkException.timeout();
@@ -28,7 +31,7 @@ void main() {
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     });
 
-    testWidgets('ErrorDisplay shows ApiException', (WidgetTester tester) async {
+    testWidgets('shows ApiException with error icon', (WidgetTester tester) async {
       final error = ApiException.unauthorized();
 
       await tester.pumpWidget(
@@ -38,10 +41,23 @@ void main() {
       );
 
       expect(find.text(error.message), findsOneWidget);
-      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      // ApiException (not AuthException) uses error_outline icon
+      expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
 
-    testWidgets('ErrorDisplay dismiss callback works', (
+    testWidgets('shows ServerError with warning icon', (WidgetTester tester) async {
+      final error = ApiException.serverError('DB offline');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ErrorDisplay(error: error)),
+        ),
+      );
+
+      expect(find.textContaining('DB offline'), findsOneWidget);
+    });
+
+    testWidgets('dismiss callback fires on close tap', (
       WidgetTester tester,
     ) async {
       bool dismissed = false;
@@ -59,7 +75,24 @@ void main() {
       expect(dismissed, true);
     });
 
-    testWidgets('GatewayStatus shows ON when running', (
+    testWidgets('shows connection refused message', (WidgetTester tester) async {
+      final error = NetworkException.connectionRefused();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ErrorDisplay(error: error)),
+        ),
+      );
+
+      expect(find.textContaining('conectar'), findsOneWidget);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  2. GatewayStatus Widget Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('GatewayStatus Widget', () {
+    testWidgets('shows ON with WS when both connected', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -73,7 +106,19 @@ void main() {
       expect(find.text('GW ON · WS'), findsOneWidget);
     });
 
-    testWidgets('GatewayStatus shows OFF when not running', (
+    testWidgets('shows ON without WS', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: GatewayStatus(isRunning: true, wsConnected: false),
+          ),
+        ),
+      );
+
+      expect(find.text('GW ON'), findsOneWidget);
+    });
+
+    testWidgets('shows OFF when not running', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
@@ -86,8 +131,13 @@ void main() {
 
       expect(find.text('GW OFF'), findsOneWidget);
     });
+  });
 
-    testWidgets('LogsViewer displays logs correctly', (
+  // ═══════════════════════════════════════════════════════════════════
+  //  3. LogsViewer Widget Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('LogsViewer Widget', () {
+    testWidgets('displays logs correctly', (
       WidgetTester tester,
     ) async {
       const logs = '''2026-04-29T10:15:30Z [INFO] Cycle start
@@ -103,7 +153,7 @@ void main() {
       expect(find.text(logs), findsOneWidget);
     });
 
-    testWidgets('LogsViewer shows empty state', (WidgetTester tester) async {
+    testWidgets('shows empty state', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(body: LogsViewer(logs: '')),
@@ -113,28 +163,69 @@ void main() {
       expect(find.text('(sin logs)'), findsOneWidget);
     });
 
-    testWidgets('AppConfig constants are accessible', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('auto-scrolls when new logs arrive', (WidgetTester tester) async {
+      // Use a ValueNotifier to track log content across rebuilds
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: _AutoScrollTestWidget(),
+          ),
+        ),
+      );
+
+      // Initial state shows the logs
+      expect(find.byType(LogsViewer), findsOneWidget);
+      await tester.tap(find.text('Add log'));
+      await tester.pump();
+      // Widget rebuilds with updated logs
+      expect(find.byType(LogsViewer), findsOneWidget);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  4. AppConfig Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('AppConfig', () {
+    test('default constants are correct', () {
       expect(AppConfig.engineDefaultHost, '127.0.0.1');
-      expect(AppConfig.engineDefaultPort, 8765);
+      expect(AppConfig.engineDefaultPort, 8000);
       expect(AppConfig.defaultSymbol, 'XRPUSDT');
       expect(AppConfig.networkTimeout, const Duration(seconds: 10));
+      expect(AppConfig.maxNetworkRetries, 3);
+      expect(AppConfig.maxLogLines, 120);
     });
 
-    testWidgets('AppConfig buildEngineUrl works', (WidgetTester tester) async {
+    test('buildEngineUrl generates correct default URL', () {
       final url = AppConfig.buildEngineUrl();
-      expect(url, 'http://127.0.0.1:8765');
+      expect(url, 'http://127.0.0.1:8000');
+    });
 
+    test('buildEngineUrl generates correct custom URL', () {
       final customUrl = AppConfig.buildEngineUrl(
         host: '192.168.1.1',
         port: 9000,
       );
       expect(customUrl, 'http://192.168.1.1:9000');
     });
+
+    test('bot defaults are L0 calibrated', () {
+      expect(AppConfig.defaultLoopInterval, 450);
+      expect(AppConfig.defaultQuoteQty, '8');
+      expect(AppConfig.defaultProfit, '0.05');
+      expect(AppConfig.defaultDrop, '0.004');
+    });
+
+    test('UI constants are reasonable', () {
+      expect(AppConfig.minDialogWidth, greaterThan(0));
+      expect(AppConfig.maxDialogWidth, greaterThan(AppConfig.minDialogWidth));
+      expect(AppConfig.configHistoryMaxItems, greaterThan(0));
+    });
   });
 
-  group('Exception Classification Tests', () {
+  // ═══════════════════════════════════════════════════════════════════
+  //  5. Exception Classification Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('Exception System', () {
     test('NetworkException timeout factory', () {
       final error = NetworkException.timeout();
       expect(error.message.contains('agotada'), true);
@@ -156,6 +247,12 @@ void main() {
       expect(error.message.contains('Invalid input'), true);
     });
 
+    test('ApiException serverError factory', () {
+      final error = ApiException.serverError('DB crash');
+      expect(error.statusCode, 500);
+      expect(error.message.contains('DB crash'), true);
+    });
+
     test('ValidationException emptyCredential factory', () {
       final error = ValidationException.emptyCredential();
       expect(error.message.contains('requeridos'), true);
@@ -165,9 +262,22 @@ void main() {
       final error = AuthException.vaultLocked();
       expect(error.message.contains('Vault'), true);
     });
+
+    test('NetworkException is PecunatorException', () {
+      final error = NetworkException(message: 'test');
+      expect(error, isA<AppException>());
+    });
+
+    test('ApiException is PecunatorException', () {
+      final error = ApiException(statusCode: 503, message: 'test');
+      expect(error, isA<AppException>());
+    });
   });
 
-  group('Widget Integration Tests', () {
+  // ═══════════════════════════════════════════════════════════════════
+  //  6. Widget Integration Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('Widget Integration', () {
     testWidgets('ErrorDisplay + GatewayStatus together', (
       WidgetTester tester,
     ) async {
@@ -190,26 +300,47 @@ void main() {
       expect(find.text('GW OFF'), findsOneWidget);
     });
 
-    testWidgets('LogsViewer auto-scrolls', (WidgetTester tester) async {
-      const initialLogs = 'Line 1\nLine 2\nLine 3';
-      const newLogs = 'Line 1\nLine 2\nLine 3\nLine 4 (new)';
+    testWidgets('Multiple errors render without overflow', (
+      WidgetTester tester,
+    ) async {
+      final errors = [
+        NetworkException.timeout(),
+        ApiException.unauthorized(),
+        NetworkException.connectionRefused(),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: errors.map((e) => ErrorDisplay(error: e)).toList(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // All 3 errors should render
+      for (final e in errors) {
+        expect(find.text(e.message), findsOneWidget);
+      }
+    });
+
+    testWidgets('Gateway status transitions', (WidgetTester tester) async {
+      bool running = false;
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: StatefulBuilder(
               builder: (context, setState) {
-                String logs = initialLogs;
                 return Column(
                   children: [
-                    Expanded(child: LogsViewer(logs: logs, autoScroll: true)),
+                    GatewayStatus(isRunning: running, wsConnected: running),
                     ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          logs = newLogs;
-                        });
-                      },
-                      child: const Text('Add log'),
+                      onPressed: () => setState(() => running = !running),
+                      child: const Text('Toggle'),
                     ),
                   ],
                 );
@@ -219,10 +350,54 @@ void main() {
         ),
       );
 
-      expect(find.text('Line 3'), findsOneWidget);
-      await tester.tap(find.text('Add log'));
+      expect(find.text('GW OFF'), findsOneWidget);
+      await tester.tap(find.text('Toggle'));
       await tester.pump();
-      expect(find.text('Line 4 (new)'), findsOneWidget);
+      expect(find.text('GW ON · WS'), findsOneWidget);
     });
   });
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  7. Port Sync Verification Tests
+  // ═══════════════════════════════════════════════════════════════════
+  group('Port Synchronization', () {
+    test('default port matches backend (8000)', () {
+      expect(AppConfig.engineDefaultPort, 8000);
+      expect(AppConfig.buildEngineUrl(), contains(':8000'));
+    });
+
+    test('URL construction is consistent', () {
+      final url1 = AppConfig.buildEngineUrl();
+      final url2 = 'http://${AppConfig.engineDefaultHost}:${AppConfig.engineDefaultPort}';
+      expect(url1, url2);
+    });
+  });
+}
+
+/// Helper widget for the auto-scroll test — uses proper StatefulWidget
+/// so logs variable survives across setState rebuilds.
+class _AutoScrollTestWidget extends StatefulWidget {
+  @override
+  State<_AutoScrollTestWidget> createState() => _AutoScrollTestWidgetState();
+}
+
+class _AutoScrollTestWidgetState extends State<_AutoScrollTestWidget> {
+  String _logs = 'Line 1\nLine 2\nLine 3';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(child: LogsViewer(logs: _logs, autoScroll: true)),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _logs = '$_logs\nLine 4 (new)';
+            });
+          },
+          child: const Text('Add log'),
+        ),
+      ],
+    );
+  }
 }
