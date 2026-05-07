@@ -20,6 +20,7 @@ import 'system_dashboard_page.dart';
 import 'api_sandbox_page.dart';
 import '../widgets/weight_monitor_dialog.dart';
 import '../widgets/vmo_dashboard.dart';
+import '../widgets/system_status_bar.dart';
 import '../utils.dart';
 class BotControlPage extends StatefulWidget {
   const BotControlPage({
@@ -1668,10 +1669,16 @@ class _BotControlPageState extends State<BotControlPage> {
               ApiSandboxPage(engineBase: _engineBase),
             ][_currentIndex],
           ),
-          // â”€â”€ Persistent compact weight gauge (visible on ALL pages) â”€â”€
+          // ── Persistent compact weight gauge + system status (visible on ALL pages) ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: CompactWeightGauge(api: _api),
+            child: Row(
+              children: [
+                Expanded(child: CompactWeightGauge(api: _api)),
+                const SizedBox(width: 8),
+                SystemStatusBar(api: _api),
+              ],
+            ),
           ),
         ],
       ),
