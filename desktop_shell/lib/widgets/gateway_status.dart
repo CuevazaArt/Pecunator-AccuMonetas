@@ -1,4 +1,5 @@
 /// Gateway status indicator widget.
+library;
 
 import 'package:flutter/material.dart';
 

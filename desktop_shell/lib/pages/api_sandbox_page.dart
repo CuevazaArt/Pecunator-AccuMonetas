@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
@@ -105,11 +105,11 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
         _queryNeedsSymbol() &&
         _selectedQueryId != 'exchange_info' &&
         symbol.isEmpty) {
-      setState(() => _error = 'SÃ­mbolo requerido para esta consulta.');
+      setState(() => _error = 'Símbolo requerido para esta consulta.');
       return;
     }
     if (_queryNeedsLimit() && (limit == null || limit <= 0)) {
-      setState(() => _error = 'LÃ­mite invÃ¡lido (ej. 50).');
+      setState(() => _error = 'Límite inválido (ej. 50).');
       return;
     }
     setState(() {
@@ -153,7 +153,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
             _response is! List &&
             _response.toString().isNotEmpty);
     if (!hasResponse) {
-      setState(() => _error = 'No hay respuesta para guardar todavÃ­a.');
+      setState(() => _error = 'No hay respuesta para guardar todavía.');
       return;
     }
     try {
@@ -201,7 +201,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          '${row['method'] ?? '-'} ${row['endpoint'] ?? '-'} Â· #${row['id'] ?? '-'}',
+          '${row['method'] ?? '-'} ${row['endpoint'] ?? '-'} · #${row['id'] ?? '-'}',
         ),
         content: SizedBox(
           width: 950,
@@ -345,7 +345,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Curado rÃ¡pido de respuesta',
+              'Curado rápido de respuesta',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -386,7 +386,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                       children: [
                         Expanded(
                           child: SelectableText(
-                            '#${row['id']} Â· ${row['ts_utc']} Â· ${row['method']} ${row['endpoint']}',
+                            '#${row['id']} · ${row['ts_utc']} · ${row['method']} ${row['endpoint']}',
                             style: const TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 11,
@@ -450,7 +450,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                 ),
               ),
             Text(
-              'Ãšltima ejecuciÃ³n UTC: $_lastExecutedAt',
+              'Última ejecución UTC: $_lastExecutedAt',
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -526,7 +526,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Usa credenciales registradas: ${requiresCred ? "sÃ­" : "no"}',
+                      'Usa credenciales registradas: ${requiresCred ? "sí" : "no"}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -534,7 +534,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                     ),
                     if (args.isNotEmpty)
                       Text(
-                        'ParÃ¡metros: ${args.join(", ")}',
+                        'Parámetros: ${args.join(", ")}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -542,7 +542,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      'Tip: puedes usar el catÃ¡logo o escribir la llamada tipo python-binance arriba; se ejecuta por backend y devuelve JSON.',
+                      'Tip: puedes usar el catálogo o escribir la llamada tipo python-binance arriba; se ejecuta por backend y devuelve JSON.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -557,7 +557,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                             controller: _symbolCtrl,
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(
-                              labelText: 'SÃ­mbolo',
+                              labelText: 'Símbolo',
                               hintText: 'BTCUSDT',
                               isDense: true,
                               border: OutlineInputBorder(),
@@ -571,7 +571,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                             controller: _limitCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                              labelText: 'LÃ­mite',
+                              labelText: 'Límite',
                               hintText: '50',
                               isDense: true,
                               border: OutlineInputBorder(),
@@ -581,7 +581,7 @@ class _ApiSandboxPageState extends State<ApiSandboxPage> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Objetivo operativo: maximizar beneficio y reducir pÃ©rdida (inevitable en ocasiones) con datos verificables.',
+                            'Objetivo operativo: maximizar beneficio y reducir pérdida (inevitable en ocasiones) con datos verificables.',
                             style: const TextStyle(fontSize: 12),
                           ),
                         ),

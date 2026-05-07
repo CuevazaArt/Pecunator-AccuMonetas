@@ -13,6 +13,7 @@ import '../widgets/compact_weight_gauge.dart';
 import 'masha_hub_page.dart';
 import 'thusnelda_hub_page.dart';
 import 'bot_guide_page.dart';
+import 'spot_account_page.dart';
 import '../widgets/weight_monitor_dialog.dart';
 import '../widgets/vmo_dashboard.dart';
 import '../utils.dart';
@@ -31,7 +32,7 @@ class BotControlPage extends StatefulWidget {
 }
 
 class _BotControlPageState extends State<BotControlPage> {
-  static const _engineBase = 'http://127.0.0.1:8765';
+  static const _engineBase = 'http://127.0.0.1:8000';
 
   final _tagCtrl = TextEditingController(text: 'Dorothy');
   final _symbolCtrl = TextEditingController(text: 'XRPUSDT');
@@ -55,7 +56,7 @@ class _BotControlPageState extends State<BotControlPage> {
   int _apiWeightLimit = 6000;
   DateTime? _binanceSrvUtc;
   DateTime? _binanceSrvObservedUtc;
-  String _activeCredential = 'none Â· -';
+  String _activeCredential = 'none · -';
   String _activeCredentialId = '';
   List<Map<String, dynamic>> _hubBots = <Map<String, dynamic>>[];
   List<Map<String, String>> _configHistory = <Map<String, String>>[];
@@ -185,27 +186,27 @@ class _BotControlPageState extends State<BotControlPage> {
       case 'tag':
         return 'Nombre local de la instancia Dorothy para diferenciar seteo/mercado.';
       case 'symbol':
-        return 'Par spot objetivo (ej. XRPUSDT). Determina el mercado sobre el que Dorothy tomarÃ¡ decisiones.';
+        return 'Par spot objetivo (ej. XRPUSDT). Determina el mercado sobre el que Dorothy tomará decisiones.';
       case 'loop':
-        return 'Segundos entre iteraciones (tiempoEntreEjecucion). Menor valor = mÃ¡s reactividad y mÃ¡s carga REST.';
+        return 'Segundos entre iteraciones (tiempoEntreEjecucion). Menor valor = más reactividad y más carga REST.';
       case 'qty':
-        return 'Monto de compra en quote (quoteOrderQtyModulo, normalmente USDT). Ajustarlo por volatilidad y tamaÃ±o de cuenta.';
+        return 'Monto de compra en quote (quoteOrderQtyModulo, normalmente USDT). Ajustarlo por volatilidad y tamaño de cuenta.';
       case 'profit':
-        return 'Factor de beneficio por ciclo. 0.05 equivale a 5%; mÃ¡s alto exige mÃ¡s recorrido para ejecutar salida.';
+        return 'Factor de beneficio por ciclo. 0.05 equivale a 5%; más alto exige más recorrido para ejecutar salida.';
       case 'drop':
-        return 'Margen extra de caÃ­da para habilitar compra. Ayuda a espaciar entradas y evitar sobreoperar en rango estrecho.';
+        return 'Margen extra de caída para habilitar compra. Ayuda a espaciar entradas y evitar sobreoperar en rango estrecho.';
       case 'qDec':
-        return 'Decimales de cantidad (LOT_SIZE). Si estÃ¡ mal configurado, Binance rechazarÃ¡ la orden.';
+        return 'Decimales de cantidad (LOT_SIZE). Si está mal configurado, Binance rechazará la orden.';
       case 'pDec':
-        return 'Decimales del precio LIMIT (PRICE_FILTER). Ajustar segÃºn tick size del sÃ­mbolo.';
+        return 'Decimales del precio LIMIT (PRICE_FILTER). Ajustar según tick size del símbolo.';
       case 'note':
         return 'Nota operativa para identificar objetivo o contexto de esta instancia.';
       case 'maxDd':
-        return 'Drawdown mÃ¡ximo tolerado (decimal). Si se excede, Dorothy bloquea nuevas compras para contener riesgo.';
+        return 'Drawdown máximo tolerado (decimal). Si se excede, Dorothy bloquea nuevas compras para contener riesgo.';
       case 'stopLoss':
-        return 'Stop-loss por posiciÃ³n (decimal). Fuerza salida defensiva cuando el precio cae bajo el umbral configurado.';
+        return 'Stop-loss por posición (decimal). Fuerza salida defensiva cuando el precio cae bajo el umbral configurado.';
       case 'metricsEvery':
-        return 'NÃºmero de ciclos entre cÃ¡lculos de mÃ©tricas (Sharpe, win rate, max drawdown) persistidas en SQLite.';
+        return 'Número de ciclos entre cálculos de métricas (Sharpe, win rate, max drawdown) persistidas en SQLite.';
       default:
         return field;
     }
@@ -280,7 +281,7 @@ class _BotControlPageState extends State<BotControlPage> {
       final activeName = activeLabel.isNotEmpty
           ? activeLabel
           : (_activeCredentialId.isEmpty ? '-' : _activeCredentialId);
-      _activeCredential = '$activeName Â· $last4 Â· $source';
+      _activeCredential = '$activeName · $last4 · $source';
     } catch (_) {
       // Keep previous credential state
     }
@@ -539,9 +540,9 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await _confirmProtocolDialog(
       title: 'Ejecutar protocolo de cierre',
       message:
-          'Antes de cerrar/cancelar Ã³rdenes, se detendrÃ¡n todas las instancias Dorothy '
-          'para evitar ciclos de disposiciÃ³n/convertir activos en paralelo. '
-          'Base operativa detectada: $_opsBaseAsset. Â¿Continuar?',
+          'Antes de cerrar/cancelar órdenes, se detendrán todas las instancias Dorothy '
+          'para evitar ciclos de disposición/convertir activos en paralelo. '
+          'Base operativa detectada: $_opsBaseAsset. ¿Continuar?',
     );
     if (ok != true) return;
     await _withBusy(() async {
@@ -564,9 +565,9 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await _confirmProtocolDialog(
       title: 'Ejecutar RED BUTTON',
       message:
-          'Esto intentarÃ¡ vender a mercado activos Spot al base asset ($_opsBaseAsset). '
-          'Primero detendrÃ¡ todas las instancias Dorothy para evitar conflictos operativos. '
-          'Usar solo en eventos de salida de emergencia. Â¿Continuar?',
+          'Esto intentará vender a mercado activos Spot al base asset ($_opsBaseAsset). '
+          'Primero detendrá todas las instancias Dorothy para evitar conflictos operativos. '
+          'Usar solo en eventos de salida de emergencia. ¿Continuar?',
     );
     if (ok != true) return;
     await _withBusy(() async {
@@ -589,9 +590,9 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await _confirmProtocolDialog(
       title: 'Cancelar LIMIT (cleanup)',
       message:
-          'Se detendrÃ¡n primero todas las instancias Dorothy activas. '
-          'Luego se cancelarÃ¡n Ã³rdenes LIMIT detectadas en pares Spot del inventario para base $_opsBaseAsset. '
-          'Â¿Continuar?',
+          'Se detendrán primero todas las instancias Dorothy activas. '
+          'Luego se cancelarán órdenes LIMIT detectadas en pares Spot del inventario para base $_opsBaseAsset. '
+          '¿Continuar?',
     );
     if (ok != true) return;
     await _withBusy(() async {
@@ -614,9 +615,9 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await _confirmProtocolDialog(
       title: 'Cancelar STOP (cleanup)',
       message:
-          'Se detendrÃ¡n primero todas las instancias Dorothy activas. '
-          'Luego se cancelarÃ¡n Ã³rdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario para base $_opsBaseAsset. '
-          'Â¿Continuar?',
+          'Se detendrán primero todas las instancias Dorothy activas. '
+          'Luego se cancelarán órdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario para base $_opsBaseAsset. '
+          '¿Continuar?',
     );
     if (ok != true) return;
     await _withBusy(() async {
@@ -637,11 +638,11 @@ class _BotControlPageState extends State<BotControlPage> {
 
   Future<void> _runCleanupAllOrders() async {
     final ok = await _confirmProtocolDialog(
-      title: 'Cancelar TODAS las Ã³rdenes (cleanup total)',
+      title: 'Cancelar TODAS las órdenes (cleanup total)',
       message:
-          'Se detendrÃ¡n primero todas las instancias Dorothy activas. '
-          'Luego se cancelarÃ¡ toda orden abierta encontrada en la cuenta Spot (base $_opsBaseAsset). '
-          'Usar solo cuando quieras limpiar completamente el libro de Ã³rdenes. Â¿Continuar?',
+          'Se detendrán primero todas las instancias Dorothy activas. '
+          'Luego se cancelará toda orden abierta encontrada en la cuenta Spot (base $_opsBaseAsset). '
+          'Usar solo cuando quieras limpiar completamente el libro de órdenes. ¿Continuar?',
     );
     if (ok != true) return;
     await _withBusy(() async {
@@ -714,7 +715,7 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar eliminaciÃ³n'),
+        title: const Text('Confirmar eliminación'),
         content: Text('Eliminar credencial $credentialId del vault local.'),
         actions: [
           TextButton(
@@ -748,7 +749,7 @@ class _BotControlPageState extends State<BotControlPage> {
       return;
     }
     if (label.length > 80) {
-      setState(() => _lastError = 'Nombre local mÃ¡ximo 80 caracteres');
+      setState(() => _lastError = 'Nombre local máximo 80 caracteres');
       return;
     }
     await _withBusy(() async {
@@ -891,9 +892,9 @@ class _BotControlPageState extends State<BotControlPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar modo LIVE'),
         content: const Text(
-          'Vas a desactivar el modo simulado. Dorothy podrÃ¡ enviar Ã³rdenes '
-          'reales a Binance con las API keys activas. Las pÃ©rdidas son posibles. '
-          'Â¿Continuar?',
+          'Vas a desactivar el modo simulado. Dorothy podrá enviar órdenes '
+          'reales a Binance con las API keys activas. Las pérdidas son posibles. '
+          '¿Continuar?',
         ),
         actions: [
           TextButton(
@@ -906,7 +907,7 @@ class _BotControlPageState extends State<BotControlPage> {
               foregroundColor: Colors.redAccent,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('SÃ­, modo LIVE'),
+            child: const Text('Sí, modo LIVE'),
           ),
         ],
       ),
@@ -1007,7 +1008,7 @@ class _BotControlPageState extends State<BotControlPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar eliminaciÃ³n'),
+        title: const Text('Confirmar eliminación'),
         content: Text(
           'Eliminar la instancia $botId y conservar solo su historial SQLite.',
         ),
@@ -1046,7 +1047,7 @@ class _BotControlPageState extends State<BotControlPage> {
                     children: [
                       Text(
                         'Guarda tus credenciales Binance en el cofre local cifrado. '
-                        'La nueva credencial se activa automÃ¡ticamente.',
+                        'La nueva credencial se activa automáticamente.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1173,7 +1174,7 @@ class _BotControlPageState extends State<BotControlPage> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Registros SQLite Â· $botId'),
+        title: Text('Registros SQLite · $botId'),
         content: SizedBox(
           width: 760,
           height: 460,
@@ -1219,7 +1220,7 @@ class _BotControlPageState extends State<BotControlPage> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Detalle registro Â· $botId'),
+        title: Text('Detalle registro · $botId'),
         content: SizedBox(
           width: 760,
           height: 520,
@@ -1265,7 +1266,7 @@ class _BotControlPageState extends State<BotControlPage> {
         content: SizedBox(
           width: 520,
           child: _configHistory.isEmpty
-              ? const Text('Sin historial aÃºn.')
+              ? const Text('Sin historial aún.')
               : ListView.separated(
                   shrinkWrap: true,
                   itemCount: _configHistory.length,
@@ -1278,8 +1279,8 @@ class _BotControlPageState extends State<BotControlPage> {
                       children: [
                         Expanded(
                           child: Text(
-                            '${h['symbol']} Â· loop ${h['loop']} Â· qty ${h['qty']}'
-                            '${note.isEmpty ? '' : ' Â· note $note'}',
+                            '${h['symbol']} · loop ${h['loop']} · qty ${h['qty']}'
+                            '${note.isEmpty ? '' : ' · note $note'}',
                           ),
                         ),
                         TextButton(
@@ -1463,7 +1464,7 @@ class _BotControlPageState extends State<BotControlPage> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'ts $ts Â· stopped $stopped Â· err $errors Â· ${plainNum(elapsed)}s',
+              'ts $ts · stopped $stopped · err $errors · ${plainNum(elapsed)}s',
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
             ),
@@ -1533,7 +1534,7 @@ class _BotControlPageState extends State<BotControlPage> {
           IconButton(
             onPressed: _loadingHub ? null : _toggleGateway,
             tooltip: _gatewayRunning
-                ? 'Gateway ON${_gatewayWsConnected ? " Â· WS" : ""} â€” pulsa para detener'
+                ? 'Gateway ON${_gatewayWsConnected ? " · WS" : ""} â€” pulsa para detener'
                 : 'Gateway OFF â€” pulsa para iniciar',
             icon: Icon(
               _gatewayRunning ? Icons.cloud_done : Icons.cloud_off_outlined,
@@ -1550,7 +1551,7 @@ class _BotControlPageState extends State<BotControlPage> {
           // â”€â”€ Theme toggle â”€â”€
           IconButton(
             onPressed: () => widget.onThemeChanged(!widget.darkMode),
-            tooltip: widget.darkMode ? 'Modo dÃ­a' : 'Modo noche',
+            tooltip: widget.darkMode ? 'Modo día' : 'Modo noche',
             icon: Icon(
               widget.darkMode ? Icons.light_mode : Icons.dark_mode,
               size: 18,
@@ -1638,8 +1639,8 @@ class _BotControlPageState extends State<BotControlPage> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Tooltip(
                   message:
-                      'Misma mÃ©trica de cabecera Binance (X-MBX-USED-WEIGHT-1M). '
-                      'LÃ­mite de referencia: variable PECUNATOR_API_WEIGHT_LIMIT_1M en el motor.',
+                      'Misma métrica de cabecera Binance (X-MBX-USED-WEIGHT-1M). '
+                      'Límite de referencia: variable PECUNATOR_API_WEIGHT_LIMIT_1M en el motor.',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1723,15 +1724,15 @@ class _BotControlPageState extends State<BotControlPage> {
                     icon: Icons.rule_folder_outlined,
                     accent: Colors.amberAccent,
                     description:
-                        'Cancela Ã³rdenes LIMIT abiertas y toma snapshot operativo/equity de salida.',
+                        'Cancela órdenes LIMIT abiertas y toma snapshot operativo/equity de salida.',
                     precautions:
                         '- Detiene Dorothy antes de ejecutar.\n'
-                        '- Ãšsalo para cierre controlado, no para liquidaciÃ³n total.\n'
+                        '- Úsalo para cierre controlado, no para liquidación total.\n'
                         '- Revisa el resumen para trazabilidad.',
                     state: _closeProtocolState,
                     onRun: _runCloseProtocol,
                     onViewSummary: () => _openProtocolSummaryDialog(
-                      'Resumen Â· Protocolo de Cierre',
+                      'Resumen · Protocolo de Cierre',
                       _closeProtocolState,
                     ),
                   ),
@@ -1741,7 +1742,7 @@ class _BotControlPageState extends State<BotControlPage> {
                     icon: Icons.warning_amber_rounded,
                     accent: Colors.redAccent,
                     description:
-                        'Rutina de salida de emergencia: intenta convertir balances Spot al asset base vÃ­a ventas a mercado.',
+                        'Rutina de salida de emergencia: intenta convertir balances Spot al asset base vía ventas a mercado.',
                     precautions:
                         '- Detiene Dorothy antes de vender.\n'
                         '- Puede fallar en activos sin par directo o por filtros LOT_SIZE.\n'
@@ -1749,7 +1750,7 @@ class _BotControlPageState extends State<BotControlPage> {
                     state: _redButtonState,
                     onRun: _runRedButton,
                     onViewSummary: () => _openProtocolSummaryDialog(
-                      'Resumen Â· RED BUTTON',
+                      'Resumen · RED BUTTON',
                       _redButtonState,
                     ),
                   ),
@@ -1759,15 +1760,15 @@ class _BotControlPageState extends State<BotControlPage> {
                     icon: Icons.format_list_numbered,
                     accent: Colors.lightBlueAccent,
                     description:
-                        'EvalÃºa pares Spot con balance y cancela Ã³rdenes LIMIT abiertas.',
+                        'Evalúa pares Spot con balance y cancela órdenes LIMIT abiertas.',
                     precautions:
                         '- Primero detiene instancias Dorothy activas.\n'
-                        '- No vende activos, solo limpia Ã³rdenes LIMIT.\n'
-                        '- Ãštil antes de relanzar estrategia con libro limpio.',
+                        '- No vende activos, solo limpia órdenes LIMIT.\n'
+                        '- Útil antes de relanzar estrategia con libro limpio.',
                     state: _cleanupLimitState,
                     onRun: _runCleanupLimitOrders,
                     onViewSummary: () => _openProtocolSummaryDialog(
-                      'Resumen Â· Cleanup LIMIT',
+                      'Resumen · Cleanup LIMIT',
                       _cleanupLimitState,
                     ),
                   ),
@@ -1777,15 +1778,15 @@ class _BotControlPageState extends State<BotControlPage> {
                     icon: Icons.pause_circle_outline,
                     accent: Colors.orangeAccent,
                     description:
-                        'Cancela Ã³rdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario.',
+                        'Cancela órdenes STOP/STOP_LIMIT/TAKE_PROFIT detectadas en pares Spot del inventario.',
                     precautions:
                         '- Primero detiene instancias Dorothy activas.\n'
-                        '- Ãštil cuando quedan stops huÃ©rfanos.\n'
-                        '- No toca posiciones, solo Ã³rdenes abiertas tipo stop.',
+                        '- Útil cuando quedan stops huérfanos.\n'
+                        '- No toca posiciones, solo órdenes abiertas tipo stop.',
                     state: _cleanupStopState,
                     onRun: _runCleanupStopOrders,
                     onViewSummary: () => _openProtocolSummaryDialog(
-                      'Resumen Â· Cleanup STOP',
+                      'Resumen · Cleanup STOP',
                       _cleanupStopState,
                     ),
                   ),
@@ -1795,15 +1796,15 @@ class _BotControlPageState extends State<BotControlPage> {
                     icon: Icons.cleaning_services_outlined,
                     accent: Colors.purpleAccent,
                     description:
-                        'Limpieza total de Ã³rdenes: cancela toda orden abierta encontrada en la cuenta.',
+                        'Limpieza total de órdenes: cancela toda orden abierta encontrada en la cuenta.',
                     precautions:
                         '- Primero detiene instancias Dorothy activas.\n'
-                        '- Es la versiÃ³n mÃ¡s agresiva de limpieza.\n'
-                        '- Usar cuando quieras dejar libro totalmente vacÃ­o.',
+                        '- Es la versión más agresiva de limpieza.\n'
+                        '- Usar cuando quieras dejar libro totalmente vacío.',
                     state: _cleanupAllState,
                     onRun: _runCleanupAllOrders,
                     onViewSummary: () => _openProtocolSummaryDialog(
-                      'Resumen Â· Cleanup TOTAL',
+                      'Resumen · Cleanup TOTAL',
                       _cleanupAllState,
                     ),
                   ),
@@ -2088,10 +2089,10 @@ class _BotControlPageState extends State<BotControlPage> {
                         title: const Text('Modo simulado'),
                         subtitle: Text(
                           ((b['simulated'] ?? true) == true)
-                              ? 'Sin Ã³rdenes reales en Binance (recomendado para pruebas).'
+                              ? 'Sin órdenes reales en Binance (recomendado para pruebas).'
                               : (((b['trading_enabled'] ?? false) == true)
-                                    ? 'LIVE: Dorothy puede colocar Ã³rdenes reales.'
-                                    : 'ConfiguraciÃ³n incompleta: LIVE requiere confirmaciÃ³n.'),
+                                    ? 'LIVE: Dorothy puede colocar órdenes reales.'
+                                    : 'Configuración incompleta: LIVE requiere confirmación.'),
                           style: const TextStyle(fontSize: 12),
                         ),
                         value: (b['simulated'] ?? true) == true,

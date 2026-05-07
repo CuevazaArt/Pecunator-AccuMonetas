@@ -15,7 +15,7 @@ class BotGuidePage extends StatelessWidget {
         'Bot de ciclo perpetuo para un simbolo. Toma referencia de orden SELL ancla '
             'y compra cuando el mercado cae bajo el umbral configurado.',
     'Masha':
-        'Bot DCA multi-timeframe. Evalua seÃ±al tecnica para comprar, recalcula precio '
+        'Bot DCA multi-timeframe. Evalua señal tecnica para comprar, recalcula precio '
             'promedio y consolida salida con una SELL LIMIT.',
     'Thusnelda':
         'Bot multi-simbolo por cesta. Recorre simbolos, compra por regla de promedio '
@@ -24,72 +24,72 @@ class BotGuidePage extends StatelessWidget {
 
   static const Map<String, List<String>> _sections = {
     'Dorothy': [
-      'Flujo principal: evalÃºa open orders + ticker y decide compra/espera/gestiÃ³n de salida.',
-      'ActivaciÃ³n: botÃ³n ACTIVO/INACTIVO gobierna ciclo perpetuo por instancia.',
+      'Flujo principal: evalúa open orders + ticker y decide compra/espera/gestión de salida.',
+      'Activación: botón ACTIVO/INACTIVO gobierna ciclo perpetuo por instancia.',
       'Guardar y aplicar: aplica cambios al instante y reinicia si estaba activo.',
-      'Objetivo: recomponer posiciÃ³n y retornar quote/base con beneficio por spread.',
+      'Objetivo: recomponer posición y retornar quote/base con beneficio por spread.',
       'Control de riesgo: maxDd bloquea nuevas compras; stopLoss permite salida defensiva.',
       'Observabilidad: usar logs crudos Binance para validar filtros, cantidades y decisiones.',
     ],
     'Masha': [
-      'Flujo principal: estrategia DCA con seÃ±al tÃ©cnica multi-timeframe (W + H).',
-      'Compra: requiere condiciones de seÃ±al y disponibilidad mÃ­nima de quote.',
+      'Flujo principal: estrategia DCA con señal técnica multi-timeframe (W + H).',
+      'Compra: requiere condiciones de señal y disponibilidad mínima de quote.',
       'Salida: mantiene una SELL LIMIT consolidada recalculada con cada compra.',
       'Riesgo: maxDd limita nuevas entradas; stopLoss corta deterioro extremo.',
-      'MÃ©tricas: sharpe, win rate y drawdown persistidos cada metricsEvery ciclos.',
-      'Observabilidad: comparar seÃ±al, precio DCA, orden de salida y logs Binance.',
+      'Métricas: sharpe, win rate y drawdown persistidos cada metricsEvery ciclos.',
+      'Observabilidad: comparar señal, precio DCA, orden de salida y logs Binance.',
     ],
     'Thusnelda': [
-      'Flujo principal: recorre una cesta de sÃ­mbolos en cada ciclo.',
-      'Compra: compara precio actual con referencia/promedio histÃ³rico por sÃ­mbolo.',
+      'Flujo principal: recorre una cesta de símbolos en cada ciclo.',
+      'Compra: compara precio actual con referencia/promedio histórico por símbolo.',
       'Salida: vigila meta de equity global y estado de cada activo de la cesta.',
-      'Riesgo: maxDd bloquea entradas adicionales; stopLoss protege sÃ­mbolo a sÃ­mbolo.',
-      'OperaciÃ³n: ajustar entre_symbol_sec para balancear latencia vs carga REST.',
-      'Observabilidad: revisar eventos de equity, decisiones por sÃ­mbolo y mÃ©tricas.',
+      'Riesgo: maxDd bloquea entradas adicionales; stopLoss protege símbolo a símbolo.',
+      'Operación: ajustar entre_symbol_sec para balancear latencia vs carga REST.',
+      'Observabilidad: revisar eventos de equity, decisiones por símbolo y métricas.',
     ],
   };
 
   static const Map<String, List<String>> _parameterGuide = {
     'Dorothy': [
       'symbol: par spot a operar; debe existir y tener liquidez.',
-      'loop sec: define frecuencia de reacciÃ³n y consumo API.',
-      'qty/profit/drop: nÃºcleo de rentabilidad y ritmo de entradas.',
+      'loop sec: define frecuencia de reacción y consumo API.',
+      'qty/profit/drop: núcleo de rentabilidad y ritmo de entradas.',
       'qDec/pDec: imprescindibles para cumplir filtros Binance.',
-      'maxDd/stopLoss: contenciÃ³n de pÃ©rdidas acumuladas y por posiciÃ³n.',
-      'metricsEvery: costo/beneficio entre detalle histÃ³rico y carga.',
+      'maxDd/stopLoss: contención de pérdidas acumuladas y por posición.',
+      'metricsEvery: costo/beneficio entre detalle histórico y carga.',
     ],
     'Masha': [
       'base/quote/symbol: coherencia obligatoria para evitar errores de mercado.',
-      'min quote + buy qty: controlan cuÃ¡ndo y cuÃ¡nto compra.',
-      'TF/periods/mm/margins: sensibilidad de seÃ±al tÃ©cnica.',
+      'min quote + buy qty: controlan cuándo y cuánto compra.',
+      'TF/periods/mm/margins: sensibilidad de señal técnica.',
       'profit: objetivo de salida de la orden consolidada.',
-      'maxDd/stopLoss: protecciÃ³n macro y micro del ciclo DCA.',
+      'maxDd/stopLoss: protección macro y micro del ciclo DCA.',
       'qDec/pDec: adaptar al instrumento para evitar rechazos.',
     ],
     'Thusnelda': [
       'symbols CSV: universo de activos a escanear por ciclo.',
       'loop + entre sym: velocidad total de barrido y carga REST.',
-      'quote qty + factor: tamaÃ±o y agresividad de cada entrada.',
+      'quote qty + factor: tamaño y agresividad de cada entrada.',
       'meta equity: umbral objetivo de rendimiento agregado.',
-      'maxDd/stopLoss: freno global y defensa por sÃ­mbolo.',
-      'refTs/qDec: soporte de referencia histÃ³rica y cumplimiento de filtros.',
+      'maxDd/stopLoss: freno global y defensa por símbolo.',
+      'refTs/qDec: soporte de referencia histórica y cumplimiento de filtros.',
     ],
   };
 
   static const Map<String, List<String>> _troubleshooting = {
     'Dorothy': [
-      'No compra: validar drop/profit, saldo quote y estado de Ã³rdenes ancla.',
+      'No compra: validar drop/profit, saldo quote y estado de órdenes ancla.',
       'Errores de filtro: ajustar qDec/pDec al tick size y lot size.',
       'Mucho peso REST: subir loop o revisar monitor de peso por acciones.',
     ],
     'Masha': [
-      'No dispara seÃ±al: revisar timeframe, periods y mÃ¡rgenes W/H.',
-      'No coloca salida: validar pDec/profit y restricciones del sÃ­mbolo.',
-      'DCA agresivo: ajustar buy qty y maxDd para menor exposiciÃ³n.',
+      'No dispara señal: revisar timeframe, periods y márgenes W/H.',
+      'No coloca salida: validar pDec/profit y restricciones del símbolo.',
+      'DCA agresivo: ajustar buy qty y maxDd para menor exposición.',
     ],
     'Thusnelda': [
-      'Cesta lenta: reducir sÃ­mbolos o aumentar entre_symbol_sec.',
-      'Sin entradas: revisar factor, referencia y liquidez real de sÃ­mbolos.',
+      'Cesta lenta: reducir símbolos o aumentar entre_symbol_sec.',
+      'Sin entradas: revisar factor, referencia y liquidez real de símbolos.',
       'Riesgo alto: endurecer maxDd/stopLoss y validar meta de equity.',
     ],
   };
@@ -130,7 +130,7 @@ class BotGuidePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'GuÃ­a de parÃ¡metros',
+                      'Guía de parámetros',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -196,7 +196,7 @@ class BotGuidePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Troubleshooting rÃ¡pido',
+                      'Troubleshooting rápido',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),

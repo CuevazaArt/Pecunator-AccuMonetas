@@ -1,4 +1,5 @@
 /// UI tests for refactored architecture.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,14 +13,14 @@ import 'package:pecunator_desktop/widgets/logs_viewer.dart';
 
 void main() {
   group('PecunatorCore Refactored UI Tests', () {
-    testWidgets('ErrorDisplay shows NetworkException', (WidgetTester tester) async {
+    testWidgets('ErrorDisplay shows NetworkException', (
+      WidgetTester tester,
+    ) async {
       final error = NetworkException.timeout();
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: ErrorDisplay(error: error),
-          ),
+          home: Scaffold(body: ErrorDisplay(error: error)),
         ),
       );
 
@@ -32,9 +33,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: ErrorDisplay(error: error),
-          ),
+          home: Scaffold(body: ErrorDisplay(error: error)),
         ),
       );
 
@@ -42,17 +41,16 @@ void main() {
       expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     });
 
-    testWidgets('ErrorDisplay dismiss callback works', (WidgetTester tester) async {
+    testWidgets('ErrorDisplay dismiss callback works', (
+      WidgetTester tester,
+    ) async {
       bool dismissed = false;
       final error = NetworkException(message: 'Test error');
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ErrorDisplay(
-              error: error,
-              onDismiss: () => dismissed = true,
-            ),
+            body: ErrorDisplay(error: error, onDismiss: () => dismissed = true),
           ),
         ),
       );
@@ -61,7 +59,9 @@ void main() {
       expect(dismissed, true);
     });
 
-    testWidgets('GatewayStatus shows ON when running', (WidgetTester tester) async {
+    testWidgets('GatewayStatus shows ON when running', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -73,7 +73,9 @@ void main() {
       expect(find.text('GW ON · WS'), findsOneWidget);
     });
 
-    testWidgets('GatewayStatus shows OFF when not running', (WidgetTester tester) async {
+    testWidgets('GatewayStatus shows OFF when not running', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -85,16 +87,16 @@ void main() {
       expect(find.text('GW OFF'), findsOneWidget);
     });
 
-    testWidgets('LogsViewer displays logs correctly', (WidgetTester tester) async {
+    testWidgets('LogsViewer displays logs correctly', (
+      WidgetTester tester,
+    ) async {
       const logs = '''2026-04-29T10:15:30Z [INFO] Cycle start
 2026-04-29T10:15:31Z [INFO] decision=BUY execution=success
 2026-04-29T10:15:32Z [INFO] Cycle end''';
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: LogsViewer(logs: logs),
-          ),
+          home: Scaffold(body: LogsViewer(logs: logs)),
         ),
       );
 
@@ -104,16 +106,16 @@ void main() {
     testWidgets('LogsViewer shows empty state', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: LogsViewer(logs: ''),
-          ),
+          home: Scaffold(body: LogsViewer(logs: '')),
         ),
       );
 
       expect(find.text('(sin logs)'), findsOneWidget);
     });
 
-    testWidgets('AppConfig constants are accessible', (WidgetTester tester) async {
+    testWidgets('AppConfig constants are accessible', (
+      WidgetTester tester,
+    ) async {
       expect(AppConfig.engineDefaultHost, '127.0.0.1');
       expect(AppConfig.engineDefaultPort, 8765);
       expect(AppConfig.defaultSymbol, 'XRPUSDT');
@@ -124,7 +126,10 @@ void main() {
       final url = AppConfig.buildEngineUrl();
       expect(url, 'http://127.0.0.1:8765');
 
-      final customUrl = AppConfig.buildEngineUrl(host: '192.168.1.1', port: 9000);
+      final customUrl = AppConfig.buildEngineUrl(
+        host: '192.168.1.1',
+        port: 9000,
+      );
       expect(customUrl, 'http://192.168.1.1:9000');
     });
   });
@@ -162,11 +167,10 @@ void main() {
     });
   });
 
-
-
-
   group('Widget Integration Tests', () {
-    testWidgets('ErrorDisplay + GatewayStatus together', (WidgetTester tester) async {
+    testWidgets('ErrorDisplay + GatewayStatus together', (
+      WidgetTester tester,
+    ) async {
       final error = ApiException.serverError('DB unavailable');
 
       await tester.pumpWidget(

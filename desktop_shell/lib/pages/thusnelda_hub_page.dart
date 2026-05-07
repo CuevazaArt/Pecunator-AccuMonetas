@@ -123,31 +123,31 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
         return 'Nombre local de la instancia Thusnelda.';
       case 'symbols':
       case 'symbolsCsv':
-        return 'Lista CSV de sÃ­mbolos spot a recorrer en el ciclo (ej. BTCUSDT,ETHUSDT).';
+        return 'Lista CSV de símbolos spot a recorrer en el ciclo (ej. BTCUSDT,ETHUSDT).';
       case 'loop':
         return 'Segundos entre ciclos completos de la cesta.';
       case 'between':
-        return 'Pausa entre sÃ­mbolos dentro de un mismo ciclo.';
+        return 'Pausa entre símbolos dentro de un mismo ciclo.';
       case 'quoteQty':
-        return 'MÃ³dulo de quote por compra parcial en cada sÃ­mbolo.';
+        return 'Módulo de quote por compra parcial en cada símbolo.';
       case 'factor':
         return 'Factor multiplicador para ajustar gatillo de entrada (0.94 = compra 6% debajo).';
       case 'profitTarget':
         return 'Objetivo de beneficio por ciclo (0.06 = 6%). Minimo 6% para cesta volatil.';
       case 'meta':
-        return 'Meta de equity global en base asset para condiciÃ³n de salida estratÃ©gica.';
+        return 'Meta de equity global en base asset para condición de salida estratégica.';
       case 'refTs':
-        return 'Timestamp ISO de referencia histÃ³rica (opcional).';
+        return 'Timestamp ISO de referencia histórica (opcional).';
       case 'qDec':
         return 'Decimales de cantidad para cumplir filtros de lote.';
       case 'note':
-        return 'Nota operativa corta para recordar propÃ³sito de la instancia.';
+        return 'Nota operativa corta para recordar propósito de la instancia.';
       case 'maxDd':
-        return 'Drawdown mÃ¡ximo permitido antes de bloquear nuevas entradas.';
+        return 'Drawdown máximo permitido antes de bloquear nuevas entradas.';
       case 'stopLoss':
-        return 'Stop-loss por sÃ­mbolo para defensa cuando el precio se deteriora.';
+        return 'Stop-loss por símbolo para defensa cuando el precio se deteriora.';
       case 'metricsEvery':
-        return 'Frecuencia de mÃ©tricas y snapshots de rendimiento en ciclos.';
+        return 'Frecuencia de métricas y snapshots de rendimiento en ciclos.';
       default:
         return key;
     }
@@ -334,7 +334,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar eliminaciÃ³n'),
+        title: const Text('Confirmar eliminación'),
         content: Text('Eliminar instancia Thusnelda $botId.'),
         actions: [
           TextButton(
@@ -408,7 +408,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                       runSpacing: 6,
                       children: [
                         _newField(_tagCtrl, 'Tag', 130, 'tag'),
-                        _newField(_symbolsCtrl, 'SÃ­mbolos CSV', 220, 'symbols'),
+                        _newField(_symbolsCtrl, 'Símbolos CSV', 220, 'symbols'),
                         _newField(_loopCtrl, 'Loop s', 90, 'loop'),
                         _newField(_betweenCtrl, 'Entre sym s', 90, 'between'),
                         _newField(_quoteQtyCtrl, 'Quote qty', 105, 'quoteQty'),
@@ -462,7 +462,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                     if (mounted) setState(() {});
                   },
                   title: Text(
-                    '${(bot['tag'] ?? 'Thusnelda L0').toString()} Â· $botId Â· ${running ? "ACTIVO" : "INACTIVO"}',
+                    '${(bot['tag'] ?? 'Thusnelda L0').toString()} · $botId · ${running ? "ACTIVO" : "INACTIVO"}',
                     style: const TextStyle(fontSize: 13),
                   ),
                   subtitle: Text(
@@ -477,7 +477,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                         child: Row(
                           children: [
                             _f(botId, d, 'tag', 'Tag', 120), const SizedBox(width: 6),
-                            _f(botId, d, 'symbols', 'SÃ­mbolos CSV', 210), const SizedBox(width: 6),
+                            _f(botId, d, 'symbols', 'Símbolos CSV', 210), const SizedBox(width: 6),
                             _f(botId, d, 'loop', 'Loop s', 85), const SizedBox(width: 6),
                             _f(botId, d, 'between', 'Entre sym s', 95), const SizedBox(width: 6),
                             _f(botId, d, 'quoteQty', 'Quote qty', 95), const SizedBox(width: 6),

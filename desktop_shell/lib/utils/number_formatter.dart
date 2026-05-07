@@ -1,4 +1,5 @@
 /// Number formatting utilities.
+library;
 
 /// Format a number removing trailing zeros and unnecessary decimal places.
 String plainNum(dynamic value, {int maxDecimals = 12}) {

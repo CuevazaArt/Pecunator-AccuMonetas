@@ -1,4 +1,5 @@
 /// Reusable logs viewer widget.
+library;
 
 import 'dart:convert';
 
@@ -68,10 +69,7 @@ class _LogsViewerState extends State<LogsViewer> {
         padding: const EdgeInsets.all(8),
         child: SelectableText(
           widget.logs.isEmpty ? '(sin logs)' : widget.logs,
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-          ),
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
         ),
       ),
     );
@@ -90,9 +88,7 @@ String formatBotLogs(Map<String, dynamic> payload) {
     final level = (m['level'] ?? '-').toString();
     final msg = (m['message'] ?? '').toString();
     final payloadText = _formatLogPayload(m['payload']);
-    out.add(
-      '$ts [$level] $msg${payloadText.isEmpty ? '' : ' | $payloadText'}',
-    );
+    out.add('$ts [$level] $msg${payloadText.isEmpty ? '' : ' | $payloadText'}');
   }
   return out.join('\n');
 }

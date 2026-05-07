@@ -36,7 +36,7 @@ class AppPreferences {
   static Future<void> setEngineHost(String value) =>
       _prefs.setString(_PrefsKeys.engineHost, value);
 
-  static int get enginePort => _prefs.getInt(_PrefsKeys.enginePort) ?? 8765;
+  static int get enginePort => _prefs.getInt(_PrefsKeys.enginePort) ?? 8000;
 
   static Future<void> setEnginePort(int value) =>
       _prefs.setInt(_PrefsKeys.enginePort, value);

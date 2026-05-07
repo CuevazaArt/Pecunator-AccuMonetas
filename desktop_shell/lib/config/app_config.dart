@@ -1,9 +1,10 @@
 /// Centralized application configuration.
+library;
 
 class AppConfig {
   // Engine API
   static const String engineDefaultHost = '127.0.0.1';
-  static const int engineDefaultPort = 8765;
+  static const int engineDefaultPort = 8000;
 
   // Network
   static const Duration networkTimeout = Duration(seconds: 10);

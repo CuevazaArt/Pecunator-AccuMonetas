@@ -9,25 +9,28 @@ class HistoryScraperService {
   // ============================================================================
   // ⚠️ PRECAUCIÓN CRÍTICA: INCIDENTE DE BANEO (02/MAYO/2026) ⚠️
   // NUNCA REACTIVAR EL POLLING MASIVO VIA REST API PARA MULTIPLES SIMBOLOS.
-  // El intento de descargar 100 símbolos usando peticiones `get_klines` por 
-  // REST API consumió el Peso de API (>6000/min) casi instantáneamente, 
+  // El intento de descargar 100 símbolos usando peticiones `get_klines` por
+  // REST API consumió el Peso de API (>6000/min) casi instantáneamente,
   // provocando un BAN DURO de IP (APIError -1003).
-  // 
+  //
   // DIRECTIVAS FUTURAS:
   // 1. La ingesta masiva histórica DEBE hacerse vía ZIP (VisionScraper).
   // 2. Las actualizaciones en vivo (Masha/Thusnelda) DEBEN usar WebSockets.
   // ============================================================================
 
-  static final HistoryScraperService instance = HistoryScraperService._internal();
+  static final HistoryScraperService instance =
+      HistoryScraperService._internal();
 
   HistoryScraperService._internal();
 
   EngineApi? api;
   bool _isRunningLoop = false;
   // ignore: unused_field
-  bool _isRunningTick = false;
+  final bool _isRunningTick = false;
 
-  final ValueNotifier<String> currentJobNotifier = ValueNotifier<String>('Inactivo');
+  final ValueNotifier<String> currentJobNotifier = ValueNotifier<String>(
+    'Inactivo',
+  );
 
   final ValueNotifier<int> concurrencyNotifier = ValueNotifier<int>(1);
   final ValueNotifier<int> delayMsNotifier = ValueNotifier<int>(1000);
@@ -55,7 +58,7 @@ class HistoryScraperService {
     '1INCHUSDT', 'ZILUSDT', 'COMPUSDT', 'YFIUSDT', 'PENDLEUSDT',
     'BTTUSDT', 'GNOUSDT', 'SUSHIUSDT', 'ORDIUSDT', 'JTOUSDT',
     'PYTHUSDT', 'ENSUSDT', 'STRKUSDT', 'BIGTIMEUSDT', 'MEMEUSDT',
-    'POLSXUSDT', 'SUPERUSDT', 'NFPUSDT', 'XECUSDT', 'GLMRUSDT'
+    'POLSXUSDT', 'SUPERUSDT', 'NFPUSDT', 'XECUSDT', 'GLMRUSDT',
   ];
 
   // Prioritized intervals (standard highest to 1m)
@@ -90,9 +93,9 @@ class HistoryScraperService {
         await Future.delayed(const Duration(seconds: 2));
         continue;
       }
-      
+
       final didWork = await _tickOnce();
-      
+
       if (didWork) {
         // Sleep a tiny bit to avoid locking
         await Future.delayed(const Duration(milliseconds: 200));
@@ -112,7 +115,10 @@ class HistoryScraperService {
   /// Returns true if an API call was made, false otherwise.
   // ignore: unused_element
   Future<bool> _processSymbolInterval(String symbol, String interval) async {
-    final localCandles = await HistogramStorage.instance.getCandles(symbol, interval);
+    final localCandles = await HistogramStorage.instance.getCandles(
+      symbol,
+      interval,
+    );
 
     if (localCandles.isEmpty) {
       // Fetch initial batch (1000 candles ending at current time)
@@ -124,7 +130,7 @@ class HistoryScraperService {
       // Fetch forwards (catch up to present)
       final lastDate = localCandles.last.date;
       final now = DateTime.now().toUtc();
-      
+
       // Calculate how much time has passed since the last candle
       Duration intervalDuration = const Duration(minutes: 1);
       if (interval == '30m') intervalDuration = const Duration(minutes: 30);
@@ -137,7 +143,12 @@ class HistoryScraperService {
       if (now.difference(lastDate) > intervalDuration) {
         // We have a gap forward
         currentJobNotifier.value = 'Actualizando $symbol $interval';
-        await _fetchAndStore(symbol, interval, lastDate.millisecondsSinceEpoch + 1, null);
+        await _fetchAndStore(
+          symbol,
+          interval,
+          lastDate.millisecondsSinceEpoch + 1,
+          null,
+        );
         currentJobNotifier.value = 'Inactivo';
         return true;
       }
@@ -152,10 +163,10 @@ class HistoryScraperService {
 
   Future<void> _enforceDelay() async {
     if (delayMsNotifier.value <= 0) return;
-    
+
     final delay = Duration(milliseconds: delayMsNotifier.value);
     DateTime waitTarget;
-    
+
     final now = DateTime.now();
     if (_nextAllowedRequestTime.isBefore(now)) {
       _nextAllowedRequestTime = now.add(delay);
@@ -170,11 +181,17 @@ class HistoryScraperService {
     await Future.delayed(toWait);
   }
 
-  Future<int> _fetchAndStore(String symbol, String interval, int? startTime, int? endTime) async {
+  Future<int> _fetchAndStore(
+    String symbol,
+    String interval,
+    int? startTime,
+    int? endTime,
+  ) async {
     try {
       await _enforceDelay();
 
-      String callExpr = "get_klines(symbol='$symbol', interval='$interval', limit=1000";
+      String callExpr =
+          "get_klines(symbol='$symbol', interval='$interval', limit=1000";
       if (startTime != null) callExpr += ", startTime=$startTime";
       if (endTime != null) callExpr += ", endTime=$endTime";
       callExpr += ")";
@@ -187,12 +204,12 @@ class HistoryScraperService {
       if (res.containsKey('error')) {
         final errStr = res['error'].toString().toLowerCase();
         print('Scraper API Error: $errStr');
-        
-        if (errStr.contains('429') || 
-            errStr.contains('418') || 
-            errStr.contains('limit') || 
-            errStr.contains('banned') || 
-            errStr.contains('too many requests') || 
+
+        if (errStr.contains('429') ||
+            errStr.contains('418') ||
+            errStr.contains('limit') ||
+            errStr.contains('banned') ||
+            errStr.contains('too many requests') ||
             errStr.contains('weight') ||
             errStr.contains('ip')) {
           _panicShutdown(errStr);
@@ -203,14 +220,16 @@ class HistoryScraperService {
       final List data = res['response'] ?? [];
       final List<Candle> parsed = [];
       for (final kline in data) {
-        parsed.add(Candle(
-          date: DateTime.fromMillisecondsSinceEpoch(kline[0]),
-          open: double.parse(kline[1].toString()),
-          high: double.parse(kline[2].toString()),
-          low: double.parse(kline[3].toString()),
-          close: double.parse(kline[4].toString()),
-          volume: double.parse(kline[5].toString()),
-        ));
+        parsed.add(
+          Candle(
+            date: DateTime.fromMillisecondsSinceEpoch(kline[0]),
+            open: double.parse(kline[1].toString()),
+            high: double.parse(kline[2].toString()),
+            low: double.parse(kline[3].toString()),
+            close: double.parse(kline[4].toString()),
+            volume: double.parse(kline[5].toString()),
+          ),
+        );
       }
 
       if (parsed.isNotEmpty) {

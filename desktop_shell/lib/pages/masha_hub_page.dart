@@ -146,41 +146,41 @@ class _MashaHubPageState extends State<MashaHubPage> {
       case 'symbol':
         return 'Par spot principal (ej. BTCUSDT). Debe ser consistente con Base/Quote.';
       case 'base':
-        return 'Activo base del par (parte izquierda del sÃ­mbolo).';
+        return 'Activo base del par (parte izquierda del símbolo).';
       case 'quote':
-        return 'Activo cotizado del par (parte derecha del sÃ­mbolo, p.ej. USDT).';
+        return 'Activo cotizado del par (parte derecha del símbolo, p.ej. USDT).';
       case 'loop':
-        return 'Segundos entre ciclos. MÃ¡s bajo = mÃ¡s reactividad y mÃ¡s consumo REST.';
+        return 'Segundos entre ciclos. Más bajo = más reactividad y más consumo REST.';
       case 'minQuote':
-        return 'Quote mÃ­nima libre para habilitar nuevas compras.';
+        return 'Quote mínima libre para habilitar nuevas compras.';
       case 'buyQty':
-        return 'Cantidad de base por compra cuando la seÃ±al habilita entrada.';
+        return 'Cantidad de base por compra cuando la señal habilita entrada.';
       case 'profit':
         return 'Objetivo de beneficio para la salida LIMIT consolidada.';
       case 'tfW':
       case 'tfH':
-        return 'Timeframe de velas para seÃ±al tÃ©cnica (W y H).';
+        return 'Timeframe de velas para señal técnica (W y H).';
       case 'pW':
       case 'pH':
         return 'Cantidad de velas para el promedio del timeframe.';
       case 'mmW':
       case 'mmH':
-        return 'Suavizado de media mÃ³vil para confirmar tendencia.';
+        return 'Suavizado de media móvil para confirmar tendencia.';
       case 'mW':
       case 'mH':
-        return 'Margen mÃ­nimo para validar entrada respecto a la media.';
+        return 'Margen mínimo para validar entrada respecto a la media.';
       case 'qDec':
         return 'Decimales para cantidad (cumplir LOT_SIZE).';
       case 'pDec':
-        return 'Decimales de precio para Ã³rdenes LIMIT (cumplir PRICE_FILTER).';
+        return 'Decimales de precio para órdenes LIMIT (cumplir PRICE_FILTER).';
       case 'note':
-        return 'Nota operativa corta de la configuraciÃ³n.';
+        return 'Nota operativa corta de la configuración.';
       case 'maxDd':
-        return 'Drawdown mÃ¡ximo tolerado. Si se supera, bloquea nuevas compras.';
+        return 'Drawdown máximo tolerado. Si se supera, bloquea nuevas compras.';
       case 'stopLoss':
-        return 'Stop-loss por posiciÃ³n DCA para cortar pÃ©rdidas extremas.';
+        return 'Stop-loss por posición DCA para cortar pérdidas extremas.';
       case 'metricsEvery':
-        return 'Frecuencia de cÃ¡lculo/persistencia de mÃ©tricas (ciclos).';
+        return 'Frecuencia de cálculo/persistencia de métricas (ciclos).';
       default:
         return key;
     }
@@ -383,7 +383,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar eliminaciÃ³n'),
+        title: const Text('Confirmar eliminación'),
         content: Text('Eliminar instancia Masha $botId.'),
         actions: [
           TextButton(
@@ -457,7 +457,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
                       runSpacing: 6,
                       children: [
                         _newField(_tagCtrl, 'Tag', 120, 'tag'),
-                        _newField(_symbolCtrl, 'SÃ­mbolo', 120, 'symbol'),
+                        _newField(_symbolCtrl, 'Símbolo', 120, 'symbol'),
                         _newField(_baseCtrl, 'Base', 90, 'base'),
                         _newField(_quoteCtrl, 'Quote', 90, 'quote'),
                         _newField(_loopCtrl, 'Loop s', 90, 'loop'),
@@ -519,7 +519,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
                     if (mounted) setState(() {});
                   },
                   title: Text(
-                    '${(bot['tag'] ?? 'Masha').toString()} Â· $botId Â· ${running ? "ACTIVO" : "INACTIVO"}',
+                    '${(bot['tag'] ?? 'Masha').toString()} · $botId · ${running ? "ACTIVO" : "INACTIVO"}',
                     style: const TextStyle(fontSize: 13),
                   ),
                   subtitle: Text(
@@ -534,7 +534,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
                         child: Row(
                           children: [
                             _f(botId, d, 'tag', 'Tag', 120), const SizedBox(width: 6),
-                            _f(botId, d, 'symbol', 'SÃ­mbolo', 120), const SizedBox(width: 6),
+                            _f(botId, d, 'symbol', 'Símbolo', 120), const SizedBox(width: 6),
                             _f(botId, d, 'base', 'Base', 85), const SizedBox(width: 6),
                             _f(botId, d, 'quote', 'Quote', 85), const SizedBox(width: 6),
                             _f(botId, d, 'loop', 'Loop s', 85), const SizedBox(width: 6),

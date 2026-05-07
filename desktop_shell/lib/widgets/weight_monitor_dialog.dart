@@ -2,8 +2,13 @@
 import 'package:flutter/material.dart';
 import '../utils.dart';
 import '../api_client.dart';
+
 class RestWeightMonitorDialog extends StatefulWidget {
-  const RestWeightMonitorDialog({required this.api, this.embedded = false});
+  const RestWeightMonitorDialog({
+    super.key,
+    required this.api,
+    this.embedded = false,
+  });
 
   final EngineApi api;
   final bool embedded;
@@ -170,12 +175,10 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
             builder: (context, v, _) => LinearProgressIndicator(
               minHeight: 10,
               value: v,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _weightColorFromPct(v),
-              ),
-              backgroundColor: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(_weightColorFromPct(v)),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest,
             ),
           ),
           const SizedBox(height: 6),
@@ -216,10 +219,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
     );
 
     if (widget.embedded) {
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: body,
-      );
+      return Padding(padding: const EdgeInsets.all(12), child: body);
     }
 
     return AlertDialog(
@@ -245,7 +245,9 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
     final est = _report['estimated_calls_per_min'] is Map
         ? Map<String, dynamic>.from(_report['estimated_calls_per_min'] as Map)
         : <String, dynamic>{};
-    final notes = ((_report['notes'] as List?) ?? const []).map((e) => '$e').toList();
+    final notes = ((_report['notes'] as List?) ?? const [])
+        .map((e) => '$e')
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -255,15 +257,17 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
           style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
         ),
         const SizedBox(height: 6),
-        ...notes.take(3).map(
-          (n) => Text(
-            '- $n',
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ...notes
+            .take(3)
+            .map(
+              (n) => Text(
+                '- $n',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
-          ),
-        ),
         const Divider(height: 14),
         Text(
           'Top acciones por delta acumulado',
@@ -272,7 +276,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
         const SizedBox(height: 6),
         Expanded(
           child: _topActions.isEmpty
-              ? const Text('AÃºn no hay acciones auditadas.')
+              ? const Text('Aún no hay acciones auditadas.')
               : ListView.builder(
                   itemCount: _topActions.length.clamp(0, 25),
                   itemBuilder: (ctx, i) {
@@ -283,7 +287,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
                     final delta = (r['delta_sum'] ?? '-').toString();
                     final avg = plainNum(r['delta_avg']);
                     return SelectableText(
-                      '[$src] $action Â· events=$events Â· delta_sum=$delta Â· delta_avg=$avg',
+                      '[$src] $action · events=$events · delta_sum=$delta · delta_avg=$avg',
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11,
@@ -298,7 +302,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
 
   Widget _buildEventsTab() {
     if (_events.isEmpty) {
-      return const Text('AÃºn no hay eventos de auditorÃ­a de peso.');
+      return const Text('Aún no hay eventos de auditoría de peso.');
     }
     return ListView.separated(
       itemCount: _events.length,
@@ -312,7 +316,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
         final delta = (e['delta_weight_1m'] ?? '-').toString();
         final note = (e['note'] ?? '').toString();
         return SelectableText(
-          '$ts Â· [$src] $action Â· used=$used Â· delta=$delta${note.isEmpty ? "" : " Â· $note"}',
+          '$ts · [$src] $action · used=$used · delta=$delta${note.isEmpty ? "" : " · $note"}',
           style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
         );
       },
@@ -322,7 +326,7 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
   Widget _buildSamplesTab() {
     if (_rows.isEmpty) {
       return const Text(
-        'AÃºn no hay muestras. Activa el gateway y espera algunos segundos.',
+        'Aún no hay muestras. Activa el gateway y espera algunos segundos.',
       );
     }
     return ListView.separated(
@@ -339,13 +343,12 @@ class RestWeightMonitorDialogState extends State<RestWeightMonitorDialog> {
         final gw = m['gateway_running'];
         final err = m['last_error_snippet'];
         return SelectableText(
-          '$ts Â· peso $u/$lim Â· bots $br/$bt Â· poll ${poll}s Â· '
+          '$ts · peso $u/$lim · bots $br/$bt · poll ${poll}s · '
           'GW ${gw == true ? "on" : "off"}'
-          '${err != null && err.toString().isNotEmpty ? " Â· err $err" : ""}',
+          '${err != null && err.toString().isNotEmpty ? " · err $err" : ""}',
           style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
         );
       },
     );
   }
 }
-

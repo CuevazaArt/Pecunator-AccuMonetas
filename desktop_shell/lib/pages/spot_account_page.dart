@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../utils.dart';
 import '../api_client.dart';
@@ -208,7 +208,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
               ),
               const SizedBox(height: 6),
               if (list.isEmpty)
-                const Text('(vacÃ­o)', style: TextStyle(fontSize: 12))
+                const Text('(vacío)', style: TextStyle(fontSize: 12))
               else
                 SizedBox(
                   height: 350,
@@ -245,7 +245,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
                             child: Text(
                               secondary == null
                                   ? '$primaryKey ${plainNum(primary)}'
-                                  : '$primaryKey ${plainNum(primary)} Â· $secondaryKey ${plainNum(secondary)}',
+                                  : '$primaryKey ${plainNum(primary)} · $secondaryKey ${plainNum(secondary)}',
                               style: const TextStyle(
                                 fontFamily: 'monospace',
                                 fontSize: 11,
@@ -318,7 +318,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
               children: [
                 _kpi('Equity $base', current),
                 _kpi('Promedio', avg),
-                _kpi('MÃ¡x prom', highAvg),
+                _kpi('Máx prom', highAvg),
                 _kpi('Sin precio', missing),
               ],
             ),
@@ -388,7 +388,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'SÃ­mbolos activos Dorothy: ${symbols.isEmpty ? '-' : symbols}',
+                'Símbolos activos Dorothy: ${symbols.isEmpty ? '-' : symbols}',
                 style: const TextStyle(fontSize: 12),
               ),
             ),
@@ -402,7 +402,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cuenta Spot Â· Binance'),
+        title: const Text('Cuenta Spot · Binance'),
         actions: [
           IconButton(
             onPressed: _loading
@@ -432,7 +432,7 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
             _baseTotalsCard(),
             _warningsBlock(),
             Text(
-              'Ãšltima lectura: $_fetchedAt',
+              'Última lectura: $_fetchedAt',
               style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
