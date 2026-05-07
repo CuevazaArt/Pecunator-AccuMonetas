@@ -16,6 +16,8 @@ import 'bot_guide_page.dart';
 import 'spot_account_page.dart';
 import 'api_weight_page.dart';
 import 'market_events_page.dart';
+import 'system_dashboard_page.dart';
+import 'api_sandbox_page.dart';
 import '../widgets/weight_monitor_dialog.dart';
 import '../widgets/vmo_dashboard.dart';
 import '../utils.dart';
@@ -1577,6 +1579,8 @@ class _BotControlPageState extends State<BotControlPage> {
           _navBtn(Icons.currency_exchange, 'Carry', 7),
           _navBtn(Icons.speed_outlined, 'API Weight', 8),
           _navBtn(Icons.newspaper_outlined, 'Macro', 9),
+          _navBtn(Icons.dashboard_outlined, 'Sistema', 10),
+          _navBtn(Icons.api_outlined, 'Sandbox', 11),
           const SizedBox(width: 4),
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
@@ -1660,6 +1664,8 @@ class _BotControlPageState extends State<BotControlPage> {
               const CarryTradePage(),
               ApiWeightMonitorPage(api: _api),
               MarketEventsPage(api: _api),
+              SystemDashboardPage(api: _api),
+              ApiSandboxPage(engineBase: _engineBase),
             ][_currentIndex],
           ),
           // â”€â”€ Persistent compact weight gauge (visible on ALL pages) â”€â”€

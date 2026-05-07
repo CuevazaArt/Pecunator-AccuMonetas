@@ -381,4 +381,24 @@ class EngineApi {
 
   Future<Map<String, dynamic>> eventsFearGreed() =>
       _client.get('/api/v1/events/fear_greed');
+
+  // ── v0.11 Risk Control endpoints ─────────────────────────────────
+
+  Future<Map<String, dynamic>> budgetGuardStatus() =>
+      _client.get('/api/v1/budget-guard/status');
+
+  Future<Map<String, dynamic>> orderLedgerStats() =>
+      _client.get('/api/v1/order-ledger/stats');
+
+  Future<Map<String, dynamic>> orderLedgerRecent({int limit = 50}) =>
+      _client.get('/api/v1/order-ledger/recent?limit=$limit');
+
+  Future<Map<String, dynamic>> regimeFilterStatus() =>
+      _client.get('/api/v1/regime-filter/status');
+
+  Future<Map<String, dynamic>> healthDeep() =>
+      _client.get('/api/v1/health/deep');
+
+  Future<Map<String, dynamic>> healthV1() =>
+      _client.get('/api/v1/health');
 }
