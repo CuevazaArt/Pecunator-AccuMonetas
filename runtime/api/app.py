@@ -68,6 +68,7 @@ from runtime.api.routers import dorothy as _dorothy_router
 from runtime.api.routers import gateway as _gateway_router
 from runtime.api.routers import sandbox as _sandbox_router
 from runtime.api.routers import vision as _vision_router
+from runtime.api.routers import market_events as _market_events_router
 
 from runtime.core.settings import (
     account_poll_interval_sec,
@@ -195,6 +196,7 @@ def create_app() -> FastAPI:
     app.include_router(_gateway_router.router)
     app.include_router(_sandbox_router.router)
     app.include_router(_vision_router.router)
+    app.include_router(_market_events_router.router)
 
     # ── All routes have been extracted to routers/ ─────────────────
     # dorothy.py  — health, presets, config, hub CRUD

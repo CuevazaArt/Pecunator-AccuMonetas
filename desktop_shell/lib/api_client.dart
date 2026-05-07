@@ -360,5 +360,21 @@ class EngineApi {
 
   Future<Map<String, dynamic>> visionRegimesLatest() =>
       _client.get('/api/v1/vision/regimes/latest');
-}
 
+  // ── Market Events endpoints ───────────────────────────────────
+
+  Future<Map<String, dynamic>> eventsSummary() =>
+      _client.get('/api/v1/events/summary');
+
+  Future<Map<String, dynamic>> eventsCalendar() =>
+      _client.get('/api/v1/events/calendar');
+
+  Future<Map<String, dynamic>> eventsHeatmap() =>
+      _client.get('/api/v1/events/activity_heatmap');
+
+  Future<Map<String, dynamic>> eventsGeopolitical() =>
+      _client.get('/api/v1/events/geopolitical');
+
+  Future<Map<String, dynamic>> eventsFearGreed() =>
+      _client.get('/api/v1/events/fear_greed');
+}
