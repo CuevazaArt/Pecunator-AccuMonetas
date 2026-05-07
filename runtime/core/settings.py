@@ -60,8 +60,11 @@ def load_gateway_settings() -> Dict[str, Any]:
                 user = json.load(f)
             if isinstance(user, dict):
                 settings.update(user)
-        except (json.JSONDecodeError, OSError, TypeError):
-            pass  # Fall back to defaults silently.
+        except (json.JSONDecodeError, OSError, TypeError) as exc:
+            import logging
+            logging.getLogger("pecunator.settings").warning(
+                "gateway_settings.json corrupt, using defaults: %s", exc
+            )
     return settings
 
 
@@ -81,10 +84,11 @@ def api_bind_host() -> str:
 
 
 def api_bind_port() -> int:
+    """HTTP API bind port. Default 8000 (unified with Flutter UI)."""
     try:
-        return int(os.environ.get("PECUNATOR_API_PORT", "8765"))
+        return int(os.environ.get("PECUNATOR_API_PORT", "8000"))
     except ValueError:
-        return 8765
+        return 8000
 
 
 def api_bind_host_for_cors_regex() -> str:

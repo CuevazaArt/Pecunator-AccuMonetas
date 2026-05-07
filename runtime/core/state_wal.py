@@ -128,8 +128,8 @@ def hydrate(state: Any, data_dir: Path | str) -> bool:
                 try:
                     setattr(state, field_name, payload[field_name])
                     restored += 1
-                except (AttributeError, TypeError):
-                    pass
+                except (AttributeError, TypeError) as exc:
+                    _LOG.debug("state_wal: skip field %s: %s", field_name, exc)
         _LOG.info(
             "state_wal: hydrated %d fields from snapshot at %s",
             restored,
@@ -157,7 +157,8 @@ def last_snapshot_age_seconds(data_dir: Path | str) -> Optional[float]:
             return None
         ts = datetime.fromisoformat(row[0])
         return (datetime.now(timezone.utc) - ts).total_seconds()
-    except Exception:
+    except Exception as exc:
+        _LOG.debug("state_wal: last_snapshot_age failed: %s", exc)
         return None
     finally:
         conn.close()

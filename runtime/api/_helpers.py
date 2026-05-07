@@ -103,8 +103,8 @@ def build_snapshot(ctx: AppContext) -> GatewaySnapshotOut:
             gateway_running=ctx.gateway is not None,
             last_error=ctx.state.last_error,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOG.debug("rest_usage_log recording skipped: %s", exc)
     return out
 
 
@@ -142,16 +142,16 @@ def audit_weight_from_client(
         try:
             from runtime.core.weight_governor import get_weight_governor
             get_weight_governor().update_weight(used)
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOG.debug("WeightGovernor feed skipped: %s", exc)
         # Feed real-time weight to the Coordinator for launch decisions
         try:
             from runtime.core.bot_coordinator import get_bot_coordinator
             get_bot_coordinator().update_weight(used)
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except Exception as exc:
+            _LOG.debug("BotCoordinator feed skipped: %s", exc)
+    except Exception as exc:
+        _LOG.warning("audit_weight_from_client failed: %s", exc)
 
 
 # ── REST weight estimate ────────────────────────────────────────────

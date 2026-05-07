@@ -37,7 +37,7 @@ def main() -> None:
     if os.environ.get("PECUNATOR_ENGINE_STUB", "").strip().lower() in ("1", "true", "yes"):
         lo.info(
             "PECUNATOR_ENGINE_STUB set: engine exits without HTTP API. "
-            "Unset to start the API (default host 127.0.0.1:8765).",
+            "Unset to start the API (default host 127.0.0.1:8000).",
         )
         return
     import uvicorn

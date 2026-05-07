@@ -1,8 +1,8 @@
 # API Surface—Pecunator
 
 > Complete Python Engine REST Endpoints Reference.  
-> Base URL: `http://127.0.0.1:8765`  
-> Interactive OpenAPI: `http://127.0.0.1:8765/docs`
+> Base URL: `http://127.0.0.1:8000`  
+> Interactive OpenAPI: `http://127.0.0.1:8000/docs`
 
 ---
 

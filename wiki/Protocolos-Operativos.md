@@ -14,7 +14,7 @@ These endpoints are available in real time from the Flutter UI or via REST API:
 Stops **all** active bots immediately.
 
 ```bash
-curl -X POST http://127.0.0.1:8765/api/v1/ops/red_button?base_asset=USDT
+curl -X POST http://127.0.0.1:8000/api/v1/ops/red_button?base_asset=USDT
 ```
 
 > ⚠️ Dorothy stops **before** the operation to avoid layout loops.
@@ -24,26 +24,26 @@ curl -X POST http://127.0.0.1:8765/api/v1/ops/red_button?base_asset=USDT
 Controlled closure: stops bots + closes positions towards USDT.
 
 ```bash
-curl -X POST http://127.0.0.1:8765/api/v1/ops/protocol/close?base_asset=USDT
+curl -X POST http://127.0.0.1:8000/api/v1/ops/protocol/close?base_asset=USDT
 ```
 
 ### Order Cleaning
 
 ```bash
 # Cancel open LIMIT orders
-curl -X POST http://127.0.0.1:8765/api/v1/ops/orders/cleanup/limit
+curl -X POST http://127.0.0.1:8000/api/v1/ops/orders/cleanup/limit
 
 # Cancel open STOP orders
-curl -X POST http://127.0.0.1:8765/api/v1/ops/orders/cleanup/stop
+curl -X POST http://127.0.0.1:8000/api/v1/ops/orders/cleanup/stop
 
 # Cancel ALL open orders
-curl -X POST http://127.0.0.1:8765/api/v1/ops/orders/cleanup/all
+curl -X POST http://127.0.0.1:8000/api/v1/ops/orders/cleanup/all
 ```
 
 ### Protocol Status
 
 ```bash
-curl http://127.0.0.1:8765/api/v1/ops/protocol/status
+curl http://127.0.0.1:8000/api/v1/ops/protocol/status
 ```
 
 ---

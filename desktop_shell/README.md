@@ -4,7 +4,7 @@ Dedicated Flutter desktop UI for `PecunatorCore`.
 
 ## Runtime model
 
-- This app talks to the local Python engine over HTTP loopback (`http://127.0.0.1:8765` by default).
+- This app talks to the local Python engine over HTTP loopback (`http://127.0.0.1:8000` by default).
 - No web UI and no browser dashboard are used.
 - API keys are handled by the Python vault layer, not stored in Dart sources.
 

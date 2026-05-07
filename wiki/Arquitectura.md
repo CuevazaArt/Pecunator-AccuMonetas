@@ -23,7 +23,7 @@ Last verified against repository structure: **2026-05-05**
 └─────────────────────────────────────────────────────────┘
 ```
 
-The Python engine runs on `http://127.0.0.1:8765` by default.  
+The Python engine runs on `http://127.0.0.1:8000` by default.  
 Flutter **only** talks to the engine via HTTP loopback; you never have API keys in Dart.
 
 ---
@@ -54,7 +54,7 @@ python -m runtime # boot as package
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PECUNATOR_API_HOST` | `127.0.0.1` | Host API |
-| `PECUNATOR_API_PORT` | `8765` | APIPort |
+| `PECUNATOR_API_PORT` | `8000` | APIPort |
 | `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | REST Weight Reference Limit |
 | `PECUNATOR_BINANCE_API_KEY` | — | Binance API key (alternative to vault) |
 | `PECUNATOR_BINANCE_API_SECRET` | — | Binance secret API (alternative to vault) |

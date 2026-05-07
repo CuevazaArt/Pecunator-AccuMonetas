@@ -126,7 +126,7 @@ subgraph DART["🦋 Flutter Desktop Shell"]
     end
 
 subgraph PY["🐍 Python Engine — runtime/"]
-        API[FastAPI — :8765]
+        API[FastAPI — :8000]
         BOTS[Hubs · Dorothy · Masha · Thusnelda]
         GW[BinanceGateway]
         V[(🔐 Vault Fernet)]
@@ -215,8 +215,8 @@ Analysis and orchestration.
 #🐍 1) Python Engine
 pip install -r requirements.txt
 python main.py
-# → API at http://127.0.0.1:8765
-# → OpenAPI docs at http://127.0.0.1:8765/docs
+# → API at http://127.0.0.1:8000
+# → OpenAPI docs at http://127.0.0.1:8000/docs
 
 #🦋2) Flutter UI (Windows)
 cd desktop_shell

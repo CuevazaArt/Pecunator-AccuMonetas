@@ -23,12 +23,12 @@ Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
 ## Motor Python (HTTP API)
 
-Por defecto **`python main.py`** levanta la API en **[`http://127.0.0.1:8765`](http://127.0.0.1:8765)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de “peso REST” en la UI con el límite de referencia de `exchangeInfo`.
+Por defecto la API se levanta en **[`http://127.0.0.1:8000`](http://127.0.0.1:8000)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de "peso REST" en la UI con el límite de referencia de `exchangeInfo`.
 
 - Atajo PowerShell (venv + arranque directo): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1`**.
 - Supervisor inmortal del motor (reinicia si el proceso cae): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1`**.
-- Si el puerto **8765** queda ocupado por un proceso viejo: **`scripts/engine/stop_engine_port.ps1`** antes de volver a arrancar.
-- OpenAPI: [`http://127.0.0.1:8765/docs`](http://127.0.0.1:8765/docs)  
+- Si el puerto **8000** queda ocupado por un proceso viejo: **`scripts/engine/stop_engine_port.ps1`** antes de volver a arrancar.
+- OpenAPI: [`http://127.0.0.1:8000/docs`](http://127.0.0.1:8000/docs)  
 - Solo stub de log (sin servidor): `PECUNATOR_ENGINE_STUB=1 python main.py`
 
 Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).

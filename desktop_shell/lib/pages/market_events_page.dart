@@ -4,6 +4,10 @@ import '../api_client.dart';
 
 /// Market Intelligence page — 24h activity heatmap, macro calendar,
 /// geopolitical risk factors, and Fear & Greed index.
+///
+/// ⚠️ DISCLAIMER: This page provides CONTEXTUAL information only.
+/// It is NOT wired to bot execution decisions. Data is curated/static
+/// and should be used as a human decision-aid, not as operative signals.
 class MarketEventsPage extends StatefulWidget {
   final EngineApi api;
   const MarketEventsPage({super.key, required this.api});
@@ -124,6 +128,25 @@ class _MarketEventsPageState extends State<MarketEventsPage> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(_error, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
               ),
+
+            // ── Contextual disclaimer ──
+            Card(
+              color: Colors.amber.withValues(alpha: 0.08),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 14, color: Colors.amber.shade300),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(
+                      'Info contextual — no conectada a decisiones de ejecución de bots. Datos curados y estadísticos.',
+                      style: TextStyle(fontSize: 10, color: Colors.amber.shade300),
+                    )),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
 
             // ── Top KPI Row ──
             Row(

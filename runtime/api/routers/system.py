@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
+
+_LOG = logging.getLogger("pecunator.api.system")
 
 from fastapi import APIRouter, Depends
 
@@ -33,20 +36,20 @@ async def health() -> dict[str, Any]:
     try:
         from runtime.core.api_fuse import get_api_fuse
         fuse_tripped = get_api_fuse().is_tripped()
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOG.debug("health: api_fuse unavailable: %s", exc)
     try:
         from runtime.core.weight_governor import get_weight_governor
         weight_zone = get_weight_governor().status()["zone"]
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOG.debug("health: weight_governor unavailable: %s", exc)
     try:
         from runtime.core.bot_coordinator import get_bot_coordinator
         cs = get_bot_coordinator().status()
         active_bots = cs.get("active_bots", 0)
         staged_bots = cs.get("staged_bots", 0)
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOG.debug("health: bot_coordinator unavailable: %s", exc)
     hub_stats = {
         "dorothy": bot.hub_stats(),
         "masha": masha.hub_stats(),

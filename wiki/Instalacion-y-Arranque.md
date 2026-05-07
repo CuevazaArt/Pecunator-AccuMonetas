@@ -64,15 +64,15 @@ powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
 powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1
 ```
 
-**Engine available at:** `http://127.0.0.1:8765`  
-**Interactive OpenAPI:** `http://127.0.0.1:8765/docs`
+**Engine available at:** `http://127.0.0.1:8000`  
+**Interactive OpenAPI:** `http://127.0.0.1:8000/docs`
 
 ### 2.4 Optional environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PECUNATOR_API_HOST` | `127.0.0.1` | API Host |
-| `PECUNATOR_API_PORT` | `8765` | API Port |
+| `PECUNATOR_API_PORT` | `8000` | API Port |
 | `PECUNATOR_API_WEIGHT_LIMIT_1M` | `6000` | REST weight reference limit for UI bar |
 | `PECUNATOR_EQUITY_BASE_ASSET` | `USDT` | Base asset for equity metrics |
 | `PECUNATOR_EQUITY_AVG_WINDOW` | `6` | Equity rolling average window |
@@ -81,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1
 
 ### 2.5 Engine Troubleshooting
 
-**Port 8765 occupied by previous process:**
+**Port 8000 occupied by previous process:**
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/engine/stop_engine_port.ps1
 ```
@@ -162,7 +162,7 @@ Delete this file only if you want to reset the hub's logs/config (make a copy fi
    powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
 
 2. Verify that the API responds:
-   curl http://127.0.0.1:8765/api/v1/vault/status
+   curl http://127.0.0.1:8000/api/v1/vault/status
 
 3. Start UI Flutter:
    scripts/ui/run_dashboard.cmd
@@ -178,31 +178,31 @@ Delete this file only if you want to reset the hub's logs/config (make a copy fi
 
 ```bash
 # Engine running?
-curl http://127.0.0.1:8765/api/v1/vault/status
+curl http://127.0.0.1:8000/api/v1/vault/status
 
 # Active credentials?
-curl http://127.0.0.1:8765/api/v1/credentials/active
+curl http://127.0.0.1:8000/api/v1/credentials/active
 
 # Gateway connected?
-curl http://127.0.0.1:8765/api/v1/gateway/snapshot
+curl http://127.0.0.1:8000/api/v1/gateway/snapshot
 ```
 
 ### 5.1 Extended runtime smoke-check
 
 ```bash
 # System health
-curl http://127.0.0.1:8765/health
-curl http://127.0.0.1:8765/health/deep
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/deep
 
 # Governance and scheduler
-curl http://127.0.0.1:8765/api/v1/weight-governor/status
-curl http://127.0.0.1:8765/api/v1/market-cache/status
-curl http://127.0.0.1:8765/api/v1/bot-coordinator/status
+curl http://127.0.0.1:8000/api/v1/weight-governor/status
+curl http://127.0.0.1:8000/api/v1/market-cache/status
+curl http://127.0.0.1:8000/api/v1/bot-coordinator/status
 
 # Hubs discovery
-curl http://127.0.0.1:8765/api/v1/hub/bots
-curl http://127.0.0.1:8765/api/v1/masha/bots
-curl http://127.0.0.1:8765/api/v1/thusnelda/bots
+curl http://127.0.0.1:8000/api/v1/hub/bots
+curl http://127.0.0.1:8000/api/v1/masha/bots
+curl http://127.0.0.1:8000/api/v1/thusnelda/bots
 ```
 
 If all endpoints answer with HTTP 200 and valid JSON, the local runtime is healthy for UI operation.
