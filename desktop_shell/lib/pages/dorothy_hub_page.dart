@@ -14,6 +14,7 @@ import 'masha_hub_page.dart';
 import 'thusnelda_hub_page.dart';
 import 'bot_guide_page.dart';
 import 'spot_account_page.dart';
+import 'api_weight_page.dart';
 import '../widgets/weight_monitor_dialog.dart';
 import '../widgets/vmo_dashboard.dart';
 import '../utils.dart';
@@ -89,7 +90,7 @@ class _BotControlPageState extends State<BotControlPage> {
     _tickBinanceClock();
     _refreshAll();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // NOTE: _syncTimestamp() removed from autostart â€” consumes API weight.
+      // NOTE: _syncTimestamp() removed from autostart — consumes API weight.
       // User can manually sync via the clock button when needed.
     });
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -101,9 +102,43 @@ class _BotControlPageState extends State<BotControlPage> {
       }
     });
     HistoryScraperService.instance.api = _api;
-    // NOTE: HistoryScraperService.start() disabled â€” it uses REST API
+    // NOTE: HistoryScraperService.start() disabled — it uses REST API
     // (banned). Historical data now ingested via VisionScraper (ZIPs).
     // HistoryScraperService.instance.start();
+
+    // ── Auto-start gateway & sync timestamp on boot ──
+    // Fire-and-forget: UI loads immediately; gateway starts in background.
+    // If credentials are missing or network fails, the error is captured
+    // silently and the user can retry via the cloud icon.
+    _autoStartGateway();
+  }
+
+  Future<void> _autoStartGateway() async {
+    // Give the backend a moment to fully initialize
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    try {
+      await _api.gatewayStart();
+      // Sync Binance server time to fix timestamp errors
+      try {
+        final r = await _api.syncTimestamp();
+        final ms = r['server_time_ms'];
+        if (ms is num) {
+          _binanceSrvUtc = DateTime.fromMillisecondsSinceEpoch(
+            ms.toInt(), isUtc: true,
+          );
+          _binanceSrvObservedUtc = DateTime.now().toUtc();
+          if (mounted) setState(_tickBinanceClock);
+        }
+      } catch (_) {
+        // Timestamp sync is best-effort; gateway still works without it.
+      }
+      if (mounted) await _reloadData();
+    } catch (e) {
+      // Gateway start failed (no creds, network down, etc.)
+      // The UI will show the offline indicator; user can retry manually.
+      debugPrint('Auto-start gateway failed: $e');
+    }
   }
 
   @override
@@ -1521,6 +1556,7 @@ class _BotControlPageState extends State<BotControlPage> {
           _navBtn(Icons.hub_outlined, 'Thusnelda', 5),
           _navBtn(Icons.savings_outlined, 'Earn', 6),
           _navBtn(Icons.currency_exchange, 'Carry', 7),
+          _navBtn(Icons.speed_outlined, 'API Weight', 8),
           const SizedBox(width: 4),
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
@@ -1602,6 +1638,7 @@ class _BotControlPageState extends State<BotControlPage> {
               ThusneldaHubPage(engineBase: _engineBase),
               const EarnManagerPage(),
               const CarryTradePage(),
+              ApiWeightMonitorPage(api: _api),
             ][_currentIndex],
           ),
           // â”€â”€ Persistent compact weight gauge (visible on ALL pages) â”€â”€
