@@ -25,20 +25,51 @@ class _ApiWeightMonitorPageState extends State<ApiWeightMonitorPage> {
   int _fuseNextCooldown = 300;
   int _fuseCurrentCooldown = 300;
 
-  // Oscillator history (rolling 5-minute window at 2s intervals = 150 samples)
+  // Oscillator history
   final List<_Sample> _history = [];
-  static const int _maxSamples = 150;
   // Crest tracking
   int _crestCount = 0;
   double _peakWeight = 0;
   double _avgWeight = 0;
   double _minWeight = double.infinity;
 
+  // ── Configurable refresh options ──
+  // Polling intervals in milliseconds
+  static const Map<String, int> _pollOptions = {
+    '200ms': 200,
+    '300ms': 300,
+    '500ms': 500,
+    '1s': 1000,
+    '2s': 2000,
+    '5s': 5000,
+    '10s': 10000,
+  };
+  // Time window options in seconds
+  static const Map<String, int> _windowOptions = {
+    '30s': 30,
+    '1 min': 60,
+    '2 min': 120,
+    '5 min': 300,
+    '10 min': 600,
+    '15 min': 900,
+  };
+  String _selectedPoll = '500ms';
+  String _selectedWindow = '1 min';
+
+  int get _pollMs => _pollOptions[_selectedPoll] ?? 2000;
+  int get _windowSec => _windowOptions[_selectedWindow] ?? 60;
+  int get _maxSamples => (_windowSec * 1000 / _pollMs).ceil();
+
   @override
   void initState() {
     super.initState();
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(Duration(milliseconds: _pollMs), (_) => _refresh());
   }
 
   @override
@@ -211,6 +242,30 @@ class _ApiWeightMonitorPageState extends State<ApiWeightMonitorPage> {
               icon: const Icon(Icons.restart_alt, size: 16, color: Colors.redAccent),
               label: const Text('Reset Fuse', style: TextStyle(color: Colors.redAccent)),
             ),
+          // Polling rate selector
+          _dropdownChip(
+            icon: Icons.speed,
+            value: _selectedPoll,
+            items: _pollOptions.keys.toList(),
+            onChanged: (v) {
+              setState(() { _selectedPoll = v; });
+              _startTimer();
+            },
+          ),
+          const SizedBox(width: 4),
+          // Time window selector
+          _dropdownChip(
+            icon: Icons.timer,
+            value: _selectedWindow,
+            items: _windowOptions.keys.toList(),
+            onChanged: (v) {
+              setState(() {
+                _selectedWindow = v;
+                _history.clear();
+              });
+            },
+          ),
+          const SizedBox(width: 4),
           IconButton(
             onPressed: _refresh,
             tooltip: 'Refrescar',
@@ -302,10 +357,10 @@ class _ApiWeightMonitorPageState extends State<ApiWeightMonitorPage> {
                   children: [
                     Row(
                       children: [
-                        const Text('Oscilador de peso API (últimos 5 min)',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        Text('Oscilador de peso API (últimos $_selectedWindow)',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
                         const Spacer(),
-                        Text('${_history.length} muestras',
+                        Text('${_history.length}/$_maxSamples @ $_selectedPoll',
                             style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
                       ],
                     ),
@@ -317,6 +372,40 @@ class _ApiWeightMonitorPageState extends State<ApiWeightMonitorPage> {
                           : CustomPaint(
                               size: const Size(double.infinity, 200),
                               painter: _OscillatorPainter(
+                                samples: List.unmodifiable(_history),
+                                limit: _weightLimit,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // ── Fixed-scale overview chart (0-6000) ──
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('Vista global (0-100% capacidad)',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        Text('${_weightUsed ?? 0}/$_weightLimit',
+                            style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 120,
+                      child: _history.length < 2
+                          ? const Center(child: Text('...', style: TextStyle(color: Colors.grey)))
+                          : CustomPaint(
+                              size: const Size(double.infinity, 120),
+                              painter: _FixedScalePainter(
                                 samples: List.unmodifiable(_history),
                                 limit: _weightLimit,
                               ),
@@ -467,6 +556,37 @@ class _ApiWeightMonitorPageState extends State<ApiWeightMonitorPage> {
       ],
     );
   }
+
+  Widget _dropdownChip({
+    required IconData icon,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.cyanAccent),
+          const SizedBox(width: 4),
+          DropdownButton<String>(
+            value: value,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            dropdownColor: const Color(0xFF1A1A2E),
+            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.cyanAccent),
+            items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            onChanged: (v) { if (v != null) onChanged(v); },
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Sample {
@@ -476,7 +596,7 @@ class _Sample {
   const _Sample(this.time, this.weight, this.limit);
 }
 
-/// Paints a rolling oscillator chart with zone coloring and crest markers.
+/// Auto-scaling oscillator painter — zooms to data range for detail.
 class _OscillatorPainter extends CustomPainter {
   final List<_Sample> samples;
   final int limit;
@@ -486,35 +606,61 @@ class _OscillatorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (samples.length < 2) return;
-
     final effectiveLimit = limit > 0 ? limit : 6000;
 
-    // Zone backgrounds
+    // Auto-scale range
+    int dataMin = samples.first.weight;
+    int dataMax = samples.first.weight;
+    for (final s in samples) {
+      if (s.weight < dataMin) dataMin = s.weight;
+      if (s.weight > dataMax) dataMax = s.weight;
+    }
+    final range = (dataMax - dataMin).clamp(1, effectiveLimit);
+    final padding = (range * 0.25).ceil().clamp(50, effectiveLimit ~/ 2);
+    final viewMin = (dataMin - padding).clamp(0, effectiveLimit);
+    final viewMax = (dataMax + padding).clamp(1, effectiveLimit);
+    final viewRange = (viewMax - viewMin).clamp(1, effectiveLimit);
+
+    double weightToY(double w) {
+      final normalized = ((w - viewMin) / viewRange).clamp(0.0, 1.0);
+      return size.height * (1.0 - normalized);
+    }
+
+    // Zone backgrounds (mapped to auto-scaled range)
     final zones = [
-      (0.0, 0.40, const Color(0x1500E5FF)),
-      (0.40, 0.60, const Color(0x15FFEA00)),
-      (0.60, 0.80, const Color(0x15FF9100)),
-      (0.80, 1.0, const Color(0x22FF1744)),
+      (0.0, 0.40, const Color(0x0D00E5FF)),
+      (0.40, 0.60, const Color(0x0DFFEA00)),
+      (0.60, 0.80, const Color(0x0DFF9100)),
+      (0.80, 1.0, const Color(0x18FF1744)),
     ];
     for (final (lo, hi, color) in zones) {
-      final top = size.height * (1 - hi);
-      final bottom = size.height * (1 - lo);
-      canvas.drawRect(
-        Rect.fromLTRB(0, top, size.width, bottom),
-        Paint()..color = color,
-      );
+      final zoneBottomW = effectiveLimit * lo;
+      final zoneTopW = effectiveLimit * hi;
+      if (zoneTopW < viewMin || zoneBottomW > viewMax) continue;
+      final top = weightToY(zoneTopW.clamp(viewMin.toDouble(), viewMax.toDouble()));
+      final bottom = weightToY(zoneBottomW.clamp(viewMin.toDouble(), viewMax.toDouble()));
+      canvas.drawRect(Rect.fromLTRB(0, top, size.width, bottom), Paint()..color = color);
     }
 
     // Threshold lines
     for (final threshold in [0.40, 0.60, 0.80]) {
-      final y = size.height * (1 - threshold);
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        Paint()
-          ..color = Colors.white12
-          ..strokeWidth = 0.5,
-      );
+      final threshW = effectiveLimit * threshold;
+      if (threshW >= viewMin && threshW <= viewMax) {
+        final y = weightToY(threshW);
+        final isDanger = threshold >= 0.80;
+        canvas.drawLine(Offset(0, y), Offset(size.width, y),
+          Paint()
+            ..color = isDanger ? const Color(0x44FF1744) : Colors.white12
+            ..strokeWidth = isDanger ? 1.5 : 0.5);
+        if (isDanger) {
+          final tp = TextPainter(
+            text: TextSpan(text: 'FUSE ${(threshold * 100).toInt()}%',
+              style: const TextStyle(color: Color(0x88FF1744), fontSize: 9, fontFamily: 'monospace')),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          tp.paint(canvas, Offset(size.width - tp.width - 4, y - tp.height - 2));
+        }
+      }
     }
 
     // Data line
@@ -522,8 +668,7 @@ class _OscillatorPainter extends CustomPainter {
     final fillPath = Path();
     for (int i = 0; i < samples.length; i++) {
       final x = (i / (samples.length - 1)) * size.width;
-      final pct = (samples[i].weight / effectiveLimit).clamp(0.0, 1.0);
-      final y = size.height * (1 - pct);
+      final y = weightToY(samples[i].weight.toDouble());
       if (i == 0) {
         path.moveTo(x, y);
         fillPath.moveTo(x, size.height);
@@ -536,71 +681,54 @@ class _OscillatorPainter extends CustomPainter {
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
-    // Fill gradient
-    final fillPaint = Paint()
+    final avgPct = (dataMin + dataMax) / 2 / effectiveLimit;
+    final baseColor = _zoneColorStatic(avgPct);
+    canvas.drawPath(fillPath, Paint()
       ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF00E5FF).withValues(alpha: 0.3),
-          const Color(0xFF00E5FF).withValues(alpha: 0.02),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawPath(fillPath, fillPaint);
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [baseColor.withValues(alpha: 0.35), baseColor.withValues(alpha: 0.03)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
+    canvas.drawPath(path, Paint()..color = baseColor..style = PaintingStyle.stroke..strokeWidth = 2..strokeJoin = StrokeJoin.round);
 
-    // Stroke
-    final strokePaint = Paint()
-      ..color = const Color(0xFF00E5FF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, strokePaint);
-
-    // Crest markers (peaks above 60%)
+    // Crest markers
     for (int i = 1; i < samples.length - 1; i++) {
-      final prev = samples[i - 1].weight;
-      final cur = samples[i].weight;
-      final next = samples[i + 1].weight;
-      final pct = cur / effectiveLimit;
-      if (cur > prev && cur > next && pct > 0.60) {
+      final prev = samples[i - 1].weight, cur = samples[i].weight, next = samples[i + 1].weight;
+      if (cur > prev && cur > next && (cur - prev > 20 || cur - next > 20)) {
         final x = (i / (samples.length - 1)) * size.width;
-        final y = size.height * (1 - pct.clamp(0.0, 1.0));
-        canvas.drawCircle(
-          Offset(x, y),
-          4,
-          Paint()..color = const Color(0xFFFF9100),
-        );
-        canvas.drawCircle(
-          Offset(x, y),
-          3,
-          Paint()..color = const Color(0xFF1A1A2E),
-        );
+        final y = weightToY(cur.toDouble());
+        final pctOfLimit = cur / effectiveLimit;
+        final c = pctOfLimit > 0.80 ? const Color(0xFFFF1744) : pctOfLimit > 0.60 ? const Color(0xFFFF9100) : const Color(0xFF00E5FF);
+        canvas.drawCircle(Offset(x, y), 3.5, Paint()..color = c);
+        canvas.drawCircle(Offset(x, y), 2, Paint()..color = const Color(0xFF1A1A2E));
       }
     }
 
-    // Current value dot
+    // Trough markers
+    for (int i = 1; i < samples.length - 1; i++) {
+      final prev = samples[i - 1].weight, cur = samples[i].weight, next = samples[i + 1].weight;
+      if (cur < prev && cur < next && (prev - cur > 20 || next - cur > 20)) {
+        final x = (i / (samples.length - 1)) * size.width;
+        canvas.drawCircle(Offset(x, weightToY(cur.toDouble())), 3, Paint()..color = const Color(0xFF00E676));
+        canvas.drawCircle(Offset(x, weightToY(cur.toDouble())), 1.5, Paint()..color = const Color(0xFF1A1A2E));
+      }
+    }
+
+    // Current dot
     if (samples.isNotEmpty) {
-      final lastPct = (samples.last.weight / effectiveLimit).clamp(0.0, 1.0);
-      final y = size.height * (1 - lastPct);
-      canvas.drawCircle(
-        Offset(size.width, y),
-        5,
-        Paint()..color = _zoneColorStatic(lastPct),
-      );
-      canvas.drawCircle(
-        Offset(size.width, y),
-        3,
-        Paint()..color = Colors.white,
-      );
+      final lastW = samples.last.weight.toDouble();
+      final y = weightToY(lastW);
+      canvas.drawCircle(Offset(size.width, y), 5, Paint()..color = _zoneColorStatic(lastW / effectiveLimit));
+      canvas.drawCircle(Offset(size.width, y), 3, Paint()..color = Colors.white);
     }
 
     // Y-axis labels
-    final textStyle = TextStyle(color: Colors.white38, fontSize: 9);
-    for (final pct in [0.0, 0.20, 0.40, 0.60, 0.80, 1.0]) {
-      final y = size.height * (1 - pct);
-      final val = (effectiveLimit * pct).toInt();
+    final textStyle = const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace');
+    for (int i = 0; i <= 6; i++) {
+      final frac = i / 6;
+      final val = viewMin + (viewRange * frac);
+      final y = size.height * (1 - frac);
       final tp = TextPainter(
-        text: TextSpan(text: '$val', style: textStyle),
+        text: TextSpan(text: '${val.toInt()} (${(val / effectiveLimit * 100).toStringAsFixed(0)}%)', style: textStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(2, y - tp.height / 2));
@@ -616,4 +744,69 @@ class _OscillatorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _OscillatorPainter old) => true;
+}
+
+/// Fixed-scale painter: always 0 to limit. Global perspective.
+class _FixedScalePainter extends CustomPainter {
+  final List<_Sample> samples;
+  final int limit;
+  _FixedScalePainter({required this.samples, required this.limit});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.length < 2) return;
+    final L = limit > 0 ? limit : 6000;
+
+    // Zone backgrounds
+    for (final (lo, hi, color) in [
+      (0.0, 0.40, const Color(0x1500E5FF)),
+      (0.40, 0.60, const Color(0x15FFEA00)),
+      (0.60, 0.80, const Color(0x15FF9100)),
+      (0.80, 1.0, const Color(0x22FF1744)),
+    ]) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, size.height * (1 - hi), size.width, size.height * (1 - lo)),
+        Paint()..color = color);
+    }
+
+    // Threshold lines
+    final ls = const TextStyle(color: Colors.white30, fontSize: 8, fontFamily: 'monospace');
+    for (final t in [0.20, 0.40, 0.60, 0.80]) {
+      final y = size.height * (1 - t);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y),
+        Paint()
+          ..color = t >= 0.80 ? const Color(0x55FF1744) : Colors.white10
+          ..strokeWidth = t >= 0.80 ? 1.5 : 0.5);
+      final tp = TextPainter(text: TextSpan(text: '${(t * 100).toInt()}% (${(L * t).toInt()})', style: ls), textDirection: TextDirection.ltr)..layout();
+      tp.paint(canvas, Offset(2, y - tp.height - 1));
+    }
+
+    // Data
+    final path = Path();
+    final fill = Path();
+    for (int i = 0; i < samples.length; i++) {
+      final x = (i / (samples.length - 1)) * size.width;
+      final pct = (samples[i].weight / L).clamp(0.0, 1.0);
+      final y = size.height * (1 - pct);
+      if (i == 0) { path.moveTo(x, y); fill.moveTo(x, size.height); fill.lineTo(x, y); }
+      else { path.lineTo(x, y); fill.lineTo(x, y); }
+    }
+    fill.lineTo(size.width, size.height); fill.close();
+
+    canvas.drawPath(fill, Paint()
+      ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [const Color(0xFF00E5FF).withValues(alpha: 0.25), const Color(0xFF00E5FF).withValues(alpha: 0.02)])
+        .createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
+    canvas.drawPath(path, Paint()..color = const Color(0xFF00E5FF)..style = PaintingStyle.stroke..strokeWidth = 1.5..strokeJoin = StrokeJoin.round);
+
+    if (samples.isNotEmpty) {
+      final lastPct = (samples.last.weight / L).clamp(0.0, 1.0);
+      final y = size.height * (1 - lastPct);
+      canvas.drawCircle(Offset(size.width, y), 4, Paint()..color = _OscillatorPainter._zoneColorStatic(lastPct));
+      canvas.drawCircle(Offset(size.width, y), 2, Paint()..color = Colors.white);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FixedScalePainter old) => true;
 }

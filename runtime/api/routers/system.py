@@ -143,7 +143,38 @@ async def weight_governor_status() -> dict[str, Any]:
     return gov.status()
 
 
+@router.post("/api/v1/weight-governor/inject")
+async def weight_governor_inject(body: dict[str, Any]) -> dict[str, Any]:
+    """Inject an external weight reading (e.g. from stress test).
+
+    Updates governor, fuse, AND gateway state so Flutter sees it.
+    """
+    weight = int(body.get("weight", 0))
+    if weight <= 0:
+        return {"ok": False, "error": "weight must be > 0"}
+
+    from runtime.core.weight_governor import get_weight_governor
+    gov = get_weight_governor()
+    gov.update_weight(weight)
+
+    from runtime.core.api_fuse import get_api_fuse
+    fuse = get_api_fuse()
+    tripped = fuse.check_weight(weight)
+
+    ctx = deps.get_ctx()
+    ctx.state.api_weight_used_1m = weight
+
+    return {
+        "ok": True,
+        "weight": weight,
+        "pct": round(weight / gov.weight_limit * 100, 1),
+        "zone": gov.status()["zone"],
+        "fuse_tripped": tripped,
+    }
+
+
 # ── Market Cache ────────────────────────────────────────────────────
+
 
 @router.get("/api/v1/market-cache/status")
 async def market_cache_status() -> dict[str, Any]:
