@@ -508,6 +508,21 @@ class MashaRunner:
             self._maybe_emit_metrics()
             return report
 
+        # T1.1: Regime filter gate
+        try:
+            from runtime.core.regime_filter import get_regime_filter
+            regime_ok, regime_reason = await get_regime_filter().is_favorable(
+                symbol, client, _to_thread=self._to_thread,
+            )
+            if not regime_ok:
+                report["decision"] = "BLOCKED_REGIME"
+                report["regime_reason"] = regime_reason
+                self._emit("WARNING", f"masha:regime_blocked {regime_reason}", {"report": report})
+                self._maybe_emit_metrics()
+                return report
+        except Exception:
+            pass  # Fail-open
+
         planned_buy_qty = _q(c.buy_qty_base, c.qty_decimals)
         report["planned_buy_qty_base"] = str(planned_buy_qty)
 

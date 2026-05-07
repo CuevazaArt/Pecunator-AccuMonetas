@@ -423,6 +423,21 @@ class ThusneldaRunner:
                             )
                             decisions.append(item)
                             continue
+                        # T1.1: Regime filter gate per symbol
+                        regime_ok = True
+                        try:
+                            from runtime.core.regime_filter import get_regime_filter
+                            regime_ok, regime_reason = await get_regime_filter().is_favorable(
+                                symbol, client, _to_thread=self._to_thread,
+                            )
+                        except Exception:
+                            regime_ok = True  # Fail-open
+                        if not regime_ok:
+                            item["decision"] = "BLOCKED_REGIME"
+                            item["regime_reason"] = regime_reason
+                            self._emit("WARNING", f"thusnelda:regime_blocked {symbol} {regime_reason}", {"item": item})
+                            decisions.append(item)
+                            continue
                         if current < limit_price:
                             item["decision"] = "BUY_MARKET"
                             if c.simulated:

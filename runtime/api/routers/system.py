@@ -171,6 +171,31 @@ async def budget_guard_status() -> dict[str, Any]:
     return get_budget_guard().status()
 
 
+# ── Order Ledger ────────────────────────────────────────────────────
+
+@router.get("/api/v1/order-ledger/recent")
+async def order_ledger_recent(limit: int = 100) -> dict[str, Any]:
+    """Return recent forensic order records."""
+    from runtime.core.order_ledger import get_order_ledger
+    return {"items": get_order_ledger().recent(limit=limit)}
+
+
+@router.get("/api/v1/order-ledger/stats")
+async def order_ledger_stats() -> dict[str, Any]:
+    """Return order ledger summary statistics."""
+    from runtime.core.order_ledger import get_order_ledger
+    return get_order_ledger().stats()
+
+
+# ── Regime Filter ───────────────────────────────────────────────────
+
+@router.get("/api/v1/regime-filter/status")
+async def regime_filter_status() -> dict[str, Any]:
+    """Return current regime filter state for all cached symbols."""
+    from runtime.core.regime_filter import get_regime_filter
+    return get_regime_filter().status()
+
+
 # ── API Log ─────────────────────────────────────────────────────────
 
 @router.get("/api-log/recent")

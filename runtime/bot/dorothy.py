@@ -41,6 +41,9 @@ class DorothyConfig:
     # Each BUY_AND_SELL creates a SELL LIMIT anchor = 1 rung.
     # When open SELL LIMITs >= max_rungs, new buys are BLOCKED.
     max_rungs_per_symbol: int = 5
+    # T0.4: Force-liquidate worst position when drawdown exceeds this.
+    # 0 = disabled (only blocks buys). Example: 0.40 = liquidate at 40% DD.
+    drawdown_liquidate_pct: Decimal = Decimal("0")
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -58,6 +61,7 @@ class DorothyConfig:
         self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
         self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
+        self.drawdown_liquidate_pct = max(_dec(self.drawdown_liquidate_pct), Decimal("0"))
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -392,6 +396,19 @@ class DorothyRunner:
         else:
             should_buy = True
 
+        # T1.1: Regime filter — block buys in unfavorable market conditions
+        regime_allowed = True
+        regime_reason = ""
+        if should_buy:
+            try:
+                from runtime.core.regime_filter import get_regime_filter
+                regime_allowed, regime_reason = await get_regime_filter().is_favorable(
+                    symbol, client, _to_thread=self._to_thread,
+                )
+            except Exception as e:
+                regime_reason = f"regime_error:{e}"
+                # Fail-open: allow trade if filter fails
+
         # T0.1: Count active rungs (open SELL LIMITs = active DCA positions)
         active_rungs = len(sell_limit)
 
@@ -414,6 +431,48 @@ class DorothyRunner:
             report["decision"] = "WAIT_DRAWDOWN_GUARD"
             report["trading_blocked"] = True
             report["drawdown_pct"] = str(drawdown)
+            # T0.4: Force-liquidate worst position if threshold configured
+            if (c.drawdown_liquidate_pct > 0
+                    and drawdown > c.drawdown_liquidate_pct
+                    and sell_limit
+                    and not c.simulated):
+                # Find highest-priced SELL LIMIT (worst position = furthest from market)
+                worst = max(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
+                worst_oid = worst.get("orderId")
+                worst_qty = _dec(worst.get("origQty", "0"), "0")
+                if worst_oid and worst_qty > 0:
+                    try:
+                        cancelled = await self._to_thread(
+                            lambda oid=worst_oid: client.cancel_order(symbol=symbol, orderId=oid)
+                        )
+                        self._emit("WARNING", "bot:forced_liquidation_cancel", {
+                            "symbol": symbol, "orderId": worst_oid, "response": cancelled,
+                        })
+                        sold = await self._to_thread(
+                            lambda q=worst_qty: client.create_order(
+                                symbol=symbol, side=client.SIDE_SELL,
+                                type=client.ORDER_TYPE_MARKET,
+                                quantity=str(_q(q, c.qty_decimals)),
+                            )
+                        )
+                        self._emit("CRITICAL", "bot:forced_liquidation_sell", {
+                            "symbol": symbol, "qty": str(worst_qty),
+                            "drawdown_pct": str(drawdown),
+                            "threshold": str(c.drawdown_liquidate_pct),
+                            "response": sold,
+                        })
+                        report["decision"] = "FORCED_LIQUIDATION"
+                        report["liquidated_qty"] = str(worst_qty)
+                    except Exception as e:
+                        self._emit("ERROR", f"bot:forced_liquidation_failed: {e}")
+            elif (c.drawdown_liquidate_pct > 0
+                    and drawdown > c.drawdown_liquidate_pct
+                    and c.simulated):
+                report["decision"] = "FORCED_LIQUIDATION_SIMULATED"
+                self._emit("WARNING", "bot:forced_liquidation_simulated", {
+                    "drawdown_pct": str(drawdown),
+                    "threshold": str(c.drawdown_liquidate_pct),
+                })
             self._emit("WARNING", "bot:drawdown_guard_active", {"report": report})
             self._maybe_emit_metrics()
             return report
@@ -430,22 +489,68 @@ class DorothyRunner:
         if not should_buy:
             self._maybe_emit_metrics()
             return report
+        # T1.1: Block if market regime is unfavorable
+        if should_buy and not regime_allowed:
+            report["decision"] = "BLOCKED_REGIME"
+            report["regime_reason"] = regime_reason
+            self._emit(
+                "WARNING",
+                f"bot:regime_blocked {regime_reason}",
+                {"report": report},
+            )
+            self._maybe_emit_metrics()
+            return report
 
         est_buy = market_price if market_price > 0 else Decimal("1")
-        est_qty = c.quote_order_qty / est_buy if est_buy > 0 else Decimal("0")
-        est_sell = est_buy * (Decimal("1") + c.profit_factor)
+        # T1.6: Model fees + slippage for honest paper trading
+        _FEE_BPS = Decimal("10")      # 0.10% taker fee
+        _SLIPPAGE_BPS = Decimal("5")   # 0.05% average slippage
+        _FRICTION = (Decimal("1") + (_FEE_BPS + _SLIPPAGE_BPS) / Decimal("10000"))
+        est_buy_adj = est_buy * _FRICTION  # effective buy price (higher)
+        est_qty = c.quote_order_qty / est_buy_adj if est_buy_adj > 0 else Decimal("0")
+        est_sell = est_buy_adj * (Decimal("1") + c.profit_factor) / _FRICTION  # TP net of fees
         report["planned_quote_order_qty"] = str(c.quote_order_qty)
-        report["planned_buy_price"] = str(est_buy)
+        report["planned_buy_price"] = str(est_buy_adj)
+        report["planned_buy_price_raw"] = str(est_buy)
         report["planned_sell_price"] = str(est_sell)
         report["planned_qty"] = str(_q(est_qty, c.qty_decimals))
+        report["fee_slippage_bps"] = str(_FEE_BPS + _SLIPPAGE_BPS)
 
         if c.simulated:
             report["execution"] = "SIMULATED"
             report["message"] = "Dry run only; no orders sent."
+            # T0.3: Record simulated order in forensic ledger
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().record(
+                    bot_id=getattr(self, '_bot_id', 'dorothy'),
+                    bot_type="dorothy", symbol=symbol, side="BUY",
+                    order_type="MARKET", qty=str(_q(est_qty, c.qty_decimals)),
+                    quote_order_qty=str(c.quote_order_qty), reason="BUY_AND_SELL",
+                    drawdown_pct=str(drawdown), active_rungs=active_rungs,
+                    max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
+                )
+            except Exception:
+                pass
             self._emit("INFO", "bot:decision", {"report": report})
             log_paper_trade("dorothy", symbol, report.get("decision", ""), report)
             self._maybe_emit_metrics()
             return report
+
+        # T0.3: Record LIVE order in forensic ledger BEFORE sending
+        _ledger_id = None
+        try:
+            from runtime.core.order_ledger import get_order_ledger
+            _ledger_id = get_order_ledger().record(
+                bot_id=getattr(self, '_bot_id', 'dorothy'),
+                bot_type="dorothy", symbol=symbol, side="BUY",
+                order_type="MARKET", qty=str(_q(est_qty, c.qty_decimals)),
+                quote_order_qty=str(c.quote_order_qty), reason="BUY_AND_SELL",
+                drawdown_pct=str(drawdown), active_rungs=active_rungs,
+                max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
+            )
+        except Exception:
+            pass
 
         buy = await self._to_thread(
             lambda: client.create_order(
@@ -455,6 +560,19 @@ class DorothyRunner:
                 quoteOrderQty=str(c.quote_order_qty),
             )
         )
+
+        # T0.3: Update ledger with Binance response
+        if _ledger_id:
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().update_binance_response(
+                    _ledger_id,
+                    str(buy.get("orderId", "")),
+                    str(buy.get("status", "")),
+                )
+            except Exception:
+                pass
+
         self._emit(
             "INFO",
             "binance:create_order_buy_market",
@@ -470,6 +588,20 @@ class DorothyRunner:
         qty = _dec(buy.get("executedQty", "0"), "0")
         sell_price = _q(buy_price * (Decimal("1") + c.profit_factor), c.price_decimals)
         sell_qty = _q(qty, c.qty_decimals)
+
+        # T0.3: Record SELL LIMIT in ledger
+        _sell_ledger_id = None
+        try:
+            from runtime.core.order_ledger import get_order_ledger
+            _sell_ledger_id = get_order_ledger().record(
+                bot_id=getattr(self, '_bot_id', 'dorothy'),
+                bot_type="dorothy", symbol=symbol, side="SELL",
+                order_type="LIMIT", qty=str(sell_qty), price=str(sell_price),
+                reason="TAKE_PROFIT", execution_mode="LIVE",
+            )
+        except Exception:
+            pass
+
         sell = await self._to_thread(
             lambda: client.create_order(
                 symbol=symbol,
@@ -480,6 +612,19 @@ class DorothyRunner:
                 price=str(sell_price),
             )
         )
+
+        # T0.3: Update sell ledger
+        if _sell_ledger_id:
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().update_binance_response(
+                    _sell_ledger_id,
+                    str(sell.get("orderId", "")),
+                    str(sell.get("status", "")),
+                )
+            except Exception:
+                pass
+
         self._emit(
             "INFO",
             "binance:create_order_sell_limit",
