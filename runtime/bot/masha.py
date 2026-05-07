@@ -46,6 +46,8 @@ class MashaConfig:
     max_drawdown_pct: Decimal = Decimal("0.25")
     stop_loss_pct: Decimal = Decimal("0.15")
     metrics_interval_cycles: int = 5
+    # T0.1: Hard ceiling on DCA rungs.
+    max_rungs_per_symbol: int = 5
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -73,6 +75,7 @@ class MashaConfig:
         self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
         self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
+        self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -198,18 +201,26 @@ class MashaRunner:
             self._equity_returns = self._equity_returns[-500:]
 
     def _compute_metrics(self) -> dict[str, Any]:
+        """T1.4: Honest performance metrics — no fake Sharpe."""
         rs = self._equity_returns
         n = len(rs)
         if n == 0:
-            return {"sharpe": "0", "win_rate": "0", "max_drawdown": str(self._max_drawdown_seen), "samples": 0}
+            return {
+                "cumulative_pnl": "0",
+                "win_rate": "0",
+                "profit_factor": "0",
+                "max_drawdown": str(self._max_drawdown_seen),
+                "samples": 0,
+            }
         wins = sum(1 for r in rs if r > 0)
-        mean = sum(rs, Decimal("0")) / Decimal(n)
-        var = sum((r - mean) * (r - mean) for r in rs) / Decimal(n)
-        std = var.sqrt() if var > 0 else Decimal("0")
-        sharpe = (mean / std) * Decimal(n).sqrt() if std > 0 else Decimal("0")
+        gross_win = sum(r for r in rs if r > 0)
+        gross_loss = abs(sum(r for r in rs if r < 0))
+        cumulative = sum(rs, Decimal("0"))
+        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")
         return {
-            "sharpe": str(sharpe),
+            "cumulative_pnl": str(cumulative),
             "win_rate": str(Decimal(wins) / Decimal(n)),
+            "profit_factor": str(pf),
             "max_drawdown": str(self._max_drawdown_seen),
             "samples": n,
         }
@@ -475,7 +486,25 @@ class MashaRunner:
             "trading_blocked": trading_blocked,
             "drawdown_pct": str(drawdown),
         }
+        # T0.1: Count active DCA rungs (open SELL orders = active positions)
+        sell_orders = [o for o in (open_orders if isinstance(open_orders, list) else [])
+                       if str(o.get("side", "")).upper() == "SELL"]
+        active_rungs = len(sell_orders)
+        report["active_rungs"] = active_rungs
+        report["max_rungs"] = c.max_rungs_per_symbol
+
         if not can_execute:
+            self._maybe_emit_metrics()
+            return report
+
+        # T0.1: Block new buys when rung ceiling is reached
+        if active_rungs >= c.max_rungs_per_symbol:
+            report["decision"] = "BLOCKED_MAX_RUNGS"
+            self._emit(
+                "WARNING",
+                f"masha:max_rungs_reached {active_rungs}/{c.max_rungs_per_symbol}",
+                {"report": report},
+            )
             self._maybe_emit_metrics()
             return report
 

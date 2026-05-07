@@ -62,6 +62,10 @@ class ThusneldaConfig:
     max_drawdown_pct: Decimal = Decimal("0.30")
     stop_loss_pct: Decimal = Decimal("0.25")
     metrics_interval_cycles: int = 3
+    # T0.1: Hard ceiling on DCA rungs PER SYMBOL in the basket.
+    # buys_after_ref count >= max_rungs → BLOCKED.
+    # Critical for volatile mid-caps where averaging-down is most dangerous.
+    max_rungs_per_symbol: int = 5
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -106,6 +110,7 @@ class ThusneldaConfig:
         self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
         self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
+        self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
         if not self.reference_ts_iso:
             self.reference_ts_iso = dt.datetime.now().isoformat()
 
@@ -244,18 +249,26 @@ class ThusneldaRunner:
             self._equity_returns = self._equity_returns[-500:]
 
     def _compute_metrics(self) -> dict[str, Any]:
+        """T1.4: Honest performance metrics — no fake Sharpe."""
         rs = self._equity_returns
         n = len(rs)
         if n == 0:
-            return {"sharpe": "0", "win_rate": "0", "max_drawdown": str(self._max_drawdown_seen), "samples": 0}
+            return {
+                "cumulative_pnl": "0",
+                "win_rate": "0",
+                "profit_factor": "0",
+                "max_drawdown": str(self._max_drawdown_seen),
+                "samples": 0,
+            }
         wins = sum(1 for r in rs if r > 0)
-        mean = sum(rs, Decimal("0")) / Decimal(n)
-        var = sum((r - mean) * (r - mean) for r in rs) / Decimal(n)
-        std = var.sqrt() if var > 0 else Decimal("0")
-        sharpe = (mean / std) * Decimal(n).sqrt() if std > 0 else Decimal("0")
+        gross_win = sum(r for r in rs if r > 0)
+        gross_loss = abs(sum(r for r in rs if r < 0))
+        cumulative = sum(rs, Decimal("0"))
+        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")
         return {
-            "sharpe": str(sharpe),
+            "cumulative_pnl": str(cumulative),
             "win_rate": str(Decimal(wins) / Decimal(n)),
+            "profit_factor": str(pf),
             "max_drawdown": str(self._max_drawdown_seen),
             "samples": n,
         }
@@ -398,6 +411,18 @@ class ThusneldaRunner:
                         item["avg_buy_price"] = str(avg_price)
                         item["current_price"] = str(current)
                         item["limit_price"] = str(limit_price)
+                        item["active_rungs"] = len(buys_after_ref)
+                        item["max_rungs"] = c.max_rungs_per_symbol
+                        # T0.1: Block if rung ceiling reached
+                        if len(buys_after_ref) >= c.max_rungs_per_symbol:
+                            item["decision"] = "BLOCKED_MAX_RUNGS"
+                            self._emit(
+                                "WARNING",
+                                f"thusnelda:max_rungs_reached {symbol} {len(buys_after_ref)}/{c.max_rungs_per_symbol}",
+                                {"item": item},
+                            )
+                            decisions.append(item)
+                            continue
                         if current < limit_price:
                             item["decision"] = "BUY_MARKET"
                             if c.simulated:

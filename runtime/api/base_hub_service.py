@@ -157,12 +157,22 @@ class BaseHubService(ABC):
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts_utc TEXT NOT NULL,
                         bot_id TEXT NOT NULL,
-                        sharpe TEXT,
+                        cumulative_pnl TEXT,
                         win_rate TEXT,
+                        profit_factor TEXT,
                         max_drawdown TEXT,
                         samples INTEGER NOT NULL DEFAULT 0
                     )
                 """)
+                # T1.4: Migrate legacy tables that still have 'sharpe' column
+                try:
+                    conn.execute(f"ALTER TABLE {pfx}_metrics_log ADD COLUMN cumulative_pnl TEXT")
+                except Exception:
+                    pass
+                try:
+                    conn.execute(f"ALTER TABLE {pfx}_metrics_log ADD COLUMN profit_factor TEXT")
+                except Exception:
+                    pass
                 conn.commit()
             finally:
                 conn.close()
@@ -279,6 +289,7 @@ class BaseHubService(ABC):
                 conn.close()
 
     def _persist_metrics(self, bot_id: str, payload: dict[str, Any]) -> None:
+        """T1.4: Persist honest metrics (cumulative_pnl, profit_factor, win_rate)."""
         if self._db_path is None:
             return
         pfx = self.HUB_CONFIG["table_prefix"]
@@ -288,14 +299,15 @@ class BaseHubService(ABC):
                 conn.execute(
                     f"""
                     INSERT INTO {pfx}_metrics_log
-                        (ts_utc, bot_id, sharpe, win_rate, max_drawdown, samples)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (ts_utc, bot_id, cumulative_pnl, win_rate, profit_factor, max_drawdown, samples)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         dt.datetime.now(dt.timezone.utc).isoformat(),
                         bot_id,
-                        str(payload.get("sharpe", "0")),
+                        str(payload.get("cumulative_pnl", "0")),
                         str(payload.get("win_rate", "0")),
+                        str(payload.get("profit_factor", "0")),
                         str(payload.get("max_drawdown", "0")),
                         int(payload.get("samples", 0) or 0),
                     ),

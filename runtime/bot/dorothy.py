@@ -37,6 +37,10 @@ class DorothyConfig:
     max_drawdown_pct: Decimal = Decimal("0.20")
     stop_loss_pct: Decimal = Decimal("0.10")
     metrics_interval_cycles: int = 5
+    # T0.1: Hard ceiling on DCA rungs per symbol.
+    # Each BUY_AND_SELL creates a SELL LIMIT anchor = 1 rung.
+    # When open SELL LIMITs >= max_rungs, new buys are BLOCKED.
+    max_rungs_per_symbol: int = 5
     simulated: bool = True
     trading_enabled: bool = False
 
@@ -53,6 +57,7 @@ class DorothyConfig:
         self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
         self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
+        self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -226,23 +231,32 @@ class DorothyRunner:
             self._equity_returns = self._equity_returns[-500:]
 
     def _compute_metrics(self) -> dict[str, Any]:
+        """T1.4: Honest performance metrics — no fake Sharpe.
+
+        - cumulative_pnl: sum of per-cycle equity returns (Decimal fraction)
+        - win_rate: fraction of positive-return cycles
+        - profit_factor: gross_wins / gross_losses (>1 is good)
+        - max_drawdown: peak-to-trough drawdown ever observed
+        """
         rs = self._equity_returns
         n = len(rs)
         if n == 0:
             return {
-                "sharpe": "0",
+                "cumulative_pnl": "0",
                 "win_rate": "0",
+                "profit_factor": "0",
                 "max_drawdown": str(self._max_drawdown_seen),
                 "samples": 0,
             }
         wins = sum(1 for r in rs if r > 0)
-        mean = sum(rs, Decimal("0")) / Decimal(n)
-        var = sum((r - mean) * (r - mean) for r in rs) / Decimal(n)
-        std = var.sqrt() if var > 0 else Decimal("0")
-        sharpe = (mean / std) * Decimal(n).sqrt() if std > 0 else Decimal("0")
+        gross_win = sum(r for r in rs if r > 0)
+        gross_loss = abs(sum(r for r in rs if r < 0))
+        cumulative = sum(rs, Decimal("0"))
+        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")
         return {
-            "sharpe": str(sharpe),
+            "cumulative_pnl": str(cumulative),
             "win_rate": str(Decimal(wins) / Decimal(n)),
+            "profit_factor": str(pf),
             "max_drawdown": str(self._max_drawdown_seen),
             "samples": n,
         }
@@ -378,6 +392,9 @@ class DorothyRunner:
         else:
             should_buy = True
 
+        # T0.1: Count active rungs (open SELL LIMITs = active DCA positions)
+        active_rungs = len(sell_limit)
+
         report: dict[str, Any] = {
             "preset_id": c.preset_id,
             "symbol": symbol,
@@ -390,12 +407,24 @@ class DorothyRunner:
             "decision": "BUY_AND_SELL" if should_buy else "WAIT",
             "sell_anchor_price": str(_dec(lowest_sell.get("price", "0"), "0")) if lowest_sell else None,
             "loop_interval_sec": c.loop_interval_sec,
+            "active_rungs": active_rungs,
+            "max_rungs": c.max_rungs_per_symbol,
         }
         if trading_blocked:
             report["decision"] = "WAIT_DRAWDOWN_GUARD"
             report["trading_blocked"] = True
             report["drawdown_pct"] = str(drawdown)
             self._emit("WARNING", "bot:drawdown_guard_active", {"report": report})
+            self._maybe_emit_metrics()
+            return report
+        # T0.1: Block new buys when rung ceiling is reached
+        if should_buy and active_rungs >= c.max_rungs_per_symbol:
+            report["decision"] = "BLOCKED_MAX_RUNGS"
+            self._emit(
+                "WARNING",
+                f"bot:max_rungs_reached {active_rungs}/{c.max_rungs_per_symbol}",
+                {"report": report},
+            )
             self._maybe_emit_metrics()
             return report
         if not should_buy:

@@ -21,3 +21,14 @@ exampleJV_enhanced/
 examples/**/config.py
 examples/**/.env
 config.py
+
+# === T3.1: Runtime output files (not source code) ===
+audit_report.txt
+portfolio_report.txt
+loans_report.txt
+earn_rates_log.csv
+loan_rates_log.csv
+earn_rates_last.txt
+loan_rates_last.txt
+token_classification.txt
+scratch/

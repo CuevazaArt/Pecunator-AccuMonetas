@@ -162,6 +162,15 @@ async def bot_coordinator_status() -> dict[str, Any]:
     return coord.status()
 
 
+# ── Budget Guard ────────────────────────────────────────────────────
+
+@router.get("/api/v1/budget-guard/status")
+async def budget_guard_status() -> dict[str, Any]:
+    """Return 24h spend tracking for the global budget guard."""
+    from runtime.core.budget_guard import get_budget_guard
+    return get_budget_guard().status()
+
+
 # ── API Log ─────────────────────────────────────────────────────────
 
 @router.get("/api-log/recent")
