@@ -135,10 +135,8 @@ class BaseStrategyRunner:
         try:
             from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
-            _cred_key = self._api_key or ""
             account = await _cache.get_or_fetch(
-                _cache.credential_key("account", _cred_key),
-                lambda: self._to_thread(client.get_account),
+                "account", lambda: self._to_thread(client.get_account),
             )
             tickers = await _cache.get_or_fetch(
                 "tickers", lambda: self._to_thread(client.get_all_tickers),

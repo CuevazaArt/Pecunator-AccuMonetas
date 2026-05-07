@@ -3,10 +3,6 @@
 If 50 bots all trade BTCUSDT, they don't need 50 separate API calls
 for the same ticker. One call, cached in RAM, serves all 50.
 
-SECURITY: Private/signed data (account, open_orders) MUST be scoped
-to the API key that fetched it. Use credential_key() for cache keys
-of private endpoints. Public data (tickers, klines) is shared globally.
-
 Architecture:
     - Thread-safe with asyncio.Lock per cache key (single-flight pattern).
     - TTL-based expiration per data type.
@@ -30,6 +26,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Optional
 
 _LOG = logging.getLogger("pecunator.core.market_cache")
+
+# Keys whose data is PRIVATE (signed, per-credential). Must be scoped.
+_PRIVATE_TIERS = frozenset({"account", "open_orders"})
 
 
 @dataclass
@@ -63,17 +62,9 @@ class MarketCache:
 
     Usage:
         cache = get_market_cache()
-
-        # PUBLIC data (shared across all bots):
         tickers = await cache.get_or_fetch(
             "tickers",
             fetcher=lambda: client.get_all_tickers(),
-        )
-
-        # PRIVATE data (scoped to API key):
-        account = await cache.get_or_fetch(
-            cache.credential_key("account", api_key),
-            fetcher=lambda: client.get_account(),
         )
     """
 
@@ -90,24 +81,28 @@ class MarketCache:
         }
 
     @staticmethod
-    def credential_key(tier: str, api_key: str, suffix: str = "") -> str:
-        """Build a cache key scoped to a specific API credential.
+    def scoped_key(key: str, api_key: str | None = None) -> str:
+        """Return a credential-scoped cache key for private data.
 
-        Use this for private/signed endpoints (account, open_orders)
-        to prevent cross-contamination between sub-accounts.
+        Public tiers (tickers, klines, exchange_info, symbol_ticker, server_time)
+        are shared across all bots — no scoping needed.
 
-        Args:
-            tier: e.g. "account", "open_orders"
-            api_key: the Binance API key (only first 8 chars hashed)
-            suffix: optional extra qualifier (e.g. symbol)
+        Private tiers (account, open_orders) MUST be scoped by API key to
+        prevent cross-contamination between sub-accounts. The key includes
+        a short hash of the API key for disambiguation.
 
-        Returns:
-            Cache key like "account@a1b2c3d4" or "open_orders@a1b2c3d4:BTCUSDT"
+        Usage:
+            cache.get_or_fetch(
+                MarketCache.scoped_key("account", self._api_key),
+                fetcher=...,
+            )
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:8]
-        if suffix:
-            return f"{tier}@{key_hash}:{suffix}"
-        return f"{tier}@{key_hash}"
+        tier = key.split(":")[0]
+        if tier in _PRIVATE_TIERS and api_key:
+            # Use first 8 chars of SHA256 hash for collision resistance
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:8]
+            return f"{key}@{key_hash}"
+        return key
 
     async def get_or_fetch(
         self,

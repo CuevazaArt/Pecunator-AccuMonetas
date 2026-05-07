@@ -316,11 +316,10 @@ class MashaRunner:
 
         # DCA anchor: current SELL LIMIT.
         try:
-            from runtime.core.market_cache import get_market_cache
+            from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
-            _cred_key = self._api_key or ""
             open_orders = await _cache.get_or_fetch(
-                _cache.credential_key("open_orders", _cred_key, symbol),
+                MarketCache.scoped_key(f"open_orders:{symbol}", self._api_key),
                 lambda: self._signed_call(client, lambda: client.get_open_orders(symbol=symbol)),
             )
         except Exception:
@@ -360,9 +359,8 @@ class MashaRunner:
         try:
             from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
-            _cred_key = self._api_key or ""
             account = await _cache.get_or_fetch(
-                _cache.credential_key("account", _cred_key),
+                "account",
                 lambda: self._signed_call(client, client.get_account),
             )
         except Exception:
@@ -522,11 +520,11 @@ class MashaRunner:
                 self._emit("WARNING", f"masha:regime_blocked {regime_reason}", {"report": report})
                 self._maybe_emit_metrics()
                 return report
-        except Exception as e:
-            # Fail-CLOSED: block trade if filter fails
+        except Exception:
+            # FAIL-CLOSED: if regime filter fails, block the trade
             report["decision"] = "BLOCKED_REGIME"
-            report["regime_reason"] = f"regime_error_BLOCKED:{e}"
-            self._emit("WARNING", f"masha:regime_filter_error_BLOCKED {e}", {"report": report})
+            report["regime_reason"] = "FAIL_CLOSED:regime_filter_error"
+            self._emit("WARNING", "masha:regime_blocked FAIL_CLOSED", {"report": report})
             self._maybe_emit_metrics()
             return report
 

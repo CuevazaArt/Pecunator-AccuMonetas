@@ -87,6 +87,61 @@ class BudgetGuard:
             self.spent_last_24h(), self.max_daily_spend_usdt,
         )
 
+    def try_reserve(
+        self,
+        bot_id: str,
+        symbol: str,
+        amount_usdt: Decimal,
+    ) -> bool:
+        """Atomically check budget and record spend in ONE transaction.
+
+        Eliminates the TOCTOU race between can_spend() and record_spend()
+        where concurrent bots could both pass the check and then both spend,
+        exceeding the daily budget.
+
+        Returns True if the spend was reserved, False if budget exhausted.
+        """
+        now = time.time()
+        now_utc = datetime.now(timezone.utc).isoformat()
+        cutoff = now - 86400
+        conn = self._conn()
+        try:
+            # BEGIN IMMEDIATE forces a write-lock before reading
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT COALESCE(SUM(CAST(amount_usdt AS REAL)), 0) "
+                "FROM budget_ledger WHERE ts >= ? AND side = 'BUY'",
+                (cutoff,),
+            ).fetchone()
+            spent = Decimal(str(row[0])) if row else Decimal("0")
+            if (spent + amount_usdt) > self.max_daily_spend_usdt:
+                conn.execute("ROLLBACK")
+                _LOG.warning(
+                    "budget_guard: REJECTED %s %s %s USDT (spent=%s, max=%s)",
+                    bot_id, symbol, amount_usdt, spent, self.max_daily_spend_usdt,
+                )
+                return False
+            conn.execute(
+                "INSERT INTO budget_ledger (ts, ts_utc, bot_id, symbol, side, amount_usdt) "
+                "VALUES (?, ?, ?, ?, 'BUY', ?)",
+                (now, now_utc, bot_id, symbol, str(amount_usdt)),
+            )
+            conn.execute("COMMIT")
+            _LOG.info(
+                "budget_guard: RESERVED %s %s %s USDT (total 24h: %s / %s)",
+                bot_id, symbol, amount_usdt,
+                spent + amount_usdt, self.max_daily_spend_usdt,
+            )
+            return True
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
+        finally:
+            conn.close()
+
     def spent_last_24h(self) -> Decimal:
         """Sum of all BUY-side spends in the last 24 hours."""
         cutoff = time.time() - 86400

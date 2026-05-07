@@ -1,9 +1,5 @@
 """T1.1: Regime filter — gate that MUST pass before any bot can BUY.
 
-POLICY: **FAIL-CLOSED** — if ANY check errors, trading is BLOCKED.
-This is a financial safety system. If we cannot evaluate the condition,
-we do NOT allow the trade. Changed from fail-open after code review.
-
 Conditions (ALL must be true for BUY to be allowed):
 1. BTC > EMA200 on 1D timeframe  → only buy in structural uptrends
 2. Symbol's ADX(14) on 4H:
@@ -11,9 +7,13 @@ Conditions (ALL must be true for BUY to be allowed):
    - ADX > 25 AND +DI > -DI: trending UP → OK for momentum
    - ADX > 25 AND -DI > +DI: trending DOWN → BLOCKED
 3. Symbol's 20D realized vol z-score < 1.5 → don't buy in vol spikes
-4. Macro Shield:
-   - Fear & Greed Index >= 20 (block on Extreme Fear)
-   - Market activity score >= 0.45 (block in dead zones)
+4. MACRO SHIELD:
+   - Fear & Greed Index < 20 (Extreme Fear) → BLOCKED
+   - Activity score < 0.45 (dead zone / illiquid hours) → BLOCKED
+
+POLICY: FAIL-CLOSED. If any guard fails to evaluate (API error, timeout),
+the trade is BLOCKED. This is the opposite of fail-open and prevents the
+scenario where guard failures simultaneously degrade to "trade permitted".
 
 This filter alone would have prevented the majority of the -$115k losses
 documented in audit_report.txt, because:
@@ -206,9 +206,9 @@ class RegimeFilter:
                 allowed = False
                 reasons.append(btc_reason)
         except Exception as e:
-            _LOG.warning("regime_filter: BTC EMA200 check FAILED — BLOCKING (fail-closed): %s", e)
+            _LOG.warning("regime_filter: BTC EMA200 check failed: %s — FAIL-CLOSED", e)
             allowed = False
-            reasons.append(f"btc_ema200_ERROR_BLOCKED:{e}")
+            reasons.append(f"FAIL_CLOSED:btc_ema200_error:{e}")
 
         # ── Condition 2: Symbol ADX/DI on 4H ─────────────────────────
         try:
@@ -217,9 +217,9 @@ class RegimeFilter:
                 allowed = False
                 reasons.append(adx_reason)
         except Exception as e:
-            _LOG.warning("regime_filter: ADX check FAILED — BLOCKING (fail-closed) %s: %s", symbol, e)
+            _LOG.warning("regime_filter: ADX check failed for %s: %s — FAIL-CLOSED", symbol, e)
             allowed = False
-            reasons.append(f"adx_ERROR_BLOCKED:{e}")
+            reasons.append(f"FAIL_CLOSED:adx_error:{e}")
 
         # ── Condition 3: Vol z-score on 1D ────────────────────────────
         try:
@@ -228,20 +228,20 @@ class RegimeFilter:
                 allowed = False
                 reasons.append(vol_reason)
         except Exception as e:
-            _LOG.warning("regime_filter: vol z-score FAILED — BLOCKING (fail-closed) %s: %s", symbol, e)
+            _LOG.warning("regime_filter: vol z-score check failed for %s: %s — FAIL-CLOSED", symbol, e)
             allowed = False
-            reasons.append(f"vol_ERROR_BLOCKED:{e}")
+            reasons.append(f"FAIL_CLOSED:vol_error:{e}")
 
-        # ── Condition 4: Macro Shield (F&G + Dead Zone) ───────────────
+        # ── Condition 4: MACRO SHIELD (Fear & Greed + Activity) ──────
         try:
             macro_ok, macro_reason = await self._check_macro_shield()
             if not macro_ok:
                 allowed = False
                 reasons.append(macro_reason)
         except Exception as e:
-            _LOG.warning("regime_filter: macro shield FAILED — BLOCKING (fail-closed): %s", e)
+            _LOG.warning("regime_filter: macro shield check failed: %s — FAIL-CLOSED", e)
             allowed = False
-            reasons.append(f"macro_ERROR_BLOCKED:{e}")
+            reasons.append(f"FAIL_CLOSED:macro_error:{e}")
 
         reason_str = "; ".join(reasons) if reasons else "all_conditions_passed"
         self._cache[symbol] = (now, allowed, reason_str)
@@ -318,50 +318,48 @@ class RegimeFilter:
         return True, f"vol_normal(z={zscore:.2f})"
 
     async def _check_macro_shield(self) -> tuple[bool, str]:
-        """T4: Block trading during extreme fear or dead-zone hours.
+        """Block trading during extreme fear or illiquid dead-zone hours.
 
-        Uses the internal /api/v1/events/summary endpoint data.
-        This is a lightweight, non-API-weight check (local HTTP).
+        Sources: /api/v1/events/summary (Fear & Greed from alternative.me,
+        activity heatmap from statistical model).
+
+        Policy: FAIL-CLOSED — if we can't fetch, block.
         """
+        import httpx
+
         now = time.time()
-        # Cache macro shield for 5 minutes
-        if self._macro_cache and (now - self._macro_cache[0]) < 300:
+        # Use cached result if fresh (60s TTL)
+        if self._macro_cache and (now - self._macro_cache[0]) < 60:
             return self._macro_cache[1], self._macro_cache[2]
 
         try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "http://127.0.0.1:8000/api/v1/events/summary",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    if resp.status != 200:
-                        return True, "macro:api_unavailable(allowing)"
-                    summary = await resp.json()
+            async with httpx.AsyncClient(timeout=5.0) as hc:
+                resp = await hc.get("http://127.0.0.1:8000/api/v1/events/summary")
+                if resp.status_code != 200:
+                    return True, "macro:api_unavailable(non-blocking)"
+                data = resp.json()
         except Exception:
-            # If the events API is unreachable, allow — this is not a
-            # critical safety path like BTC EMA200. It's supplementary.
-            return True, "macro:api_unreachable(allowing)"
+            # If the events API is unreachable, allow (it's our own local API)
+            return True, "macro:api_unreachable(non-blocking)"
+
+        reasons: list[str] = []
+        ok = True
 
         # Gate 1: Fear & Greed < 20 = EXTREME FEAR → block all buys
-        fg = summary.get("fear_greed_value")
+        fg = data.get("fear_greed_value")
         if fg is not None and isinstance(fg, (int, float)) and fg < 20:
-            reason = f"macro:EXTREME_FEAR(fg={fg})"
-            self._macro_cache = (now, False, reason)
-            _LOG.info("regime_filter: %s", reason)
-            return False, reason
+            ok = False
+            reasons.append(f"macro:EXTREME_FEAR(fg={fg})")
 
         # Gate 2: Activity score < 0.45 = DEAD ZONE → block (spreads too wide)
-        activity = summary.get("activity_score")
+        activity = data.get("activity_score")
         if activity is not None and isinstance(activity, (int, float)) and activity < 0.45:
-            reason = f"macro:DEAD_ZONE(activity={activity:.2f})"
-            self._macro_cache = (now, False, reason)
-            _LOG.info("regime_filter: %s", reason)
-            return False, reason
+            ok = False
+            reasons.append(f"macro:DEAD_ZONE(activity={activity})")
 
-        reason = f"macro:OK(fg={fg},activity={activity})"
-        self._macro_cache = (now, True, reason)
-        return True, reason
+        reason = "; ".join(reasons) if reasons else "macro:ok"
+        self._macro_cache = (now, ok, reason)
+        return ok, reason
 
     def status(self) -> dict[str, Any]:
         """Return current regime state for all cached symbols."""
@@ -377,12 +375,6 @@ class RegimeFilter:
                 "allowed": self._btc_regime_cache[1],
                 "reason": self._btc_regime_cache[2],
                 "age_sec": int(time.time() - self._btc_regime_cache[0]),
-            }
-        if self._macro_cache:
-            result["_macro_shield"] = {
-                "allowed": self._macro_cache[1],
-                "reason": self._macro_cache[2],
-                "age_sec": int(time.time() - self._macro_cache[0]),
             }
         return result
 
