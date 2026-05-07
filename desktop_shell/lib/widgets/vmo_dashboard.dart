@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../api_client.dart';
 
 class VmoDashboard extends StatefulWidget {
@@ -277,7 +278,7 @@ class _VmoDashboardState extends State<VmoDashboard> with SingleTickerProviderSt
                       const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                        child: SpinKitDualRing(color: Colors.blueAccent, size: 14.0, lineWidth: 2.0),
                       )
                     else
                       IconButton(

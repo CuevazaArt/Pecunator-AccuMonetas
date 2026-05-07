@@ -85,6 +85,6 @@ async def vision_stream(websocket: WebSocket):
                 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         # Log exception silently to prevent server crash on client disconnect
         pass

@@ -8,10 +8,9 @@ config construction (~150 lines vs the original ~858).
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from decimal import Decimal
 import sqlite3
-from pathlib import Path
 from typing import Any, Callable, Optional
 import uuid
 
@@ -82,7 +81,6 @@ class BotService(BaseHubService):
         super()._init_db()
         if self._db_path is None:
             return
-        import threading as _t
         with self._db_lock:
             conn = open_db(self._db_path)
             try:

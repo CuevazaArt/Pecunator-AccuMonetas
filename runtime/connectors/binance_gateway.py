@@ -31,7 +31,6 @@ from runtime.core.settings import (
     equity_poll_stride,
 )
 from runtime.core.state_store import StateStore
-from runtime.core.exception_zoo import get_exception_zoo
 from runtime.core.api_governor import get_api_governor, P_TRADING
 
 WS_BASE = "wss://stream.binance.com:9443/stream"
@@ -420,7 +419,7 @@ class BinanceGateway:
         try:
             data = await self._to_thread(lambda: self._client.stream_get_listen_key())
             self._capture_rest_weight_from_client(action="user_data:stream_get_listen_key")
-            self._emit_log(f"User Data Stream: listenKey obtained")
+            self._emit_log("User Data Stream: listenKey obtained")
             return data
         except BinanceAPIException as e:
             self._emit_log(f"User Data Stream: listenKey error: {self._api_error_summary(e)}")
@@ -538,7 +537,7 @@ class BinanceGateway:
                     pass
                 continue
             url = f"wss://stream.binance.com:9443/ws/{self._listen_key}"
-            self._emit_log(f"User Data Stream: connecting...")
+            self._emit_log("User Data Stream: connecting...")
             try:
                 async with websockets.connect(
                     url, ping_interval=20, ping_timeout=20, close_timeout=5,

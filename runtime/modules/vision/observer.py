@@ -18,11 +18,9 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Optional
 
 from runtime.modules.vision.chart_capture import (
-    CaptureResult,
     capture_chart,
     prune_old_captures,
 )

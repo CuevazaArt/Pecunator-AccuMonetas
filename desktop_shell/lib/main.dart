@@ -1,6 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'pages/dorothy_hub_page.dart';
+import 'services/vision_scraper.dart';
+import 'services/history_scraper.dart';
 
 void main() {
   // ── Error boundary: prevent widget crashes from killing the entire app ──
@@ -63,6 +65,21 @@ class PecunatorDesktopApp extends StatefulWidget {
 
 class _PecunatorDesktopAppState extends State<PecunatorDesktopApp> {
   bool _darkMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-start cold sync in patient mode (1 per hour)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final symbols = HistoryScraperService.instance.symbols;
+      if (symbols.isNotEmpty) {
+        VisionScraperService.instance.startColdSync(symbols, ['1d', '4h', '1h', '1m']);
+      } else {
+        // Fallback default symbols
+        VisionScraperService.instance.startColdSync(['BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT'], ['1d', '4h', '1h', '1m']);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

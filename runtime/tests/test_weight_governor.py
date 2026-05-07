@@ -1,9 +1,7 @@
 """Tests for runtime.core.weight_governor."""
 from __future__ import annotations
 
-import time
 import pytest
-from unittest.mock import patch
 
 from runtime.core.weight_governor import WeightGovernor, get_weight_governor
 

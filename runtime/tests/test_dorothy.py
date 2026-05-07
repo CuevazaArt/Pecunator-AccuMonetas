@@ -2,9 +2,8 @@
 
 import asyncio
 import datetime as dt
-from datetime import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 

@@ -14,7 +14,6 @@ from fastapi import HTTPException
 from runtime.api import deps
 from runtime.api.schemas import GatewaySnapshotOut
 from runtime.app import AppContext
-from runtime.core.security_util import sanitize_log_message
 from runtime.core.settings import (
     account_poll_interval_sec,
     api_weight_limit_1m_display,

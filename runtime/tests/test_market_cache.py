@@ -1,9 +1,7 @@
 """Tests for runtime.core.market_cache — using actual API: get_or_fetch, invalidate, invalidate_prefix, status."""
 from __future__ import annotations
 
-import asyncio
 import pytest
-import pytest_asyncio
 
 from runtime.core.market_cache import MarketCache, get_market_cache
 

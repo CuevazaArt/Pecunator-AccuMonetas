@@ -24,7 +24,6 @@ from typing import Any, Callable, Optional
 from binance.client import Client
 
 from runtime.bot._decimal_utils import dec as _dec
-from runtime.bot._panic import check_panic_lock
 
 
 class BaseStrategyRunner:

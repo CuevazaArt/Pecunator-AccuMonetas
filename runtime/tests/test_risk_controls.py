@@ -1,11 +1,9 @@
 """Tests for v0.11 risk control modules."""
 from __future__ import annotations
 
-import tempfile
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
 
 
 # ── OrderLedger tests ───────────────────────────────────────────────
@@ -159,7 +157,7 @@ class TestTrailingTP:
 
 class TestBacktestEngine:
     def test_basic_run(self):
-        from runtime.backtest.engine import BacktestEngine, Candle, BacktestStrategy, Portfolio
+        from runtime.backtest.engine import BacktestEngine, Candle, BacktestStrategy
 
         class BuyEvery10(BacktestStrategy):
             def on_candle(self, idx, candle, portfolio):

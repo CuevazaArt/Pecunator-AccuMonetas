@@ -6,7 +6,7 @@ import asyncio
 import datetime as dt
 import time
 from dataclasses import asdict, dataclass
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 from typing import Any, Callable, Optional
 
 from binance.client import Client

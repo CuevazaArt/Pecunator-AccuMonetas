@@ -18,7 +18,6 @@ And resume operations by deleting it.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 # Resolved once at import time; bots check at the start of each cycle.

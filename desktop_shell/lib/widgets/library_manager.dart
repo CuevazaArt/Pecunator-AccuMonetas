@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../utils/histogram_storage.dart';
 import '../services/history_scraper.dart';
 import '../services/vision_scraper.dart';
@@ -165,7 +166,7 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: SpinKitPouringHourGlassRefined(color: Colors.orangeAccent, size: 40.0))
                 : _stats.isEmpty
                     ? const Center(child: Text('La biblioteca SQLite está vacía.', style: TextStyle(color: Colors.grey)))
                     : ListView.builder(
@@ -263,7 +264,10 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
             ),
             const SizedBox(height: 12),
             if (isRunning) ...[
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8.0,
+                runSpacing: 8.0,
                 children: [
                   ElevatedButton.icon(
                     icon: const Icon(Icons.stop, size: 18),
@@ -276,22 +280,23 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
                   const SizedBox(width: 12),
                   const SizedBox(
                     width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: SpinKitRing(color: Colors.amberAccent, size: 16.0, lineWidth: 2.0),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      status,
-                      style: const TextStyle(
-                          color: Colors.amberAccent, fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Text(
+                    status,
+                    style: const TextStyle(
+                        color: Colors.amberAccent, fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ] else ...[
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8.0,
+                runSpacing: 8.0,
                 children: [
                   ElevatedButton.icon(
                     icon: const Icon(Icons.hourglass_bottom, size: 18),
@@ -316,14 +321,11 @@ class _LibraryManagerPageState extends State<LibraryManagerPage> {
                           quickMode: true);
                     },
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      status,
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Text(
+                    status,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

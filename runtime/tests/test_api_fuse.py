@@ -1,7 +1,6 @@
 """Tests for runtime.core.api_fuse — using actual API: check_weight, on_error_code, manual_reset."""
 from __future__ import annotations
 
-import time
 import pytest
 
 from runtime.core.api_fuse import ApiFuse, get_api_fuse

@@ -21,7 +21,7 @@ import asyncio
 import logging
 import time
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Coroutine, Optional
 
 _LOG = logging.getLogger("pecunator.core.market_cache")

@@ -19,7 +19,6 @@ import logging
 import sqlite3
 import time
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 

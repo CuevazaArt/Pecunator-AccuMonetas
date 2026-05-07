@@ -16,49 +16,18 @@ from typing import Any
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from runtime.api import deps
 from runtime.api.schemas import (
-    ActiveCredentialOut,
-    BotConfigBody,
-    BotConfigOut,
-    BotStatusOut,
     GatewaySnapshotOut,
-    GatewayStartBody,
-    HubBotCreateBody,
-    HubBotLogsOut,
-    HubBotOut,
-    HubBotsOut,
-    HubBotUpdateBody,
-    MashaBotCreateBody,
-    MashaBotLogsOut,
-    MashaBotOut,
-    MashaBotsOut,
-    MashaBotUpdateBody,
-    TerminalExecBody,
-    TerminalExecOut,
-    ThusneldaBotCreateBody,
-    ThusneldaBotLogsOut,
-    ThusneldaBotOut,
-    ThusneldaBotsOut,
-    ThusneldaBotUpdateBody,
-    TimeSyncBody,
-    TimeSyncOut,
-    VaultCredentialLabelBody,
-    VaultCredentialUpsertBody,
-    VaultStatusOut,
 )
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_base
 from runtime.core.ops_audit_log import get_ops_audit_log
 from runtime.core.security_util import sanitize_log_message
-from runtime.api._helpers import resolve_pair as _resolve_pair_impl
-from runtime.api._helpers import build_snapshot as _snapshot_impl
-from runtime.api._helpers import audit_weight_from_client as _audit_weight_impl
-from runtime.api._helpers import mask_pk, pk_last4, rest_weight_estimate_report
 from runtime.api.routers import system as _system_router
 from runtime.api.routers import masha as _masha_router
 from runtime.api.routers import thusnelda as _thusnelda_router

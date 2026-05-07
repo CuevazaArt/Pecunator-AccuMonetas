@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends
 
 from runtime.api import deps
 from runtime.api._helpers import rest_weight_estimate_report
-from runtime.api.schemas import GatewaySnapshotOut
 from runtime.app import AppContext
 from runtime.core.settings import api_weight_limit_1m_display, account_poll_interval_sec
 
