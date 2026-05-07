@@ -52,7 +52,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check runtime/modules/bots/dorothy.py --select=E,W,F
+          ruff check runtime/ --select=E,W,F
 
       - name: Type check with mypy
         run: |
