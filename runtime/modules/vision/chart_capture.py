@@ -226,8 +226,9 @@ async def capture_chart(
     # ── Try chart-img first ─────────────────────────────────────
     if source in ("chart-img", "auto") and api_key:
         try:
+            indicators = None
             # Resolve indicators if missing
-            if "indicators" not in locals() or indicators is None:
+            if indicators is None:
                 from runtime.modules.vision.config import get_vmo_config
                 cfg = get_vmo_config()
                 indicators = getattr(cfg, "indicators", None)

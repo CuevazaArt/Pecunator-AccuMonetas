@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 _LOG = logging.getLogger("pecunator.core.weight_governor")
@@ -41,6 +41,7 @@ class BotSlot:
     last_cycle_ts: float = 0.0
     total_weight_used: int = 0
     cycle_count: int = 0
+    registered_ts: float = 0.0
 
 
 class WeightGovernor:
@@ -91,6 +92,7 @@ class WeightGovernor:
                 weight_per_cycle=weight_per_cycle,
                 loop_interval_sec=loop_interval_sec,
                 priority=priority,
+                registered_ts=time.monotonic(),
             )
             self._recompute_offsets()
         _LOG.info(
@@ -135,10 +137,15 @@ class WeightGovernor:
             if throttle == float('inf') and slot.priority < self.TRADING:
                 return float('inf')
 
-            # Apply throttle multiplier to the bot's interval
             now = time.monotonic()
-            effective_interval = slot.loop_interval_sec * max(1.0, throttle)
-            next_allowed = slot.last_cycle_ts + effective_interval
+            
+            if slot.cycle_count == 0:
+                # First run: respect phase offset relative to registration time
+                next_allowed = slot.registered_ts + slot.phase_offset_sec
+            else:
+                # Apply throttle multiplier to the bot's interval
+                effective_interval = slot.loop_interval_sec * max(1.0, throttle)
+                next_allowed = slot.last_cycle_ts + effective_interval
 
             if now >= next_allowed:
                 return 0.0

@@ -45,7 +45,7 @@
         "FETUSDT"
       ],
       "max_equity_usdt": "200",
-      "enabled": false,
+      "enabled": true,
       "api_key_label": "THUSNELDA_API"
     },
     {
@@ -72,7 +72,7 @@
       "description": "Personal/Reserve account — emergency capital, manual operations",
       "symbols": [],
       "max_equity_usdt": "0",
-      "enabled": false,
+      "enabled": true,
       "api_key_label": "RESERVE_API"
     }
   ]
