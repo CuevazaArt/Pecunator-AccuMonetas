@@ -303,18 +303,20 @@ class MashaBotLogsOut(BaseModel):
 
 class ThusneldaBotCreateBody(BaseModel):
     bot_id: Optional[str] = None
-    tag: str = Field(default="Thusnelda", min_length=1, max_length=64)
-    symbols_csv: str = Field(default="BTCUSDT,ETHUSDT", min_length=5, max_length=512)
-    loop_interval_sec: int = Field(default=600, ge=1, le=86400)
+    tag: str = Field(default="Thusnelda L0", min_length=1, max_length=64)
+    symbols_csv: str = Field(default="PEPEUSDT,SUIUSDT,NEARUSDT,INJUSDT,FETUSDT", min_length=5, max_length=512)
+    loop_interval_sec: int = Field(default=300, ge=1, le=86400)
     between_symbol_sec: int = Field(default=3, ge=0, le=600)
-    quote_order_qty_modulo: str = Field(default="8")
-    factor_multiplication: str = Field(default="0.99")
-    meta_equity_usdt: str = Field(default="1000000")
+    quote_order_qty_modulo: str = Field(default="6")
+    factor_multiplication: str = Field(default="0.94")
+    profit_target_pct: str = Field(default="0.06")
+    meta_equity_usdt: str = Field(default="0")
     reference_ts_iso: str = Field(default="")
     qty_decimals: int = Field(default=8, ge=0, le=18)
+    price_decimals: int = Field(default=8, ge=0, le=18)
     note: str = Field(default="", max_length=20)
-    max_drawdown_pct: str = Field(default="0.25")
-    stop_loss_pct: str = Field(default="0.20")
+    max_drawdown_pct: str = Field(default="0.30")
+    stop_loss_pct: str = Field(default="0.25")
     metrics_interval_cycles: int = Field(default=3, ge=1, le=10000)
     simulated: bool = True
     trading_enabled: bool = False
@@ -327,9 +329,11 @@ class ThusneldaBotUpdateBody(BaseModel):
     between_symbol_sec: Optional[int] = Field(default=None, ge=0, le=600)
     quote_order_qty_modulo: Optional[str] = None
     factor_multiplication: Optional[str] = None
+    profit_target_pct: Optional[str] = None
     meta_equity_usdt: Optional[str] = None
     reference_ts_iso: Optional[str] = None
     qty_decimals: Optional[int] = Field(default=None, ge=0, le=18)
+    price_decimals: Optional[int] = Field(default=None, ge=0, le=18)
     note: Optional[str] = Field(default=None, max_length=20)
     max_drawdown_pct: Optional[str] = None
     stop_loss_pct: Optional[str] = None
@@ -350,6 +354,7 @@ class ThusneldaBotOut(BaseModel):
     between_symbol_sec: int
     quote_order_qty_modulo: str
     factor_multiplication: str
+    profit_target_pct: str = "0.06"
     meta_equity_usdt: str
     reference_ts_iso: str
     qty_decimals: int

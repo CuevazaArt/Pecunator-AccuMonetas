@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../utils.dart';
@@ -14,18 +14,19 @@ class ThusneldaHubPage extends StatefulWidget {
 }
 
 class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
-  final _tagCtrl = TextEditingController(text: 'Thusnelda');
-  final _symbolsCtrl = TextEditingController(text: 'BTCUSDT,ETHUSDT');
-  final _loopCtrl = TextEditingController(text: '600');
+  final _tagCtrl = TextEditingController(text: 'Thusnelda L0');
+  final _symbolsCtrl = TextEditingController(text: 'PEPEUSDT,SUIUSDT,NEARUSDT,INJUSDT,FETUSDT');
+  final _loopCtrl = TextEditingController(text: '300');
   final _betweenCtrl = TextEditingController(text: '3');
-  final _quoteQtyCtrl = TextEditingController(text: '8');
-  final _factorCtrl = TextEditingController(text: '0.99');
-  final _metaCtrl = TextEditingController(text: '1000000');
+  final _quoteQtyCtrl = TextEditingController(text: '6');
+  final _factorCtrl = TextEditingController(text: '0.94');
+  final _profitTargetCtrl = TextEditingController(text: '0.06');
+  final _metaCtrl = TextEditingController(text: '0');
   final _refTsCtrl = TextEditingController();
   final _qtyDecCtrl = TextEditingController(text: '8');
   final _noteCtrl = TextEditingController();
-  final _maxDdCtrl = TextEditingController(text: '0.25');
-  final _stopLossCtrl = TextEditingController(text: '0.20');
+  final _maxDdCtrl = TextEditingController(text: '0.30');
+  final _stopLossCtrl = TextEditingController(text: '0.25');
   final _metricsEveryCtrl = TextEditingController(text: '3');
 
   bool _loading = false;
@@ -58,6 +59,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
     _betweenCtrl.dispose();
     _quoteQtyCtrl.dispose();
     _factorCtrl.dispose();
+    _profitTargetCtrl.dispose();
     _metaCtrl.dispose();
     _refTsCtrl.dispose();
     _qtyDecCtrl.dispose();
@@ -94,18 +96,19 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
     final botId = (bot['bot_id'] ?? '').toString();
     final d = _draftByBot.putIfAbsent(botId, () {
       return <String, String>{
-        'tag': (bot['tag'] ?? 'Thusnelda').toString(),
-        'symbols': (bot['symbols_csv'] ?? 'BTCUSDT,ETHUSDT').toString(),
-        'loop': (bot['loop_interval_sec'] ?? 600).toString(),
+        'tag': (bot['tag'] ?? 'Thusnelda L0').toString(),
+        'symbols': (bot['symbols_csv'] ?? 'PEPEUSDT,SUIUSDT,NEARUSDT,INJUSDT,FETUSDT').toString(),
+        'loop': (bot['loop_interval_sec'] ?? 300).toString(),
         'between': (bot['between_symbol_sec'] ?? 3).toString(),
         'quoteQty': (bot['quote_order_qty_modulo'] ?? '8').toString(),
-        'factor': (bot['factor_multiplication'] ?? '0.99').toString(),
-        'meta': (bot['meta_equity_usdt'] ?? '1000000').toString(),
+        'factor': (bot['factor_multiplication'] ?? '0.94').toString(),
+        'profitTarget': (bot['profit_target_pct'] ?? '0.06').toString(),
+        'meta': (bot['meta_equity_usdt'] ?? '0').toString(),
         'refTs': (bot['reference_ts_iso'] ?? '').toString(),
         'qDec': (bot['qty_decimals'] ?? 8).toString(),
         'note': (bot['note'] ?? '').toString(),
-        'maxDd': (bot['max_drawdown_pct'] ?? '0.25').toString(),
-        'stopLoss': (bot['stop_loss_pct'] ?? '0.20').toString(),
+        'maxDd': (bot['max_drawdown_pct'] ?? '0.30').toString(),
+        'stopLoss': (bot['stop_loss_pct'] ?? '0.25').toString(),
         'metricsEvery': (bot['metrics_interval_cycles'] ?? 3).toString(),
         'simulated': ((bot['simulated'] ?? true) == true).toString(),
         'trading_enabled': ((bot['trading_enabled'] ?? false) == true).toString(),
@@ -128,7 +131,9 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
       case 'quoteQty':
         return 'MÃ³dulo de quote por compra parcial en cada sÃ­mbolo.';
       case 'factor':
-        return 'Factor multiplicador para ajustar gatillo de entrada por promedio.';
+        return 'Factor multiplicador para ajustar gatillo de entrada (0.94 = compra 6% debajo).';
+      case 'profitTarget':
+        return 'Objetivo de beneficio por ciclo (0.06 = 6%). Minimo 6% para cesta volatil.';
       case 'meta':
         return 'Meta de equity global en base asset para condiciÃ³n de salida estratÃ©gica.';
       case 'refTs':
@@ -260,6 +265,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
         'between_symbol_sec': int.tryParse(_betweenCtrl.text.trim()) ?? 3,
         'quote_order_qty_modulo': _quoteQtyCtrl.text.trim(),
         'factor_multiplication': _factorCtrl.text.trim(),
+        'profit_target_pct': _profitTargetCtrl.text.trim(),
         'meta_equity_usdt': _metaCtrl.text.trim(),
         'reference_ts_iso': _refTsCtrl.text.trim(),
         'qty_decimals': int.tryParse(_qtyDecCtrl.text.trim()) ?? 8,
@@ -284,16 +290,17 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
       await _api.thusneldaUpdateBot(botId, {
         'tag': d['tag'],
         'symbols_csv': (d['symbols'] ?? '').toUpperCase(),
-        'loop_interval_sec': int.tryParse(d['loop'] ?? '600') ?? 600,
+        'loop_interval_sec': int.tryParse(d['loop'] ?? '300') ?? 600,
         'between_symbol_sec': int.tryParse(d['between'] ?? '3') ?? 3,
-        'quote_order_qty_modulo': d['quoteQty'] ?? '8',
-        'factor_multiplication': d['factor'] ?? '0.99',
-        'meta_equity_usdt': d['meta'] ?? '1000000',
+        'quote_order_qty_modulo': d['quoteQty'] ?? '6',
+        'factor_multiplication': d['factor'] ?? '0.94',
+        'profit_target_pct': d['profitTarget'] ?? '0.06',
+        'meta_equity_usdt': d['meta'] ?? '0',
         'reference_ts_iso': d['refTs'] ?? '',
         'qty_decimals': int.tryParse(d['qDec'] ?? '8') ?? 8,
         'note': d['note'] ?? '',
-        'max_drawdown_pct': d['maxDd'] ?? '0.25',
-        'stop_loss_pct': d['stopLoss'] ?? '0.20',
+        'max_drawdown_pct': d['maxDd'] ?? '0.30',
+        'stop_loss_pct': d['stopLoss'] ?? '0.25',
         'metrics_interval_cycles': int.tryParse(d['metricsEvery'] ?? '3') ?? 3,
       });
       if (wasRunning) {
@@ -360,7 +367,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Thusnelda1.0 Hub'),
+        title: const Text('Thusnelda L0 · Volatile Basket Hub'),
         actions: [
           IconButton(
             onPressed: _loading ? null : _openGuide,
@@ -392,7 +399,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Nueva instancia Thusnelda',
+                      'Nueva instancia Thusnelda L0 (Cesta Volatil)',
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
@@ -406,6 +413,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                         _newField(_betweenCtrl, 'Entre sym s', 90, 'between'),
                         _newField(_quoteQtyCtrl, 'Quote qty', 105, 'quoteQty'),
                         _newField(_factorCtrl, 'Factor', 90, 'factor'),
+                        _newField(_profitTargetCtrl, 'Profit %', 90, 'profitTarget'),
                         _newField(_metaCtrl, 'Meta USDT', 110, 'meta'),
                         _newField(_refTsCtrl, 'Referencia ISO (opc)', 180, 'refTs'),
                         _newField(_qtyDecCtrl, 'QDec', 75, 'qDec'),
@@ -430,7 +438,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                 child: Padding(
                   padding: EdgeInsets.all(12),
                   child: Text(
-                    'No hay instancias Thusnelda1.0. Crea la primera.',
+                    'No hay instancias Thusnelda L0. Crea una con la cesta volátil.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
@@ -454,7 +462,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                     if (mounted) setState(() {});
                   },
                   title: Text(
-                    '${(bot['tag'] ?? 'Thusnelda').toString()} Â· $botId Â· ${running ? "ACTIVO" : "INACTIVO"}',
+                    '${(bot['tag'] ?? 'Thusnelda L0').toString()} Â· $botId Â· ${running ? "ACTIVO" : "INACTIVO"}',
                     style: const TextStyle(fontSize: 13),
                   ),
                   subtitle: Text(
@@ -474,6 +482,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                             _f(botId, d, 'between', 'Entre sym s', 95), const SizedBox(width: 6),
                             _f(botId, d, 'quoteQty', 'Quote qty', 95), const SizedBox(width: 6),
                             _f(botId, d, 'factor', 'Factor', 85), const SizedBox(width: 6),
+                            _f(botId, d, 'profitTarget', 'Profit %', 85), const SizedBox(width: 6),
                             _f(botId, d, 'meta', 'Meta USDT', 110), const SizedBox(width: 6),
                             _f(botId, d, 'refTs', 'Referencia ISO', 180), const SizedBox(width: 6),
                             _f(botId, d, 'qDec', 'QDec', 65), const SizedBox(width: 6),
