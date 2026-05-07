@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 class BotGuidePage extends StatelessWidget {
   const BotGuidePage({super.key, required this.botName});
 
@@ -54,7 +54,7 @@ class BotGuidePage extends StatelessWidget {
       'symbol: par spot a operar; debe existir y tener liquidez.',
       'loop sec: define frecuencia de reacción y consumo API.',
       'qty/profit/drop: núcleo de rentabilidad y ritmo de entradas.',
-      'qDec/pDec: imprescindibles para cumplir filtros Binance.',
+      'qDec/pDec: auto-resueltos desde Binance exchangeInfo al crear/guardar.',
       'maxDd/stopLoss: contención de pérdidas acumuladas y por posición.',
       'metricsEvery: costo/beneficio entre detalle histórico y carga.',
     ],
@@ -64,7 +64,7 @@ class BotGuidePage extends StatelessWidget {
       'TF/periods/mm/margins: sensibilidad de señal técnica.',
       'profit: objetivo de salida de la orden consolidada.',
       'maxDd/stopLoss: protección macro y micro del ciclo DCA.',
-      'qDec/pDec: adaptar al instrumento para evitar rechazos.',
+      'qDec/pDec: auto-resueltos desde Binance exchangeInfo al crear/guardar.',
     ],
     'Thusnelda': [
       'symbols CSV: universo de activos a escanear por ciclo.',
@@ -72,19 +72,19 @@ class BotGuidePage extends StatelessWidget {
       'quote qty + factor: tamaño y agresividad de cada entrada.',
       'meta equity: umbral objetivo de rendimiento agregado.',
       'maxDd/stopLoss: freno global y defensa por símbolo.',
-      'refTs/qDec: soporte de referencia histórica y cumplimiento de filtros.',
+      'refTs/qDec: soporte de referencia histórica; qDec auto-resuelto desde exchangeInfo.',
     ],
   };
 
   static const Map<String, List<String>> _troubleshooting = {
     'Dorothy': [
       'No compra: validar drop/profit, saldo quote y estado de órdenes ancla.',
-      'Errores de filtro: ajustar qDec/pDec al tick size y lot size.',
+      'Errores de filtro: qDec/pDec ahora son auto-resueltos; verificar que gateway esté activo.',
       'Mucho peso REST: subir loop o revisar monitor de peso por acciones.',
     ],
     'Masha': [
       'No dispara señal: revisar timeframe, periods y márgenes W/H.',
-      'No coloca salida: validar pDec/profit y restricciones del símbolo.',
+      'No coloca salida: verificar profit, gateway activo (decimales auto-resueltos).',
       'DCA agresivo: ajustar buy qty y maxDd para menor exposición.',
     ],
     'Thusnelda': [

@@ -258,9 +258,19 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
 
   Future<void> _create() async {
     await _withBusy(() async {
+      final syms = _symbolsCtrl.text.trim().toUpperCase();
+      // Auto-resolve decimals from first symbol in basket
+      int qDec = 8;
+      try {
+        final firstSym = syms.split(',').first.trim();
+        if (firstSym.isNotEmpty) {
+          final prec = await _api.symbolPrecision(firstSym);
+          qDec = (prec['qty_decimals'] as int?) ?? 8;
+        }
+      } catch (_) { /* gateway offline — use safe defaults */ }
       await _api.thusneldaCreateBot({
         'tag': _tagCtrl.text.trim().isEmpty ? 'Thusnelda' : _tagCtrl.text.trim(),
-        'symbols_csv': _symbolsCtrl.text.trim().toUpperCase(),
+        'symbols_csv': syms,
         'loop_interval_sec': int.tryParse(_loopCtrl.text.trim()) ?? 600,
         'between_symbol_sec': int.tryParse(_betweenCtrl.text.trim()) ?? 3,
         'quote_order_qty_modulo': _quoteQtyCtrl.text.trim(),
@@ -268,7 +278,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
         'profit_target_pct': _profitTargetCtrl.text.trim(),
         'meta_equity_usdt': _metaCtrl.text.trim(),
         'reference_ts_iso': _refTsCtrl.text.trim(),
-        'qty_decimals': int.tryParse(_qtyDecCtrl.text.trim()) ?? 8,
+        'qty_decimals': qDec,
         'note': _noteCtrl.text.trim(),
         'max_drawdown_pct': _maxDdCtrl.text.trim(),
         'stop_loss_pct': _stopLossCtrl.text.trim(),
@@ -287,9 +297,19 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
       final wasRunning = _bots.any(
         (b) => (b['bot_id'] ?? '').toString() == botId && b['running'] == true,
       );
+      final syms = (d['symbols'] ?? '').toUpperCase();
+      // Auto-resolve decimals from first symbol in basket
+      int qDec = int.tryParse(d['qDec'] ?? '8') ?? 8;
+      try {
+        final firstSym = syms.split(',').first.trim();
+        if (firstSym.isNotEmpty) {
+          final prec = await _api.symbolPrecision(firstSym);
+          qDec = (prec['qty_decimals'] as int?) ?? qDec;
+        }
+      } catch (_) { /* gateway offline — keep current */ }
       await _api.thusneldaUpdateBot(botId, {
         'tag': d['tag'],
-        'symbols_csv': (d['symbols'] ?? '').toUpperCase(),
+        'symbols_csv': syms,
         'loop_interval_sec': int.tryParse(d['loop'] ?? '300') ?? 600,
         'between_symbol_sec': int.tryParse(d['between'] ?? '3') ?? 3,
         'quote_order_qty_modulo': d['quoteQty'] ?? '6',
@@ -297,7 +317,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
         'profit_target_pct': d['profitTarget'] ?? '0.06',
         'meta_equity_usdt': d['meta'] ?? '0',
         'reference_ts_iso': d['refTs'] ?? '',
-        'qty_decimals': int.tryParse(d['qDec'] ?? '8') ?? 8,
+        'qty_decimals': qDec,
         'note': d['note'] ?? '',
         'max_drawdown_pct': d['maxDd'] ?? '0.30',
         'stop_loss_pct': d['stopLoss'] ?? '0.25',
@@ -416,7 +436,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                         _newField(_profitTargetCtrl, 'Profit %', 90, 'profitTarget'),
                         _newField(_metaCtrl, 'Meta USDT', 110, 'meta'),
                         _newField(_refTsCtrl, 'Referencia ISO (opc)', 180, 'refTs'),
-                        _newField(_qtyDecCtrl, 'QDec', 75, 'qDec'),
+                        // qDec removed — auto-resolved from Binance exchangeInfo
                         _newField(_noteCtrl, 'Nota', 150, 'note'),
                         _newField(_maxDdCtrl, 'maxDd', 90, 'maxDd'),
                         _newField(_stopLossCtrl, 'stopLoss', 90, 'stopLoss'),
@@ -485,7 +505,7 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
                             _f(botId, d, 'profitTarget', 'Profit %', 85), const SizedBox(width: 6),
                             _f(botId, d, 'meta', 'Meta USDT', 110), const SizedBox(width: 6),
                             _f(botId, d, 'refTs', 'Referencia ISO', 180), const SizedBox(width: 6),
-                            _f(botId, d, 'qDec', 'QDec', 65), const SizedBox(width: 6),
+                            // qDec removed — auto-resolved from Binance exchangeInfo on save
                             _f(botId, d, 'note', 'Nota', 130), const SizedBox(width: 6),
                             _f(botId, d, 'maxDd', 'maxDd', 80), const SizedBox(width: 6),
                             _f(botId, d, 'stopLoss', 'stopLoss', 90), const SizedBox(width: 6),

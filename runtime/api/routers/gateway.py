@@ -156,3 +156,61 @@ async def account_wallets(
 ) -> dict[str, Any]:
     from runtime.api.app import _fetch_wallet_buckets
     return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
+
+
+# ── Symbol precision auto-resolver ──────────────────────────────────
+
+@router.get("/gateway/symbol_precision")
+async def symbol_precision(
+    symbol: str,
+    ctx: AppContext = Depends(deps.get_ctx),
+) -> dict[str, Any]:
+    """Auto-resolve qty_decimals and price_decimals from Binance exchangeInfo.
+
+    Reads LOT_SIZE.stepSize → qty_decimals and PRICE_FILTER.tickSize → price_decimals.
+    This makes manual qDec/pDec fields unnecessary.
+    """
+    import asyncio
+    from decimal import Decimal
+
+    if not ctx.gateway or not ctx.gateway._client:
+        raise HTTPException(status_code=400, detail="Gateway not running — start it first")
+
+    client = ctx.gateway._client
+    sym = symbol.upper().strip()
+
+    try:
+        info = await asyncio.to_thread(client.get_symbol_info, sym)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Cannot fetch symbol info for {sym}: {e}") from None
+
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Symbol {sym} not found on Binance")
+
+    qty_dec = 8  # safe default
+    price_dec = 8
+
+    for f in info.get("filters", []):
+        ft = str(f.get("filterType", "")).upper()
+        if ft == "LOT_SIZE":
+            step = f.get("stepSize", "1")
+            try:
+                d = Decimal(str(step)).normalize()
+                # Count decimals: 0.001 → 3, 0.01 → 2, 1 → 0
+                qty_dec = max(0, -d.as_tuple().exponent)
+            except Exception:
+                pass
+        elif ft == "PRICE_FILTER":
+            tick = f.get("tickSize", "0.01")
+            try:
+                d = Decimal(str(tick)).normalize()
+                price_dec = max(0, -d.as_tuple().exponent)
+            except Exception:
+                pass
+
+    return {
+        "symbol": sym,
+        "qty_decimals": qty_dec,
+        "price_decimals": price_dec,
+        "source": "exchangeInfo",
+    }

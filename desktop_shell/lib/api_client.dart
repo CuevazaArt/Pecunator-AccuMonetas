@@ -102,6 +102,10 @@ class EngineApi {
   Future<Map<String, dynamic>> accountWallets({String baseAsset = 'USDT'}) =>
       _client.get('/api/v1/account/wallets?base_asset=$baseAsset');
 
+  /// Auto-resolve qty_decimals and price_decimals from Binance exchangeInfo.
+  Future<Map<String, dynamic>> symbolPrecision(String symbol) =>
+      _client.get('/api/v1/gateway/symbol_precision?symbol=${Uri.encodeComponent(symbol)}');
+
   Future<Map<String, dynamic>> terminalExecute({required String command}) =>
       _client.post('/api/v1/terminal/execute', body: {'command': command});
 

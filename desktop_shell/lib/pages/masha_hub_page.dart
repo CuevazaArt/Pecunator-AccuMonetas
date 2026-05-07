@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../utils.dart';
@@ -291,9 +291,18 @@ class _MashaHubPageState extends State<MashaHubPage> {
 
   Future<void> _create() async {
     await _withBusy(() async {
+      final sym = _symbolCtrl.text.trim().toUpperCase();
+      // Auto-resolve decimals from Binance exchangeInfo (hardcoded once)
+      int qDec = 8;
+      int pDec = 8;
+      try {
+        final prec = await _api.symbolPrecision(sym);
+        qDec = (prec['qty_decimals'] as int?) ?? 8;
+        pDec = (prec['price_decimals'] as int?) ?? 8;
+      } catch (_) { /* gateway offline — use safe defaults */ }
       await _api.mashaCreateBot({
         'tag': _tagCtrl.text.trim().isEmpty ? 'Masha' : _tagCtrl.text.trim(),
-        'symbol': _symbolCtrl.text.trim().toUpperCase(),
+        'symbol': sym,
         'base_asset': _baseCtrl.text.trim().toUpperCase(),
         'quote_asset': _quoteCtrl.text.trim().toUpperCase(),
         'loop_interval_sec': int.tryParse(_loopCtrl.text.trim()) ?? 300,
@@ -308,8 +317,8 @@ class _MashaHubPageState extends State<MashaHubPage> {
         'periods_h': int.tryParse(_periodsHCtrl.text.trim()) ?? 2,
         'mm_periods_h': int.tryParse(_mmHCtrl.text.trim()) ?? 2,
         'margin_low_h': _marginHCtrl.text.trim(),
-        'qty_decimals': int.tryParse(_qtyDecCtrl.text.trim()) ?? 8,
-        'price_decimals': int.tryParse(_priceDecCtrl.text.trim()) ?? 8,
+        'qty_decimals': qDec,
+        'price_decimals': pDec,
         'note': _noteCtrl.text.trim(),
         'max_drawdown_pct': _maxDdCtrl.text.trim(),
         'stop_loss_pct': _stopLossCtrl.text.trim(),
@@ -328,9 +337,18 @@ class _MashaHubPageState extends State<MashaHubPage> {
       final wasRunning = _bots.any(
         (b) => (b['bot_id'] ?? '').toString() == botId && b['running'] == true,
       );
+      final sym = (d['symbol'] ?? '').toUpperCase();
+      // Auto-resolve decimals from Binance exchangeInfo
+      int qDec = int.tryParse(d['qDec'] ?? '8') ?? 8;
+      int pDec = int.tryParse(d['pDec'] ?? '8') ?? 8;
+      try {
+        final prec = await _api.symbolPrecision(sym);
+        qDec = (prec['qty_decimals'] as int?) ?? qDec;
+        pDec = (prec['price_decimals'] as int?) ?? pDec;
+      } catch (_) { /* gateway offline — keep current values */ }
       await _api.mashaUpdateBot(botId, {
         'tag': d['tag'],
-        'symbol': (d['symbol'] ?? '').toUpperCase(),
+        'symbol': sym,
         'base_asset': (d['base'] ?? '').toUpperCase(),
         'quote_asset': (d['quote'] ?? '').toUpperCase(),
         'loop_interval_sec': int.tryParse(d['loop'] ?? '300') ?? 300,
@@ -345,8 +363,8 @@ class _MashaHubPageState extends State<MashaHubPage> {
         'periods_h': int.tryParse(d['pH'] ?? '2') ?? 2,
         'mm_periods_h': int.tryParse(d['mmH'] ?? '2') ?? 2,
         'margin_low_h': d['mH'] ?? '0.003',
-        'qty_decimals': int.tryParse(d['qDec'] ?? '8') ?? 8,
-        'price_decimals': int.tryParse(d['pDec'] ?? '8') ?? 8,
+        'qty_decimals': qDec,
+        'price_decimals': pDec,
         'note': d['note'] ?? '',
         'max_drawdown_pct': d['maxDd'] ?? '0.25',
         'stop_loss_pct': d['stopLoss'] ?? '0.15',
@@ -472,8 +490,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
                         _newField(_periodsHCtrl, 'P H', 70, 'pH'),
                         _newField(_mmHCtrl, 'MM H', 70, 'mmH'),
                         _newField(_marginHCtrl, 'M H', 90, 'mH'),
-                        _newField(_qtyDecCtrl, 'QDec', 70, 'qDec'),
-                        _newField(_priceDecCtrl, 'PDec', 70, 'pDec'),
+                        // qDec/pDec removed — auto-resolved from Binance exchangeInfo
                         _newField(_noteCtrl, 'Nota', 140, 'note'),
                         _newField(_maxDdCtrl, 'maxDd', 90, 'maxDd'),
                         _newField(_stopLossCtrl, 'stopLoss', 90, 'stopLoss'),
@@ -549,8 +566,7 @@ class _MashaHubPageState extends State<MashaHubPage> {
                             _f(botId, d, 'pH', 'P H', 60), const SizedBox(width: 6),
                             _f(botId, d, 'mmH', 'MM H', 70), const SizedBox(width: 6),
                             _f(botId, d, 'mH', 'M H', 80), const SizedBox(width: 6),
-                            _f(botId, d, 'qDec', 'QDec', 65), const SizedBox(width: 6),
-                            _f(botId, d, 'pDec', 'PDec', 65), const SizedBox(width: 6),
+                            // qDec/pDec removed — auto-resolved from Binance exchangeInfo on save
                             _f(botId, d, 'note', 'Nota', 130), const SizedBox(width: 6),
                             _f(botId, d, 'maxDd', 'maxDd', 80), const SizedBox(width: 6),
                             _f(botId, d, 'stopLoss', 'stopLoss', 90), const SizedBox(width: 6),

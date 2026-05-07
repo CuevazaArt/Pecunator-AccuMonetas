@@ -447,16 +447,25 @@ class _BotControlPageState extends State<BotControlPage> {
       (b) => (b['bot_id'] ?? '').toString() == botId && b['running'] == true,
     );
     await _withBusy(() async {
+      final sym = (draft['symbol'] ?? 'XRPUSDT').trim().toUpperCase();
+      // Auto-resolve decimals from Binance exchangeInfo (one-time hardcode)
+      int qDec = int.tryParse((draft['qDec'] ?? '8').trim()) ?? 8;
+      int pDec = int.tryParse((draft['pDec'] ?? '4').trim()) ?? 4;
+      try {
+        final prec = await _api.symbolPrecision(sym);
+        qDec = (prec['qty_decimals'] as int?) ?? qDec;
+        pDec = (prec['price_decimals'] as int?) ?? pDec;
+      } catch (_) { /* gateway offline — keep manual values */ }
       await _api.hubUpdateBot(botId, {
         'tag': (draft['tag'] ?? 'Dorothy').trim(),
-        'symbol': (draft['symbol'] ?? 'XRPUSDT').trim(),
+        'symbol': sym,
         'loop_interval_sec':
             int.tryParse((draft['loop'] ?? '450').trim()) ?? 450,
         'quote_order_qty': (draft['qty'] ?? '8').trim(),
         'profit_factor': (draft['profit'] ?? '0.05').trim(),
         'margin_drop_factor': (draft['drop'] ?? '0.004').trim(),
-        'qty_decimals': int.tryParse((draft['qDec'] ?? '8').trim()) ?? 8,
-        'price_decimals': int.tryParse((draft['pDec'] ?? '4').trim()) ?? 4,
+        'qty_decimals': qDec,
+        'price_decimals': pDec,
         'note': (draft['note'] ?? '').trim(),
         'max_drawdown_pct': (draft['maxDd'] ?? '0.20').trim(),
         'stop_loss_pct': (draft['stopLoss'] ?? '0.10').trim(),
@@ -475,15 +484,24 @@ class _BotControlPageState extends State<BotControlPage> {
 
   Future<void> _createBot() async {
     await _withBusy(() async {
+      final sym = _symbolCtrl.text.trim().toUpperCase();
+      // Auto-resolve decimals from Binance exchangeInfo (hardcoded once)
+      int qDec = 8;
+      int pDec = 4;
+      try {
+        final prec = await _api.symbolPrecision(sym);
+        qDec = (prec['qty_decimals'] as int?) ?? 8;
+        pDec = (prec['price_decimals'] as int?) ?? 4;
+      } catch (_) { /* gateway offline — use safe defaults */ }
       await _api.hubCreateBot({
         'tag': _tagCtrl.text.trim().isEmpty ? 'Dorothy' : _tagCtrl.text.trim(),
-        'symbol': _symbolCtrl.text.trim(),
+        'symbol': sym,
         'loop_interval_sec': int.tryParse(_loopCtrl.text.trim()) ?? 450,
         'quote_order_qty': _quoteCtrl.text.trim(),
         'profit_factor': _profitCtrl.text.trim(),
         'margin_drop_factor': _dropCtrl.text.trim(),
-        'qty_decimals': int.tryParse(_qtyDecCtrl.text.trim()) ?? 8,
-        'price_decimals': int.tryParse(_priceDecCtrl.text.trim()) ?? 4,
+        'qty_decimals': qDec,
+        'price_decimals': pDec,
         'note': _noteCtrl.text.trim(),
         'max_drawdown_pct': _maxDdCtrl.text.trim(),
         'stop_loss_pct': _stopLossCtrl.text.trim(),
@@ -1920,20 +1938,7 @@ class _BotControlPageState extends State<BotControlPage> {
                         width: 90,
                         tooltip: _settingTooltip('drop'),
                       ),
-                      const SizedBox(width: 6),
-                      _field(
-                        _qtyDecCtrl,
-                        'qDec',
-                        width: 70,
-                        tooltip: _settingTooltip('qDec'),
-                      ),
-                      const SizedBox(width: 6),
-                      _field(
-                        _priceDecCtrl,
-                        'pDec',
-                        width: 70,
-                        tooltip: _settingTooltip('pDec'),
-                      ),
+                      // qDec/pDec removed — auto-resolved from Binance exchangeInfo
                       const SizedBox(width: 6),
                       _field(
                         _noteCtrl,
@@ -2219,24 +2224,7 @@ class _BotControlPageState extends State<BotControlPage> {
                               width: 85,
                               tooltip: _settingTooltip('drop'),
                             ),
-                            const SizedBox(width: 6),
-                            _draftField(
-                              botId,
-                              draft,
-                              'qDec',
-                              label: 'qDec',
-                              width: 70,
-                              tooltip: _settingTooltip('qDec'),
-                            ),
-                            const SizedBox(width: 6),
-                            _draftField(
-                              botId,
-                              draft,
-                              'pDec',
-                              label: 'pDec',
-                              width: 70,
-                              tooltip: _settingTooltip('pDec'),
-                            ),
+                            // qDec/pDec removed — auto-resolved from Binance exchangeInfo on save
                             const SizedBox(width: 6),
                             _draftField(
                               botId,
