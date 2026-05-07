@@ -21,8 +21,8 @@ from typing import Any, Callable, Optional
 
 from binance.client import Client
 
+from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
-from runtime.bot._panic import check_panic_lock
 from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 from runtime.core.security_util import sanitize_log_message
@@ -139,168 +139,28 @@ class ThusneldaConfig:
         return d
 
 
-class ThusneldaRunner:
+class ThusneldaRunner(BaseStrategyRunner):
+
+    BOT_TYPE = "thusnelda"
+
     def __init__(
         self,
         log: Callable[[str], None],
         event_log: Optional[Callable[[str, str, Optional[dict[str, Any]]], None]] = None,
     ) -> None:
+        super().__init__(log, event_log)
         self.config = ThusneldaConfig()
         self.config.normalize()
-        self._log = log
-        self._event_log = event_log
-        self._task: Optional[asyncio.Task[Any]] = None
-        self._stop = asyncio.Event()
-        self._last_report: dict[str, Any] = {}
-        self._last_error: Optional[str] = None
-        self._last_cycle_ts: Optional[str] = None
-        self._api_key: Optional[str] = None
-        self._api_secret: Optional[str] = None
-        self._client: Optional[Client] = None
-        self._error_streak = 0
-        self._peak_equity_usdt: Optional[Decimal] = None
-        self._last_equity_usdt: Optional[Decimal] = None
-        self._max_drawdown_seen: Decimal = Decimal("0")
-        self._equity_returns: list[Decimal] = []
-        self._cycle_count = 0
-
-    def _emit(self, level: str, message: str, payload: Optional[dict[str, Any]] = None) -> None:
-        if self._event_log is not None:
-            try:
-                self._event_log(level, message, payload)
-                return
-            except Exception:
-                pass
-        self._log(message)
-
-    @property
-    def running(self) -> bool:
-        return self._task is not None and not self._task.done()
-
-    @property
-    def last_report(self) -> dict[str, Any]:
-        return dict(self._last_report)
-
-    @property
-    def last_error(self) -> Optional[str]:
-        return self._last_error
-
-    @property
-    def last_cycle_ts(self) -> Optional[str]:
-        return self._last_cycle_ts
 
     def apply_config(self, cfg: ThusneldaConfig) -> None:
         cfg.normalize()
         self.config = cfg
 
-    def set_credentials(self, api_key: str, api_secret: str) -> None:
-        self._api_key = api_key.strip()
-        self._api_secret = api_secret.strip()
+    def _bot_key(self) -> str:
+        return f"thusnelda:{self.config.symbols_csv}"
 
-    def _ensure_client(self) -> Client:
-        if not self._api_key or not self._api_secret:
-            raise RuntimeError("No credentials resolved for bot")
-        if self._client is None:
-            self._client = Client(
-                self._api_key,
-                self._api_secret,
-                requests_params={"timeout": 30},
-            )
-        return self._client
-
-    async def _to_thread(self, fn: Callable[[], Any]) -> Any:
-        return await asyncio.to_thread(fn)
-
-    def restore_risk_state(
-        self,
-        *,
-        peak_equity_usdt: Optional[str] = None,
-        max_drawdown_seen: Optional[str] = None,
-        cycle_count: Optional[int] = None,
-    ) -> None:
-        if peak_equity_usdt is not None:
-            v = _dec(peak_equity_usdt, "0")
-            self._peak_equity_usdt = v if v > 0 else None
-        if max_drawdown_seen is not None:
-            self._max_drawdown_seen = max(Decimal("0"), _dec(max_drawdown_seen, "0"))
-        if cycle_count is not None:
-            self._cycle_count = max(0, int(cycle_count))
-
-    def _register_equity(self, equity: Decimal) -> tuple[Decimal, bool]:
-        if self._peak_equity_usdt is None or equity > self._peak_equity_usdt:
-            self._peak_equity_usdt = equity
-        peak = self._peak_equity_usdt or equity
-        dd = Decimal("0")
-        if peak > 0:
-            dd = (peak - equity) / peak
-        if dd > self._max_drawdown_seen:
-            self._max_drawdown_seen = dd
-        blocked = dd > self.config.max_drawdown_pct
-        return dd, blocked
-
-    def _record_return(self, equity: Decimal) -> None:
-        prev = self._last_equity_usdt
-        self._last_equity_usdt = equity
-        if prev is None or prev <= 0:
-            return
-        r = (equity - prev) / prev
-        self._equity_returns.append(r)
-        if len(self._equity_returns) > 500:
-            self._equity_returns = self._equity_returns[-500:]
-
-    def _compute_metrics(self) -> dict[str, Any]:
-        """T1.4: Honest performance metrics — no fake Sharpe."""
-        rs = self._equity_returns
-        n = len(rs)
-        if n == 0:
-            return {
-                "cumulative_pnl": "0",
-                "win_rate": "0",
-                "profit_factor": "0",
-                "max_drawdown": str(self._max_drawdown_seen),
-                "samples": 0,
-            }
-        wins = sum(1 for r in rs if r > 0)
-        gross_win = sum(r for r in rs if r > 0)
-        gross_loss = abs(sum(r for r in rs if r < 0))
-        cumulative = sum(rs, Decimal("0"))
-        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")
-        return {
-            "cumulative_pnl": str(cumulative),
-            "win_rate": str(Decimal(wins) / Decimal(n)),
-            "profit_factor": str(pf),
-            "max_drawdown": str(self._max_drawdown_seen),
-            "samples": n,
-        }
-
-    def _maybe_emit_metrics(self) -> None:
-        self._cycle_count += 1
-        if self._cycle_count % self.config.metrics_interval_cycles == 0:
-            self._emit("SYSTEM", "thusnelda:metrics", self._compute_metrics())
-
-    async def _sync_time_for_signed(self, client: Client) -> None:
-        data = await self._to_thread(lambda: client.get_server_time())
-        server_ms = int((data or {}).get("serverTime", 0) or 0)
-        local_ms = int(time.time() * 1000)
-        offset_ms = server_ms - local_ms
-        try:
-            client.timestamp_offset = offset_ms
-        except Exception:
-            pass
-        self._emit(
-            "INFO",
-            f"thusnelda:time_sync offset_ms={offset_ms}",
-            {"server_time": data, "offset_ms": offset_ms},
-        )
-
-    async def _signed_call(self, client: Client, fn: Callable[[], Any]) -> Any:
-        try:
-            return await self._to_thread(fn)
-        except Exception as e:
-            if "-1021" not in str(e):
-                raise
-            await self._sync_time_for_signed(client)
-            return await self._to_thread(fn)
+    def _loop_log_summary(self, report: dict[str, Any]) -> str:
+        return f"thusnelda:cycle symbols={len(report.get('symbols', []))} simulated={report.get('simulated')}"
 
     async def _qty_for_market_sell(self, client: Client, symbol: str, qty: Decimal) -> Decimal | None:
         try:
@@ -391,10 +251,6 @@ class ThusneldaRunner:
                         decisions.append(item)
                     else:
                         avg_price = sum(prices, Decimal("0")) / Decimal(len(prices))
-                        ticker = await self._to_thread(
-                            lambda s=symbol: client.get_symbol_ticker(symbol=s)
-                        )
-                        # Note: per-symbol tickers cached at cache layer via key
                         try:
                             from runtime.core.market_cache import get_market_cache
                             _cache = get_market_cache()
@@ -405,7 +261,9 @@ class ThusneldaRunner:
                                 ),
                             )
                         except Exception:
-                            pass  # Already fetched above as fallback
+                            ticker = await self._to_thread(
+                                lambda s=symbol: client.get_symbol_ticker(symbol=s)
+                            )
                         current = _dec((ticker or {}).get("price", "0"), "0")
                         limit_price = avg_price * c.factor_multiplication
                         item["avg_buy_price"] = str(avg_price)
@@ -512,7 +370,9 @@ class ThusneldaRunner:
                     non_usdt_equity += total * px
         total_equity = non_usdt_equity + usdt_free
         drawdown, trading_blocked = self._register_equity(total_equity)
-        self._record_return(total_equity)
+        prev_eq = self._last_equity_usdt
+        self._last_equity_usdt = total_equity
+        self._record_return(prev_eq, total_equity)
         self._emit(
             "SYSTEM",
             "thusnelda:equity_snapshot",
@@ -525,21 +385,13 @@ class ThusneldaRunner:
             },
         )
         # ── Harvest Decision ──────────────────────────────────────
-        # Determine if we should liquidate (harvest profits).
-        # If meta_equity_usdt is set explicitly (> 0), use that as target.
-        # Otherwise, use profit_target_pct relative to peak equity as the
-        # reference for when the basket has delivered its cycle target.
         if c.meta_equity_usdt > 0:
             harvest_target = c.meta_equity_usdt
         else:
-            # Use the initial/reference equity to compute the cycle target.
-            # _peak_equity_usdt tracks the highest seen equity.
-            # Harvest when current equity is >= initial * (1 + target_pct).
-            # If no peak yet, we can't determine harvest — skip.
             if self._peak_equity_usdt and self._peak_equity_usdt > 0:
                 harvest_target = self._peak_equity_usdt * (Decimal("1") + c.profit_target_pct)
             else:
-                harvest_target = Decimal("0")  # No target yet — first cycle
+                harvest_target = Decimal("0")
 
         should_liquidate = harvest_target > 0 and total_equity >= harvest_target
         liquidations: list[dict[str, Any]] = []
@@ -645,122 +497,3 @@ class ThusneldaRunner:
                 )
         self._maybe_emit_metrics()
         return report
-
-    async def sync_time(self) -> dict[str, Any]:
-        client = self._ensure_client()
-        data = await self._to_thread(lambda: client.get_server_time())
-        server_ms = int(data.get("serverTime", 0) or 0)
-        local_ms = int(time.time() * 1000)
-        offset_ms = server_ms - local_ms
-        try:
-            client.timestamp_offset = offset_ms
-        except Exception:
-            pass
-        self._emit(
-            "INFO",
-            f"thusnelda:time_sync offset_ms={offset_ms}",
-            {"server_time": data, "offset_ms": offset_ms},
-        )
-        return {
-            "local_time_ms": local_ms,
-            "server_time_ms": server_ms,
-            "offset_ms": offset_ms,
-            "source": "thusnelda",
-        }
-
-    async def _loop(self) -> None:
-        while not self._stop.is_set():
-            # ── OOB Kill Switch: PANIC.lock ────────────────────────
-            if check_panic_lock():
-                self._emit("CRITICAL", "PANIC.lock detected — halting Thusnelda")
-                break
-            sleep_sec = float(self.config.loop_interval_sec)
-            # ── Governor permission gate ─────────────────────────
-            try:
-                from runtime.core.weight_governor import get_weight_governor
-                gov = get_weight_governor()
-                bot_key = f"thusnelda:{self.config.symbols_csv}"
-                wait = gov.request_permission(bot_key)
-                if wait == float('inf'):
-                    self._emit("WARNING", "governor:LOCKOUT — ciclo omitido (zona emergencia)")
-                    try:
-                        await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
-                    except asyncio.TimeoutError:
-                        pass
-                    continue
-                if wait > 0:
-                    self._emit("INFO", f"governor:throttle — esperando {wait:.1f}s")
-                    try:
-                        await asyncio.wait_for(self._stop.wait(), timeout=wait)
-                    except asyncio.TimeoutError:
-                        pass
-                    if self._stop.is_set():
-                        break
-            except Exception:
-                pass  # Governor unavailable — proceed normally
-            try:
-                rep = await self.run_once()
-
-                self._last_report = rep
-                self._last_error = None
-                self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
-                self._error_streak = 0
-                self._emit(
-                    "INFO",
-                    f"thusnelda:cycle symbols={len(rep.get('symbols', []))} simulated={rep.get('simulated')}",
-                    {"report": rep},
-                )
-                # Report cycle to coordinator for phase tracking
-                try:
-                    from runtime.core.bot_coordinator import get_bot_coordinator
-                    get_bot_coordinator().report_cycle(f"thusnelda:{self.config.symbols_csv}")
-                except Exception:
-                    pass
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                self._last_error = sanitize_log_message(str(e))
-                self._error_streak += 1
-                if self._client is not None:
-                    try:
-                        self._client.session.close()
-                    except Exception:
-                        pass
-                    self._client = None
-                sleep_sec = min(
-                    60.0,
-                    max(2.0, min(float(self.config.loop_interval_sec), float(2 ** min(self._error_streak, 6)))),
-                )
-                self._emit("ERROR", f"thusnelda:error {self._last_error}", {"error": self._last_error})
-            # Add coordinator jitter to prevent cycle collisions
-            try:
-                from runtime.core.bot_coordinator import get_bot_coordinator
-                jitter = get_bot_coordinator().compute_jitter(f"thusnelda:{self.config.symbols_csv}")
-                if jitter > 0:
-                    sleep_sec += jitter
-            except Exception:
-                pass
-            try:
-                await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
-            except asyncio.TimeoutError:
-                pass
-
-    async def start(self) -> None:
-        if self.running:
-            return
-        self._stop.clear()
-        self._task = asyncio.create_task(self._loop())
-
-    async def stop(self) -> None:
-        self._stop.set()
-        t = self._task
-        if t is not None:
-            t.cancel()
-            await asyncio.gather(t, return_exceptions=True)
-        self._task = None
-        if self._client is not None:
-            try:
-                self._client.session.close()
-            except Exception:
-                pass
-            self._client = None

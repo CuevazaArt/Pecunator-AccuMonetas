@@ -5,18 +5,22 @@ Deduplicates code shared by Dorothy, Masha, and Thusnelda:
 - Equity tracking (_register_equity, _record_return)
 - Metrics computation (_compute_metrics, _maybe_emit_metrics)
 - Risk state persistence (restore_risk_state)
-- Start/stop lifecycle
+- Start/stop lifecycle with governor, panic lock, coordinator jitter
 - Time sync
-- Panic lock check
+- Signed call retry on -1021
 
 Concrete runners inherit this and implement only:
 - run_once() -> dict: The strategy-specific decision logic
 - config: The bot-specific configuration dataclass
+- _bot_key() -> str: Identifier for governor/coordinator
+- _loop_log_summary(report) -> str: One-line summary for cycle log
 """
 
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import random
 import time
 from decimal import Decimal
 from typing import Any, Callable, Optional
@@ -24,6 +28,8 @@ from typing import Any, Callable, Optional
 from binance.client import Client
 
 from runtime.bot._decimal_utils import dec as _dec
+from runtime.bot._panic import check_panic_lock
+from runtime.core.security_util import sanitize_log_message
 
 
 class BaseStrategyRunner:
@@ -106,8 +112,43 @@ class BaseStrategyRunner:
             )
         return self._client
 
+    def _close_client(self) -> None:
+        """Close the Binance client session safely."""
+        if self._client is not None:
+            try:
+                self._client.session.close()
+            except Exception:
+                pass
+            self._client = None
+
     async def _to_thread(self, fn: Callable[[], Any]) -> Any:
         return await asyncio.to_thread(fn)
+
+    async def _sync_time_for_signed(self, client: Client) -> None:
+        """Sync local timestamp offset with Binance server time."""
+        data = await self._to_thread(lambda: client.get_server_time())
+        server_ms = int((data or {}).get("serverTime", 0) or 0)
+        local_ms = int(time.time() * 1000)
+        offset_ms = server_ms - local_ms
+        try:
+            client.timestamp_offset = offset_ms
+        except Exception:
+            pass
+        self._emit(
+            "INFO",
+            f"{self.BOT_TYPE}:time_sync offset_ms={offset_ms}",
+            {"server_time": data, "offset_ms": offset_ms},
+        )
+
+    async def _signed_call(self, client: Client, fn: Callable[[], Any]) -> Any:
+        """Execute a signed Binance call, retrying on -1021 timestamp error."""
+        try:
+            return await self._to_thread(fn)
+        except Exception as e:
+            if "-1021" not in str(e):
+                raise
+            await self._sync_time_for_signed(client)
+            return await self._to_thread(fn)
 
     # ── Risk state persistence ──────────────────────────────────────
 
@@ -133,10 +174,11 @@ class BaseStrategyRunner:
     ) -> tuple[Decimal, Decimal]:
         """Compute total equity and free capital in base_asset."""
         try:
-            from runtime.core.market_cache import get_market_cache
+            from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
             account = await _cache.get_or_fetch(
-                "account", lambda: self._to_thread(client.get_account),
+                MarketCache.scoped_key("account", self._api_key),
+                lambda: self._to_thread(client.get_account),
             )
             tickers = await _cache.get_or_fetch(
                 "tickers", lambda: self._to_thread(client.get_all_tickers),
@@ -188,10 +230,8 @@ class BaseStrategyRunner:
         blocked = dd > max_dd
         return dd, blocked
 
-    def _record_return(self, equity: Decimal, prev_equity: Optional[Decimal] = None) -> None:
+    def _record_return(self, prev_equity: Optional[Decimal], equity: Decimal) -> None:
         """Record equity return for metrics computation."""
-        if prev_equity is None:
-            prev_equity = self._last_equity_usdt
         if prev_equity is None or prev_equity <= 0:
             return
         r = (equity - prev_equity) / prev_equity
@@ -202,7 +242,13 @@ class BaseStrategyRunner:
     # ── Metrics ─────────────────────────────────────────────────────
 
     def _compute_metrics(self) -> dict[str, Any]:
-        """T1.4: Honest performance metrics — no fake Sharpe."""
+        """T1.4: Honest performance metrics — no fake Sharpe.
+
+        - cumulative_pnl: sum of per-cycle equity returns (Decimal fraction)
+        - win_rate: fraction of positive-return cycles
+        - profit_factor: gross_wins / gross_losses (>1 is good)
+        - max_drawdown: peak-to-trough drawdown ever observed
+        """
         rs = self._equity_returns
         n = len(rs)
         if n == 0:
@@ -256,7 +302,114 @@ class BaseStrategyRunner:
             "source": self.BOT_TYPE,
         }
 
+    # ── Subclass hooks ──────────────────────────────────────────────
+
+    def _bot_key(self) -> str:
+        """Return identifier for governor/coordinator (e.g. 'dorothy:XRPUSDT')."""
+        raise NotImplementedError
+
+    def _loop_log_summary(self, report: dict[str, Any]) -> str:
+        """Return a one-line summary for cycle log."""
+        return f"{self.BOT_TYPE}:cycle simulated={report.get('simulated')}"
+
+    async def run_once(self) -> dict[str, Any]:
+        """Execute one strategy cycle. Must be implemented by subclass."""
+        raise NotImplementedError
+
     # ── Lifecycle ───────────────────────────────────────────────────
+
+    async def _loop(self) -> None:
+        while not self._stop.is_set():
+            # ── OOB Kill Switch: PANIC.lock ────────────────────────
+            if check_panic_lock():
+                self._emit("CRITICAL", f"PANIC.lock detected — halting {self.BOT_TYPE}")
+                break
+            sleep_sec = float(getattr(self.config, 'loop_interval_sec', 450))
+            # ── Fuse check with desync jitter ─────────────────────
+            # If fuse is tripped, skip the cycle but add random jitter
+            # so all bots don't converge when the fuse resets.
+            try:
+                from runtime.core.api_fuse import get_api_fuse
+                fuse = get_api_fuse()
+                if fuse.is_tripped():
+                    remaining = fuse.remaining_cooldown_sec()
+                    # Add 5-30s random desync jitter per bot
+                    desync = random.uniform(5.0, 30.0)
+                    self._emit("WARNING", f"API FUSE ACTIVO: ciclo omitido ({remaining:.0f}s + {desync:.0f}s jitter)")
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=min(remaining + desync, sleep_sec))
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+            except Exception:
+                pass
+            # ── Governor permission gate ─────────────────────────
+            try:
+                from runtime.core.weight_governor import get_weight_governor
+                gov = get_weight_governor()
+                bot_key = self._bot_key()
+                wait = gov.request_permission(bot_key)
+                if wait == float('inf'):
+                    self._emit("WARNING", "governor:LOCKOUT — ciclo omitido (zona emergencia)")
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+                if wait > 0:
+                    self._emit("INFO", f"governor:throttle — esperando {wait:.1f}s")
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=wait)
+                    except asyncio.TimeoutError:
+                        pass
+                    if self._stop.is_set():
+                        break
+            except Exception:
+                pass  # Governor unavailable — proceed normally
+            try:
+                rep = await self.run_once()
+
+                self._last_report = rep
+                self._last_error = None
+                self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
+                self._error_streak = 0
+                self._emit("INFO", self._loop_log_summary(rep), {"report": rep})
+                # Report cycle to coordinator for phase tracking
+                try:
+                    from runtime.core.bot_coordinator import get_bot_coordinator
+                    get_bot_coordinator().report_cycle(self._bot_key())
+                except Exception:
+                    pass
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self._last_error = sanitize_log_message(str(e))
+                self._error_streak += 1
+                # Recreate client on failures so transient socket/session faults can self-heal.
+                self._close_client()
+                sleep_sec = min(
+                    60.0,
+                    max(2.0, min(float(getattr(self.config, 'loop_interval_sec', 450)),
+                                 float(2 ** min(self._error_streak, 6)))),
+                )
+                self._emit("ERROR", f"{self.BOT_TYPE}:error {self._last_error}", {"error": self._last_error})
+                self._emit(
+                    "WARNING",
+                    f"{self.BOT_TYPE}:retry_in {sleep_sec:.0f}s (streak={self._error_streak})",
+                    {"retry_sec": sleep_sec, "streak": self._error_streak},
+                )
+            # Add coordinator jitter to prevent cycle collisions
+            try:
+                from runtime.core.bot_coordinator import get_bot_coordinator
+                jitter = get_bot_coordinator().compute_jitter(self._bot_key())
+                if jitter > 0:
+                    sleep_sec += jitter
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=sleep_sec)
+            except asyncio.TimeoutError:
+                pass
 
     async def start(self) -> None:
         if self.running:
@@ -266,11 +419,9 @@ class BaseStrategyRunner:
 
     async def stop(self) -> None:
         self._stop.set()
-        task = self._task
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+        t = self._task
+        if t is not None:
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
         self._task = None
+        self._close_client()

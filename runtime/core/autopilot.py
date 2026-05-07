@@ -129,7 +129,11 @@ VOLATILITY_MULTIPLIERS: dict[str, dict[str, float]] = {
 
 
 class AutoTuner:
-    """Adjusts bot parameters based on market regime and volatility.
+    """⚠️ EXPERIMENTAL — Adjusts bot parameters based on market regime and volatility.
+
+    STATUS: Off by default. Do NOT enable with trading_enabled=True until
+    backtested over >= 3 years of data. The adaptive profit calculation
+    has not been validated against real market conditions.
 
     Criteria:
       1. Regime (from VMO) → base adjustments
@@ -632,7 +636,11 @@ class ProcessWatchdog:
 # ── Main AutoPilot Orchestrator ─────────────────────────────────────
 
 class AutoPilot:
-    """Master orchestrator — boots and runs all Pecunator systems.
+    """⚠️ EXPERIMENTAL — Master orchestrator for all Pecunator systems.
+
+    STATUS: Off by default. AutoStager and AutoTuner mutations are BLOCKED
+    when any bot has trading_enabled=True. Use only for simulated modes
+    until strategy is validated via backtest.
 
     Usage:
         pilot = AutoPilot()
