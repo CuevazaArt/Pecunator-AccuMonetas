@@ -165,8 +165,10 @@ class RegimeFilter:
             return "BLOCKED_REGIME"
     """
 
-    # Cache regime decisions for this many seconds (avoid hammering API)
-    CACHE_TTL_SEC = 300  # 5 minutes
+    # Cache regime decisions to avoid hammering API.
+    # 60s is responsive enough for flash crashes while still saving weight.
+    # Previously 300s — reduced after audit identified stale-cache risk.
+    CACHE_TTL_SEC = 60
 
     def __init__(self) -> None:
         self._cache: dict[str, tuple[float, bool, str]] = {}
@@ -336,11 +338,11 @@ class RegimeFilter:
             async with httpx.AsyncClient(timeout=5.0) as hc:
                 resp = await hc.get("http://127.0.0.1:8000/api/v1/events/summary")
                 if resp.status_code != 200:
-                    return True, "macro:api_unavailable(non-blocking)"
+                    return False, "macro:FAIL_CLOSED:api_unavailable"
                 data = resp.json()
-        except Exception:
-            # If the events API is unreachable, allow (it's our own local API)
-            return True, "macro:api_unreachable(non-blocking)"
+        except Exception as e:
+            # FAIL-CLOSED: if the events API is unreachable, block
+            return False, f"macro:FAIL_CLOSED:api_unreachable({e})"
 
         reasons: list[str] = []
         ok = True

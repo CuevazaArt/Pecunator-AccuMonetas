@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import datetime as dt
-import time
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any, Callable, Optional
@@ -43,14 +40,18 @@ class MashaConfig:
     note: str = ""
     # [MEJORA] Proteccion de riesgo configurable.
     max_drawdown_pct: Decimal = Decimal("0.25")
-    stop_loss_pct: Decimal = Decimal("0.15")
+    stop_loss_pct: Decimal = Decimal("0.20")  # DCA-wide: avoid premature exit
     metrics_interval_cycles: int = 5
     # T0.1: Hard ceiling on DCA rungs.
-    max_rungs_per_symbol: int = 5
-    simulated: bool = True
-    trading_enabled: bool = False
+    max_rungs_per_symbol: int = 3  # Conservative: limits BTC exposure
+    # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
+    # Use trading_enabled as the sole on/off switch.
+    simulated: bool = False
+    trading_enabled: bool = True
 
     def normalize(self) -> None:
+        # simulated mode permanently disabled — always LIVE.
+        self.simulated = False
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.base_asset = (self.base_asset or "").strip().upper() or "BTC"
         self.quote_asset = (self.quote_asset or "").strip().upper() or "USDT"
@@ -390,14 +391,63 @@ class MashaRunner(BaseStrategyRunner):
 
         planned_buy_qty = _q(c.buy_qty_base, c.qty_decimals)
         report["planned_buy_qty_base"] = str(planned_buy_qty)
+        planned_quote_cost = planned_buy_qty * close_h
+
+        # T0.2: Block if daily spend limit exceeded
+        try:
+            from runtime.core.budget_guard import get_budget_guard
+            bg = get_budget_guard()
+            if c.simulated:
+                if not bg.can_spend(planned_quote_cost):
+                    report["decision"] = "BLOCKED_BUDGET"
+                    self._emit("WARNING", "masha:budget_blocked", {"report": report})
+                    self._maybe_emit_metrics()
+                    return report
+            else:
+                if not bg.try_reserve(self._bot_key(), symbol, planned_quote_cost):
+                    report["decision"] = "BLOCKED_BUDGET"
+                    self._emit("WARNING", "masha:budget_blocked", {"report": report})
+                    self._maybe_emit_metrics()
+                    return report
+        except Exception as e:
+            report["decision"] = "BLOCKED_BUDGET"
+            self._emit("WARNING", f"masha:budget_error FAIL_CLOSED {e}", {"report": report})
+            self._maybe_emit_metrics()
+            return report
 
         if c.simulated:
             report["execution"] = "SIMULATED"
             report["message"] = "Dry run only; no orders sent."
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().record(
+                    bot_id=getattr(self, '_bot_id', 'masha'),
+                    bot_type="masha", symbol=symbol, side="BUY",
+                    order_type="MARKET", qty=str(planned_buy_qty),
+                    quote_order_qty=str(planned_quote_cost), reason="BUY_AND_REPRICE_SELL",
+                    drawdown_pct=str(drawdown), active_rungs=active_rungs,
+                    max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
+                )
+            except Exception as e:
+                self._emit("ERROR", f"order_ledger:record_failed:{e}")
             self._emit("INFO", "masha:decision", {"report": report})
             log_paper_trade("masha", symbol, report.get("decision", ""), report)
             self._maybe_emit_metrics()
             return report
+
+        _ledger_id = None
+        try:
+            from runtime.core.order_ledger import get_order_ledger
+            _ledger_id = get_order_ledger().record(
+                bot_id=getattr(self, '_bot_id', 'masha'),
+                bot_type="masha", symbol=symbol, side="BUY",
+                order_type="MARKET", qty=str(planned_buy_qty),
+                quote_order_qty=str(planned_quote_cost), reason="BUY_AND_REPRICE_SELL",
+                drawdown_pct=str(drawdown), active_rungs=active_rungs,
+                max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
+            )
+        except Exception as e:
+            self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
         buy = await self._signed_call(
             client,
@@ -408,6 +458,17 @@ class MashaRunner(BaseStrategyRunner):
                 quantity=str(planned_buy_qty),
             ),
         )
+        if _ledger_id:
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().update_binance_response(
+                    _ledger_id,
+                    str((buy or {}).get("orderId", "")),
+                    str((buy or {}).get("status", "")),
+                )
+            except Exception as e:
+                self._emit("ERROR", f"order_ledger:update_failed:{e}")
+
         self._emit("INFO", "binance:create_order_buy_market", {"symbol": symbol, "response": buy})
         fills = buy.get("fills") if isinstance(buy, dict) else None
         if isinstance(fills, list) and fills:
@@ -450,6 +511,18 @@ class MashaRunner(BaseStrategyRunner):
                         {"symbol": symbol, "response": cancelled},
                     )
 
+        _sell_ledger_id = None
+        try:
+            from runtime.core.order_ledger import get_order_ledger
+            _sell_ledger_id = get_order_ledger().record(
+                bot_id=getattr(self, '_bot_id', 'masha'),
+                bot_type="masha", symbol=symbol, side="SELL",
+                order_type="LIMIT", qty=str(target_sell_qty), price=str(target_sell_price),
+                reason="TAKE_PROFIT", execution_mode="LIVE",
+            )
+        except Exception as e:
+            self._emit("ERROR", f"order_ledger:record_failed:{e}")
+
         sell = await self._signed_call(
             client,
             lambda: client.create_order(
@@ -461,6 +534,17 @@ class MashaRunner(BaseStrategyRunner):
                 price=str(target_sell_price),
             ),
         )
+        if _sell_ledger_id:
+            try:
+                from runtime.core.order_ledger import get_order_ledger
+                get_order_ledger().update_binance_response(
+                    _sell_ledger_id,
+                    str((sell or {}).get("orderId", "")),
+                    str((sell or {}).get("status", "")),
+                )
+            except Exception as e:
+                self._emit("ERROR", f"order_ledger:update_failed:{e}")
+
         self._emit("INFO", "binance:create_order_sell_limit", {"symbol": symbol, "response": sell})
         report["execution"] = "LIVE"
         report["buy_order_id"] = (buy or {}).get("orderId")

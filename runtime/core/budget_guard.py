@@ -39,7 +39,7 @@ class BudgetGuard:
     def __init__(
         self,
         data_dir: Path | str,
-        max_daily_spend_usdt: Decimal = Decimal("100"),
+        max_daily_spend_usdt: Decimal = Decimal("50"),  # Conservative for 100 USDT test
     ) -> None:
         self._db_path = Path(data_dir) / "budget_guard.sqlite"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)

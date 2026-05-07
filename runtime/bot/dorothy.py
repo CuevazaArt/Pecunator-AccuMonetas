@@ -1,22 +1,15 @@
-"""ExampleJV-inspired rule set with safe defaults (simulated by default)."""
+"""ExampleJV-inspired rule set — LIVE mode only (simulated mode removed)."""
 
 from __future__ import annotations
 
-import asyncio
-import datetime as dt
-import time
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any, Callable, Optional
 
-from binance.client import Client
-
 from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
-from runtime.bot._panic import check_panic_lock
 from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
-from runtime.core.security_util import sanitize_log_message
 
 
 # _dec and _q imported from runtime.bot._decimal_utils
@@ -28,7 +21,7 @@ class DorothyConfig:
     preset_id: str = "B"
     symbol: str = "XRPUSDT"
     loop_interval_sec: int = 450
-    quote_order_qty: Decimal = Decimal("8")
+    quote_order_qty: Decimal = Decimal("6")  # Conservative: 6 USDT per rung
     profit_factor: Decimal = Decimal("0.05")
     margin_drop_factor: Decimal = Decimal("0.03")  # L0: 3% between DCA steps
     qty_decimals: int = 8
@@ -36,19 +29,23 @@ class DorothyConfig:
     note: str = ""
     # [MEJORA] Proteccion de riesgo configurable.
     max_drawdown_pct: Decimal = Decimal("0.20")
-    stop_loss_pct: Decimal = Decimal("0.10")
+    stop_loss_pct: Decimal = Decimal("0.15")  # Wider stop for DCA compatibility
     metrics_interval_cycles: int = 5
     # T0.1: Hard ceiling on DCA rungs per symbol.
     # Each BUY_AND_SELL creates a SELL LIMIT anchor = 1 rung.
     # When open SELL LIMITs >= max_rungs, new buys are BLOCKED.
-    max_rungs_per_symbol: int = 5
+    max_rungs_per_symbol: int = 3  # Conservative: 3 rungs × 6 USDT = 18 USDT max exposure
     # T0.4: Force-liquidate worst position when drawdown exceeds this.
     # 0 = disabled (only blocks buys). Example: 0.40 = liquidate at 40% DD.
     drawdown_liquidate_pct: Decimal = Decimal("0")
-    simulated: bool = True
-    trading_enabled: bool = False
+    # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
+    # Use trading_enabled as the sole on/off switch.
+    simulated: bool = False
+    trading_enabled: bool = True
 
     def normalize(self) -> None:
+        # simulated mode permanently disabled — always LIVE.
+        self.simulated = False
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_order_qty = max(_dec(self.quote_order_qty, "0.0001"), Decimal("0.0001"))
@@ -170,39 +167,53 @@ class DorothyRunner(BaseStrategyRunner):
             {"symbol": symbol, "response": ticker},
         )
         market_price = _dec(ticker.get("price", "0"), "0")
-        if lowest_sell is not None and c.stop_loss_pct > 0:
-            anchor_sell_price = _dec(lowest_sell.get("price", "0"), "0")
-            implied_buy = anchor_sell_price / (Decimal("1") + c.profit_factor) if c.profit_factor >= 0 else anchor_sell_price
-            stop_price = implied_buy * (Decimal("1") - c.stop_loss_pct)
-            if market_price <= stop_price:
-                stop_payload: dict[str, Any] = {
-                    "symbol": symbol,
-                    "anchor_sell_price": str(anchor_sell_price),
-                    "implied_buy_price": str(implied_buy),
-                    "stop_price": str(stop_price),
-                    "market_price": str(market_price),
-                }
-                if c.simulated:
-                    stop_payload["execution"] = "SIMULATED"
-                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
-                else:
-                    oid = lowest_sell.get("orderId")
-                    qty = _dec(lowest_sell.get("origQty", "0"), "0")
-                    if oid is not None:
-                        cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
-                        self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
-                    if qty > 0:
-                        sold = await self._to_thread(
-                            lambda q=qty: client.create_order(
-                                symbol=symbol,
-                                side=client.SIDE_SELL,
-                                type=client.ORDER_TYPE_MARKET,
-                                quantity=str(_q(q, c.qty_decimals)),
-                            )
-                        )
-                        self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
-                    stop_payload["execution"] = "LIVE"
-                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+        stop_loss_triggered = False
+        liquidated_qty = Decimal("0")
+        if sell_limit and c.stop_loss_pct > 0:
+            for sl_order in sell_limit:
+                anchor_sell_price = _dec(sl_order.get("price", "0"), "0")
+                implied_buy = anchor_sell_price / (Decimal("1") + c.profit_factor) if c.profit_factor >= 0 else anchor_sell_price
+                stop_price = implied_buy * (Decimal("1") - c.stop_loss_pct)
+                if market_price <= stop_price:
+                    stop_payload: dict[str, Any] = {
+                        "symbol": symbol,
+                        "anchor_sell_price": str(anchor_sell_price),
+                        "implied_buy_price": str(implied_buy),
+                        "stop_price": str(stop_price),
+                        "market_price": str(market_price),
+                    }
+                    if c.simulated:
+                        stop_payload["execution"] = "SIMULATED"
+                        self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+                        stop_loss_triggered = True
+                    else:
+                        oid = sl_order.get("orderId")
+                        qty = _dec(sl_order.get("origQty", "0"), "0")
+                        if oid is not None:
+                            try:
+                                cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
+                                self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
+                            except Exception as e:
+                                self._emit("ERROR", f"binance:cancel_order_stop_loss_failed: {e}")
+                        if qty > 0:
+                            try:
+                                sold = await self._to_thread(
+                                    lambda q=qty: client.create_order(
+                                        symbol=symbol,
+                                        side=client.SIDE_SELL,
+                                        type=client.ORDER_TYPE_MARKET,
+                                        quantity=str(_q(q, c.qty_decimals)),
+                                    )
+                                )
+                                self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
+                                liquidated_qty += qty
+                            except Exception as e:
+                                self._emit("ERROR", f"binance:create_order_sell_market_stop_loss_failed: {e}")
+                        stop_payload["execution"] = "LIVE"
+                        self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+                        stop_loss_triggered = True
+                        
+            if stop_loss_triggered:
                 stop_report = {
                     "preset_id": c.preset_id,
                     "symbol": symbol,
@@ -210,7 +221,7 @@ class DorothyRunner(BaseStrategyRunner):
                     "trading_enabled": c.trading_enabled,
                     "decision": "STOP_LOSS",
                     "market_price": str(market_price),
-                    "stop_price": str(stop_price),
+                    "liquidated_qty": str(liquidated_qty),
                     "loop_interval_sec": c.loop_interval_sec,
                 }
                 self._maybe_emit_metrics()
@@ -260,40 +271,23 @@ class DorothyRunner(BaseStrategyRunner):
             report["decision"] = "WAIT_DRAWDOWN_GUARD"
             report["trading_blocked"] = True
             report["drawdown_pct"] = str(drawdown)
-            # T0.4: Force-liquidate worst position if threshold configured
+            # T0.4: HARD PAUSE — if drawdown exceeds liquidation threshold,
+            # do NOT auto-liquidate (doom button removed per audit).
+            # Instead: emit CRITICAL alert and keep trading fully blocked.
+            # Human operator must manually decide to liquidate or hold.
             if (c.drawdown_liquidate_pct > 0
-                    and drawdown > c.drawdown_liquidate_pct
-                    and sell_limit
-                    and not c.simulated):
-                # Find highest-priced SELL LIMIT (worst position = furthest from market)
-                worst = max(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
-                worst_oid = worst.get("orderId")
-                worst_qty = _dec(worst.get("origQty", "0"), "0")
-                if worst_oid and worst_qty > 0:
-                    try:
-                        cancelled = await self._to_thread(
-                            lambda oid=worst_oid: client.cancel_order(symbol=symbol, orderId=oid)
-                        )
-                        self._emit("WARNING", "bot:forced_liquidation_cancel", {
-                            "symbol": symbol, "orderId": worst_oid, "response": cancelled,
-                        })
-                        sold = await self._to_thread(
-                            lambda q=worst_qty: client.create_order(
-                                symbol=symbol, side=client.SIDE_SELL,
-                                type=client.ORDER_TYPE_MARKET,
-                                quantity=str(_q(q, c.qty_decimals)),
-                            )
-                        )
-                        self._emit("CRITICAL", "bot:forced_liquidation_sell", {
-                            "symbol": symbol, "qty": str(worst_qty),
-                            "drawdown_pct": str(drawdown),
-                            "threshold": str(c.drawdown_liquidate_pct),
-                            "response": sold,
-                        })
-                        report["decision"] = "FORCED_LIQUIDATION"
-                        report["liquidated_qty"] = str(worst_qty)
-                    except Exception as e:
-                        self._emit("ERROR", f"bot:forced_liquidation_failed: {e}")
+                    and drawdown > c.drawdown_liquidate_pct):
+                self._emit("CRITICAL", "bot:DRAWDOWN_CRITICAL_PAUSE", {
+                    "symbol": symbol,
+                    "drawdown_pct": str(drawdown),
+                    "threshold": str(c.drawdown_liquidate_pct),
+                    "active_rungs": active_rungs,
+                    "market_price": str(market_price),
+                    "message": "DRAWDOWN EXCEEDS CRITICAL THRESHOLD. "
+                               "Trading paused. NO auto-liquidation. "
+                               "Manual intervention required.",
+                })
+                report["decision"] = "CRITICAL_PAUSE_DRAWDOWN"
             elif (c.drawdown_liquidate_pct > 0
                     and drawdown > c.drawdown_liquidate_pct
                     and c.simulated):
@@ -329,6 +323,29 @@ class DorothyRunner(BaseStrategyRunner):
             )
             self._maybe_emit_metrics()
             return report
+
+        # T0.2: Block if daily spend limit exceeded
+        if should_buy:
+            try:
+                from runtime.core.budget_guard import get_budget_guard
+                bg = get_budget_guard()
+                if c.simulated:
+                    if not bg.can_spend(c.quote_order_qty):
+                        report["decision"] = "BLOCKED_BUDGET"
+                        self._emit("WARNING", "bot:budget_blocked", {"report": report})
+                        self._maybe_emit_metrics()
+                        return report
+                else:
+                    if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty):
+                        report["decision"] = "BLOCKED_BUDGET"
+                        self._emit("WARNING", "bot:budget_blocked", {"report": report})
+                        self._maybe_emit_metrics()
+                        return report
+            except Exception as e:
+                report["decision"] = "BLOCKED_BUDGET"
+                self._emit("WARNING", f"bot:budget_error FAIL_CLOSED {e}", {"report": report})
+                self._maybe_emit_metrics()
+                return report
 
         est_buy = market_price if market_price > 0 else Decimal("1")
         # T1.6: Model fees + slippage for honest paper trading
