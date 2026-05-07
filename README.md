@@ -103,10 +103,26 @@ Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibi
 
 ## Política de tests
 
-- La verificación oficial se ejecuta en **GitHub Actions** (`.github/workflows/`).
-- Evitamos depender de test suites locales para validar merges a `main/develop`.
-- Cualquier cambio en runtime/UI/workflows debe actualizar `docs/CHANGELOG.md`.
-- El repositorio incluye escaneo automático de secretos en CI (`secret-scan.yml`) para prevenir exposición accidental.
+```bash
+# Run official test suite (85+ tests, ~1 second)
+python -m pytest runtime/tests/ -x -q --tb=short
+```
+
+- **`runtime/tests/`** — official test suite. All tests must pass before merging.
+- **`tests/legacy/`** — historical integration tests (reference only, not gated).
+- Verificación automatizada en **GitHub Actions** (`.github/workflows/`).
+- Escaneo automático de secretos en CI (`secret-scan.yml`).
+- Cambios en runtime/UI/workflows **deben** actualizar `CHANGELOG.md`.
+
+### Risk control modules (v0.11+)
+
+| Module | Purpose | Endpoint |
+|---|---|---|
+| `budget_guard` | Hard daily USDT spend ceiling | `/api/v1/budget-guard/status` |
+| `order_ledger` | Forensic order audit trail | `/api/v1/order-ledger/recent` |
+| `regime_filter` | Block buys in downtrends | `/api/v1/regime-filter/status` |
+| `vol_sizer` | Adjust qty by realized vol | (used by bot runners) |
+| `trailing_tp` | ATR-based trailing take-profit | (used by bot runners) |
 
 ## Documentación
 
