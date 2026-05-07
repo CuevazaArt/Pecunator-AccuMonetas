@@ -106,12 +106,13 @@ CRITICAL INSTRUCTIONS:
    - Bollinger Bands (BB): Check for squeeze/compression (low volatility) or expansion (high volatility).
 2. Context: You will be provided with the last known regimes. Use this to determine if the market is shifting.
 3. Bot Selection (Strict Mapping):
-   - "TRENDING" → "dorothy" (scalp with the trend)
-   - "RANGING" → "masha" (DCA within the range bounds)
-   - "BREAKOUT" → "thusnelda" (opportunistic multi-symbol)
-   - "CHOPPY" → "none" (erratic, sit out)
+   - "TRENDING" → "dorothy" (trend-following scalper, rides momentum in BTC/ETH/SOL)
+   - "RANGING" → "masha" (DCA range accumulator, buys dips in sideways BTC/ETH/BNB)
+   - "BREAKOUT" → "thusnelda" (volatile basket, buys 5 mid-cap altcoins on dip, harvests on sector rally)
+   - "CHOPPY" → "none" (erratic, sit out — no bot should operate)
 4. If indicators contradict price action or you are unsure, lower confidence (<0.5) and recommend "none".
 5. risk_level should reflect technical danger (e.g., trading trending near massive resistance = HIGH).
+6. For mid-cap volatile assets (PEPE, SUI, NEAR, INJ, FET), expect wider natural oscillation ranges.
 
 Respond ONLY with valid JSON matching the schema (no markdown, no explanations outside the JSON)."""
 
@@ -406,12 +407,13 @@ For EACH chart, return a JSON object with these fields:
 }
 
 Bot Selection Rules:
-- "TRENDING" → "dorothy" (scalp with trend)
-- "RANGING" → "masha" (DCA within range)
-- "BREAKOUT" → "thusnelda" (opportunistic)
-- "CHOPPY" → "none" (sit out)
+- "TRENDING" → "dorothy" (trend-following scalper for BTC/ETH/SOL)
+- "RANGING" → "masha" (DCA range accumulator for BTC/ETH/BNB)
+- "BREAKOUT" → "thusnelda" (volatile basket: PEPE/SUI/NEAR/INJ/FET)
+- "CHOPPY" → "none" (sit out, no bot operates)
 
 Technical Indicators: Charts contain RSI, MACD, and Bollinger Bands. USE THEM.
+For mid-cap volatile assets (PEPE, SUI, NEAR, INJ, FET), expect wider natural oscillation.
 
 CRITICAL: Return a JSON ARRAY of objects, one per image, in the SAME ORDER as provided.
 Example: [{"symbol": "BTCUSDT", ...}, {"symbol": "ETHUSDT", ...}]

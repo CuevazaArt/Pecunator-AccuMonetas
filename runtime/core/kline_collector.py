@@ -31,12 +31,19 @@ from runtime.core.telemetry_vault import get_telemetry_vault
 _LOG = logging.getLogger("pecunator.core.kline_collector")
 
 # Default collection targets: symbols × intervals
+# Must cover ALL symbols actively operated by any bot:
+#   Dorothy:   BTCUSDT, ETHUSDT, SOLUSDT
+#   Masha:     BTCUSDT, ETHUSDT, BNBUSDT
+#   Thusnelda: PEPEUSDT, SUIUSDT, NEARUSDT, INJUSDT, FETUSDT
 _DEFAULT_TARGETS = [
+    # Blue-chips (Dorothy + Masha) — deeper history
     ("BTCUSDT", "1h"), ("BTCUSDT", "4h"), ("BTCUSDT", "1d"),
     ("ETHUSDT", "1h"), ("ETHUSDT", "4h"), ("ETHUSDT", "1d"),
-    ("SOLUSDT", "4h"), ("BNBUSDT", "4h"), ("XRPUSDT", "4h"),
-    ("ADAUSDT", "4h"), ("DOGEUSDT", "4h"), ("AVAXUSDT", "4h"),
-    ("DOTUSDT", "4h"), ("MATICUSDT", "4h"),
+    ("SOLUSDT", "4h"), ("SOLUSDT", "1d"),
+    ("BNBUSDT", "4h"), ("BNBUSDT", "1d"),
+    # Volatile basket (Thusnelda) — 4h for oscillation analysis
+    ("PEPEUSDT", "4h"), ("SUIUSDT", "4h"), ("NEARUSDT", "4h"),
+    ("INJUSDT", "4h"), ("FETUSDT", "4h"),
 ]
 
 KLINE_WEIGHT = 5  # Binance weight per klines request

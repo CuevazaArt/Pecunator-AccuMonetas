@@ -1,4 +1,14 @@
-"""Thusnelda1.0-inspired multi-symbol equity-target strategy runner."""
+"""Thusnelda — volatile basket strategy runner.
+
+Operating Model (L0 Basket):
+  - Maintains a fixed basket of 5 mid-cap volatile altcoins from sectors
+    NOT overlapping with Dorothy (trend-following) or Masha (DCA range).
+  - Buys the entire basket on activation (market dip / VMO opportunity).
+  - Harvests when total basket equity rises >= target (6% default).
+  - Symbols: PEPE, SUI, NEAR, INJ, FET (Meme/L1/AI/DeFi sectors).
+  - This bot does NOT operate BTC, ETH, SOL, or BNB (those belong
+    to Dorothy and Masha respectively).
+"""
 
 from __future__ import annotations
 
@@ -21,24 +31,44 @@ from runtime.core.security_util import sanitize_log_message
 # _dec and _q imported from runtime.bot._decimal_utils
 
 
+# L0 Profit Floor for Thusnelda (basket requires higher margin due to
+# multi-symbol exposure and the intent to capture sector-wide moves).
+THUSNELDA_PROFIT_FLOOR: Decimal = Decimal("0.06")  # 6% per cycle
+
+
 @dataclass
 class ThusneldaConfig:
     preset_id: str = "T1"
-    symbols_csv: str = "BTCUSDT,ETHUSDT"
+    # Volatile basket: non-overlapping with Dorothy/Masha blue-chips.
+    # Sectors: Meme (PEPE), L1/Move (SUI), AI/Infra (NEAR),
+    #          DeFi/Cosmos (INJ), AI/Agents (FET)
+    symbols_csv: str = "PEPEUSDT,SUIUSDT,NEARUSDT,INJUSDT,FETUSDT"
     loop_interval_sec: int = 600
     between_symbol_sec: int = 3
-    quote_order_qty_modulo: Decimal = Decimal("8")
-    factor_multiplication: Decimal = Decimal("0.99")
-    meta_equity_usdt: Decimal = Decimal("1000000")
+    quote_order_qty_modulo: Decimal = Decimal("6")   # L0 micro-operation
+    # factor_multiplication: buy when current < avg * factor.
+    # 0.94 = buy when price is 6% below average (matches profit target).
+    factor_multiplication: Decimal = Decimal("0.94")
+    # meta_equity_usdt: liquidate (harvest) when equity >= this target.
+    # Computed at activation as: initial_equity * (1 + profit_target).
+    # Default 0 = use profit_target_pct instead.
+    meta_equity_usdt: Decimal = Decimal("0")
+    # L0 basket profit target: 6% minimum per cycle.
+    profit_target_pct: Decimal = Decimal("0.06")
     reference_ts_iso: str = ""
     qty_decimals: int = 8
     note: str = ""
-    # [MEJORA] Proteccion de riesgo configurable.
-    max_drawdown_pct: Decimal = Decimal("0.25")
-    stop_loss_pct: Decimal = Decimal("0.20")
+    # Wider risk tolerance for volatile mid-cap basket.
+    max_drawdown_pct: Decimal = Decimal("0.30")
+    stop_loss_pct: Decimal = Decimal("0.25")
     metrics_interval_cycles: int = 3
     simulated: bool = True
     trading_enabled: bool = False
+
+    # Symbols already operated by Dorothy/Masha — Thusnelda must NOT touch.
+    _RESERVED_SYMBOLS: frozenset[str] = frozenset({
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
+    })
 
     def normalize(self) -> None:
         symbols = []
@@ -47,17 +77,30 @@ class ThusneldaConfig:
             if not s:
                 continue
             try:
-                symbols.append(normalize_binance_spot_symbol(s))
+                sym = normalize_binance_spot_symbol(s)
+                # Warn but don't block if symbol overlaps with Dorothy/Masha
+                if sym in self._RESERVED_SYMBOLS:
+                    import logging
+                    logging.getLogger("pecunator.thusnelda").warning(
+                        "Symbol %s is reserved for Dorothy/Masha — "
+                        "removing from Thusnelda basket", sym,
+                    )
+                    continue
+                symbols.append(sym)
             except Exception:
                 continue
         if not symbols:
-            symbols = ["BTCUSDT", "ETHUSDT"]
+            symbols = ["PEPEUSDT", "SUIUSDT", "NEARUSDT", "INJUSDT", "FETUSDT"]
         self.symbols_csv = ",".join(symbols)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.between_symbol_sec = max(0, min(int(self.between_symbol_sec), 600))
         self.quote_order_qty_modulo = max(_dec(self.quote_order_qty_modulo, "0.0001"), Decimal("0.0001"))
         self.factor_multiplication = max(_dec(self.factor_multiplication, "0.0001"), Decimal("0.0001"))
         self.meta_equity_usdt = _dec(self.meta_equity_usdt, "0")
+        # L0 floor: 6% minimum profit target for volatile basket
+        self.profit_target_pct = max(
+            _dec(self.profit_target_pct, "0.06"), THUSNELDA_PROFIT_FLOOR,
+        )
         self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
         self.note = (self.note or "").strip()[:20]
         self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
@@ -81,10 +124,13 @@ class ThusneldaConfig:
         d["quote_order_qty_modulo"] = str(self.quote_order_qty_modulo)
         d["factor_multiplication"] = str(self.factor_multiplication)
         d["meta_equity_usdt"] = str(self.meta_equity_usdt)
+        d["profit_target_pct"] = str(self.profit_target_pct)
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
         d["symbols"] = self.symbols()
         d["mode"] = "SIMULATED" if self.simulated else "LIVE"
+        # Remove internal frozenset from serialization
+        d.pop("_RESERVED_SYMBOLS", None)
         return d
 
 
@@ -438,7 +484,24 @@ class ThusneldaRunner:
                 "trading_blocked": trading_blocked,
             },
         )
-        should_liquidate = (c.meta_equity_usdt <= 0) or (total_equity >= c.meta_equity_usdt)
+        # ── Harvest Decision ──────────────────────────────────────
+        # Determine if we should liquidate (harvest profits).
+        # If meta_equity_usdt is set explicitly (> 0), use that as target.
+        # Otherwise, use profit_target_pct relative to peak equity as the
+        # reference for when the basket has delivered its cycle target.
+        if c.meta_equity_usdt > 0:
+            harvest_target = c.meta_equity_usdt
+        else:
+            # Use the initial/reference equity to compute the cycle target.
+            # _peak_equity_usdt tracks the highest seen equity.
+            # Harvest when current equity is >= initial * (1 + target_pct).
+            # If no peak yet, we can't determine harvest — skip.
+            if self._peak_equity_usdt and self._peak_equity_usdt > 0:
+                harvest_target = self._peak_equity_usdt * (Decimal("1") + c.profit_target_pct)
+            else:
+                harvest_target = Decimal("0")  # No target yet — first cycle
+
+        should_liquidate = harvest_target > 0 and total_equity >= harvest_target
         liquidations: list[dict[str, Any]] = []
         if should_liquidate:
             if isinstance(balances, list):

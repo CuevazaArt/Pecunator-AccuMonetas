@@ -36,14 +36,15 @@
       "email": "xrpacum_virtual@6nfrqwurnoemail.com",
       "role": "bot",
       "bot_type": "thusnelda",
-      "description": "Opportunistic multi-symbol — quick snipes on volatility spikes",
+      "description": "L0 volatile basket — buys dip, harvests on sector rally (6%+ target)",
       "symbols": [
-        "XRPUSDT",
-        "ADAUSDT",
-        "DOGEUSDT",
-        "AVAXUSDT"
+        "PEPEUSDT",
+        "SUIUSDT",
+        "NEARUSDT",
+        "INJUSDT",
+        "FETUSDT"
       ],
-      "max_equity_usdt": "300",
+      "max_equity_usdt": "200",
       "enabled": false,
       "api_key_label": "THUSNELDA_API"
     },

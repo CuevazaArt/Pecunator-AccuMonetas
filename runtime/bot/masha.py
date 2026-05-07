@@ -30,7 +30,7 @@ class MashaConfig:
     loop_interval_sec: int = 300
     quote_min_free_to_operate: Decimal = Decimal("6")
     buy_qty_base: Decimal = Decimal("0.001")
-    profit_factor: Decimal = Decimal("0.01")
+    profit_factor: Decimal = Decimal("0.05")  # L0: min 3%, default 5%
     timeframe_w: str = "1w"
     periods_w: int = 2
     mm_periods_w: int = 2
@@ -59,7 +59,8 @@ class MashaConfig:
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_min_free_to_operate = max(_dec(self.quote_min_free_to_operate, "0.0001"), Decimal("0.0001"))
         self.buy_qty_base = max(_dec(self.buy_qty_base, "0.00000001"), Decimal("0.00000001"))
-        self.profit_factor = max(_dec(self.profit_factor), Decimal("0"))
+        # L0 floor: 3% minimum profit to ensure viability after commissions
+        self.profit_factor = max(_dec(self.profit_factor), Decimal("0.03"))
         self.margin_low_w = max(_dec(self.margin_low_w), Decimal("0"))
         self.margin_low_h = max(_dec(self.margin_low_h), Decimal("0"))
         self.periods_w = max(1, min(int(self.periods_w), 1000))

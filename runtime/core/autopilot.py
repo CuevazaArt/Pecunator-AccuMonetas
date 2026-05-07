@@ -45,6 +45,12 @@ from typing import Any, Optional
 
 _LOG = logging.getLogger("pecunator.autopilot")
 
+# ── L0 Profit Floor ─────────────────────────────────────────────────
+# The absolute minimum profit_factor allowed by the system.
+# Below this, Binance commissions (0.2% round-trip) erode returns
+# to unacceptable levels for micro-operations (5-8 USDT notional).
+PROFIT_FLOOR: float = 0.03  # 3% — L0 viability threshold
+
 # ── Auto-Tuning Parameter Bounds ────────────────────────────────────
 
 @dataclass
@@ -53,23 +59,29 @@ class TuningProfile:
 
     Each field is a tuple of (min, default, max).
     The tuner will never push a parameter outside [min, max].
+
+    L0 Calibration (v0.7):
+      - quote_order_qty capped at 5-8 USDT for micro-operations
+      - profit_factor floor at 3% (PROFIT_FLOOR) to ensure viability
+      - margin_drop calibrated for DCA breathing room (~3% per step)
     """
-    # Dorothy
-    dorothy_quote_order_qty: tuple[float, float, float] = (5.0, 8.0, 25.0)
-    dorothy_profit_factor: tuple[float, float, float] = (0.02, 0.05, 0.12)
-    dorothy_margin_drop: tuple[float, float, float] = (0.002, 0.004, 0.010)
-    dorothy_stop_loss: tuple[float, float, float] = (0.05, 0.10, 0.20)
+    # Dorothy — trend-following scalper
+    dorothy_quote_order_qty: tuple[float, float, float] = (5.0, 6.0, 8.0)
+    dorothy_profit_factor: tuple[float, float, float] = (0.03, 0.05, 0.15)
+    dorothy_margin_drop: tuple[float, float, float] = (0.02, 0.03, 0.05)
+    dorothy_stop_loss: tuple[float, float, float] = (0.08, 0.15, 0.30)
     dorothy_interval_sec: tuple[int, int, int] = (180, 450, 900)
 
-    # Masha
-    masha_quote_order_qty: tuple[float, float, float] = (5.0, 10.0, 30.0)
-    masha_profit_factor: tuple[float, float, float] = (0.01, 0.03, 0.08)
-    masha_margin_drop: tuple[float, float, float] = (0.003, 0.005, 0.015)
-    masha_stop_loss: tuple[float, float, float] = (0.05, 0.10, 0.25)
+    # Masha — DCA range accumulator
+    masha_quote_order_qty: tuple[float, float, float] = (5.0, 6.0, 8.0)
+    masha_profit_factor: tuple[float, float, float] = (0.03, 0.05, 0.12)
+    masha_margin_drop: tuple[float, float, float] = (0.02, 0.03, 0.05)
+    masha_stop_loss: tuple[float, float, float] = (0.10, 0.20, 0.30)
     masha_interval_sec: tuple[int, int, int] = (300, 600, 1200)
 
-    # Thusnelda
-    thusnelda_quote_order_qty: tuple[float, float, float] = (3.0, 6.0, 15.0)
+    # Thusnelda — volatile basket (6% profit floor)
+    thusnelda_quote_order_qty: tuple[float, float, float] = (5.0, 6.0, 8.0)
+    thusnelda_profit_factor: tuple[float, float, float] = (0.06, 0.08, 0.15)
     thusnelda_interval_sec: tuple[int, int, int] = (120, 300, 600)
 
 
@@ -123,8 +135,9 @@ class AutoTuner:
       1. Regime (from VMO) → base adjustments
       2. Volatility overlay → modifies position size and stops
       3. Confidence filter → only tune if confidence > threshold
-      4. Historical performance → bias towards settings that worked
+      4. Adaptive profit factor → oscillation spectrum + capital
       5. Safety clamps → never exceed TuningProfile bounds
+      6. L0 floor → profit_factor never below PROFIT_FLOOR (3%)
     """
 
     def __init__(
@@ -136,6 +149,79 @@ class AutoTuner:
         self._conf_threshold = confidence_threshold
         self._history: list[dict[str, Any]] = []
 
+    @staticmethod
+    def compute_adaptive_profit(
+        oscillation_pct: float,
+        regime: str,
+        volatility: str,
+        available_capital: float = 0.0,
+        num_instruments: int = 1,
+    ) -> float:
+        """Compute the optimal profit_factor for a symbol.
+
+        The profit factor is derived from the price oscillation spectrum
+        (the natural swing range of the asset) and adjusted by market
+        conditions and capital constraints.
+
+        Args:
+            oscillation_pct: Price oscillation range as percentage
+                (e.g. 5.0 means the price swings ~5% in its cycle).
+                Typically computed as (High - Low) / Close over recent
+                candles from VMO/chart_analyzer.
+            regime: Market regime from VMO (TRENDING, RANGING, etc.)
+            volatility: Volatility classification (HIGH, NORMAL, etc.)
+            available_capital: Free USDT in the bot's sub-account.
+                Used to bias the factor when capital is scarce.
+            num_instruments: Number of active trading pairs for this bot.
+                More instruments → less capital per pair → demand more %.
+
+        Returns:
+            Optimal profit_factor as a float, guaranteed >= PROFIT_FLOOR.
+        """
+        # ── Base: half the natural oscillation range ──
+        # Capturing half the swing is realistic without overfitting.
+        # If oscillation data is unavailable (0), fall back to floor.
+        base = (oscillation_pct / 200.0) if oscillation_pct > 0 else PROFIT_FLOOR
+
+        # ── Regime multiplier ──
+        regime_mult = {
+            "TRENDING": 1.4,    # Let profits run — momentum in our favor
+            "RANGING": 0.75,    # Take profits quickly — price will revert
+            "BREAKOUT": 1.8,    # Very wide — capture the impulse move
+            "CHOPPY": 1.0,      # Default (should not be operating)
+        }.get(regime, 1.0)
+
+        # ── Volatility multiplier ──
+        vol_mult = {
+            "HIGH": 0.85,       # Reduce — high vol = more noise
+            "NORMAL": 1.0,
+            "LOW": 1.15,        # Widen — cleaner movements
+            "COMPRESSED": 0.7,  # Compress — pre-breakout, be cautious
+        }.get(volatility, 1.0)
+
+        # ── Capital scarcity adjustment ──
+        # With little capital per instrument, demand higher % to justify
+        # the operational overhead. With ample capital, accept lower %.
+        capital_per_instrument = (
+            available_capital / max(num_instruments, 1)
+            if available_capital > 0
+            else 0.0
+        )
+        if capital_per_instrument <= 0:
+            capital_mult = 1.0   # No data → neutral
+        elif capital_per_instrument < 30:
+            capital_mult = 1.3   # Scarce → demand more %
+        elif capital_per_instrument < 80:
+            capital_mult = 1.0   # Normal
+        else:
+            capital_mult = 0.85  # Ample → accept less %
+
+        # ── Final computation ──
+        profit = base * regime_mult * vol_mult * capital_mult
+
+        # Clamp: never below L0 floor, never above 15%
+        return max(PROFIT_FLOOR, min(profit, 0.15))
+
     def compute_params(
         self,
         bot_type: str,
@@ -143,8 +229,23 @@ class AutoTuner:
         volatility: str,
         confidence: float,
         current_params: dict[str, Any],
+        *,
+        oscillation_pct: float = 0.0,
+        available_capital: float = 0.0,
+        num_instruments: int = 1,
     ) -> dict[str, Any]:
         """Compute tuned parameters for a bot.
+
+        Args:
+            bot_type: Bot type identifier (dorothy, masha, thusnelda).
+            regime: Market regime from VMO.
+            volatility: Volatility classification from VMO.
+            confidence: VMO confidence score (0-1).
+            current_params: Current bot parameters to adjust from.
+            oscillation_pct: Price oscillation spectrum (%) for adaptive
+                profit computation. 0 = use static multiplier fallback.
+            available_capital: Free USDT for capital-aware sizing.
+            num_instruments: Active trading pairs count.
 
         Returns:
             Dict with adjusted parameters + reasoning.
@@ -204,8 +305,37 @@ class AutoTuner:
                     new_val = round(new_val, 6)
                 new_params[param_key] = new_val
                 adjustments_made.append(
-                    f"{param_key}: {current_val} → {new_val} (×{multiplier:.2f})"
+                    f"{param_key}: {current_val} -> {new_val} (x{multiplier:.2f})"
                 )
+
+        # ── Adaptive Profit Factor Override ──
+        # If oscillation data is available, compute the optimal profit
+        # using the L0 adaptive formula and override the static result.
+        if oscillation_pct > 0:
+            adaptive_pf = self.compute_adaptive_profit(
+                oscillation_pct=oscillation_pct,
+                regime=regime,
+                volatility=volatility,
+                available_capital=available_capital,
+                num_instruments=num_instruments,
+            )
+            current_pf = float(new_params.get("profit_factor", 0.05))
+            if abs(adaptive_pf - current_pf) / max(current_pf, 0.001) > 0.05:
+                new_params["profit_factor"] = round(adaptive_pf, 6)
+                adjustments_made.append(
+                    f"profit_factor: {current_pf} -> {adaptive_pf:.6f} "
+                    f"(adaptive, osc={oscillation_pct:.1f}%)"
+                )
+
+        # ── L0 Floor Enforcement ──
+        # Regardless of all adjustments, profit_factor must never drop
+        # below PROFIT_FLOOR. This is the last safety net.
+        final_pf = float(new_params.get("profit_factor", PROFIT_FLOOR))
+        if final_pf < PROFIT_FLOOR:
+            new_params["profit_factor"] = PROFIT_FLOOR
+            adjustments_made.append(
+                f"profit_factor: {final_pf} -> {PROFIT_FLOOR} (L0 floor enforced)"
+            )
 
         result = {
             "adjusted": len(adjustments_made) > 0,

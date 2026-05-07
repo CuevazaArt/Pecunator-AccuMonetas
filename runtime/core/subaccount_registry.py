@@ -61,9 +61,9 @@ _DEFAULT_REGISTRY: list[SubAccountEntry] = [
         email="xrpacum_virtual@6nfrqwurnoemail.com",
         role="bot",
         bot_type="thusnelda",
-        description="Opportunistic multi-symbol — quick snipes on volatility spikes",
-        symbols=["XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT"],
-        max_equity_usdt="300",
+        description="L0 volatile basket — buys dip, harvests on sector rally (6%+ target)",
+        symbols=["PEPEUSDT", "SUIUSDT", "NEARUSDT", "INJUSDT", "FETUSDT"],
+        max_equity_usdt="200",
         api_key_label="THUSNELDA_API",
     ),
     SubAccountEntry(

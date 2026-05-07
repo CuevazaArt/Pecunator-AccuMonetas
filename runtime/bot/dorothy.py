@@ -29,7 +29,7 @@ class DorothyConfig:
     loop_interval_sec: int = 450
     quote_order_qty: Decimal = Decimal("8")
     profit_factor: Decimal = Decimal("0.05")
-    margin_drop_factor: Decimal = Decimal("0.004")
+    margin_drop_factor: Decimal = Decimal("0.03")  # L0: 3% between DCA steps
     qty_decimals: int = 8
     price_decimals: int = 4
     note: str = ""
@@ -44,7 +44,8 @@ class DorothyConfig:
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_order_qty = max(_dec(self.quote_order_qty, "0.0001"), Decimal("0.0001"))
-        self.profit_factor = max(_dec(self.profit_factor), Decimal("0"))
+        # L0 floor: 3% minimum profit to ensure viability after commissions
+        self.profit_factor = max(_dec(self.profit_factor), Decimal("0.03"))
         self.margin_drop_factor = max(_dec(self.margin_drop_factor), Decimal("0"))
         self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
         self.price_decimals = max(0, min(int(self.price_decimals), 18))

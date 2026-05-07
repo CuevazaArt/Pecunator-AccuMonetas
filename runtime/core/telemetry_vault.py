@@ -195,6 +195,53 @@ class TelemetryVault:
         finally:
             conn.close()
 
+    def compute_oscillation_pct(
+        self, symbol: str, interval: str = "4h", num_candles: int = 30
+    ) -> float:
+        """Compute average price oscillation range for a symbol.
+
+        Calculates mean((high - low) / close) * 100 over the most recent
+        ``num_candles`` stored candles. This represents the natural swing
+        range of the asset — the input to the adaptive profit formula in
+        :class:`AutoTuner`.
+
+        Args:
+            symbol: Trading pair (e.g. "BTCUSDT").
+            interval: Candle timeframe (e.g. "4h", "1d").
+            num_candles: Number of recent candles to average over.
+
+        Returns:
+            Oscillation percentage (e.g. 5.2 means ~5.2% average range).
+            Returns 0.0 if insufficient data.
+        """
+        conn = open_db(self._path)
+        try:
+            rows = conn.execute(
+                """
+                SELECT high, low, close FROM kline_history
+                WHERE symbol = ? AND interval = ?
+                ORDER BY open_time DESC LIMIT ?
+                """,
+                (symbol, interval, num_candles),
+            ).fetchall()
+            if len(rows) < 3:
+                return 0.0
+            total = 0.0
+            valid = 0
+            for row in rows:
+                try:
+                    h = float(row[0])
+                    l = float(row[1])
+                    c = float(row[2])
+                    if c > 0:
+                        total += ((h - l) / c) * 100.0
+                        valid += 1
+                except (ValueError, TypeError, ZeroDivisionError):
+                    continue
+            return round(total / valid, 2) if valid > 0 else 0.0
+        finally:
+            conn.close()
+
     # ── Capture Index ───────────────────────────────────────────────
 
     def index_capture(
