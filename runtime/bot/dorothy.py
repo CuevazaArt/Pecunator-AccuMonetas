@@ -172,8 +172,9 @@ class DorothyRunner:
         try:
             from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
+            _cred_key = self._api_key or ""
             account = await _cache.get_or_fetch(
-                "account",
+                _cache.credential_key("account", _cred_key),
                 lambda: self._to_thread(client.get_account),
             )
             tickers = await _cache.get_or_fetch(
@@ -220,9 +221,6 @@ class DorothyRunner:
             dd = (peak - equity) / peak
         if dd > self._max_drawdown_seen:
             self._max_drawdown_seen = dd
-        if self._equity_returns:
-            prev = self._equity_returns[-1]
-            _ = prev
         blocked = dd > self.config.max_drawdown_pct
         return dd, blocked
 
@@ -305,8 +303,9 @@ class DorothyRunner:
         try:
             from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
+            _cred_key = self._api_key or ""
             open_orders = await _cache.get_or_fetch(
-                f"open_orders:{symbol}",
+                _cache.credential_key("open_orders", _cred_key, symbol),
                 lambda: self._to_thread(lambda: client.get_open_orders(symbol=symbol)),
             )
         except Exception:
@@ -407,7 +406,8 @@ class DorothyRunner:
                 )
             except Exception as e:
                 regime_reason = f"regime_error:{e}"
-                # Fail-open: allow trade if filter fails
+                regime_allowed = False  # Fail-CLOSED: block trade if filter fails
+                self._emit("WARNING", f"bot:regime_filter_error_BLOCKED {e}")
 
         # T0.1: Count active rungs (open SELL LIMITs = active DCA positions)
         active_rungs = len(sell_limit)
@@ -530,8 +530,11 @@ class DorothyRunner:
                     drawdown_pct=str(drawdown), active_rungs=active_rungs,
                     max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
                 )
-            except Exception:
-                pass
+            except Exception as _ledger_err:
+                import logging as _lg
+                _lg.getLogger("pecunator.bot.dorothy").error(
+                    "OrderLedger.record FAILED (SIM BUY) — audit gap: %s", _ledger_err,
+                )
             self._emit("INFO", "bot:decision", {"report": report})
             log_paper_trade("dorothy", symbol, report.get("decision", ""), report)
             self._maybe_emit_metrics()
@@ -549,8 +552,11 @@ class DorothyRunner:
                 drawdown_pct=str(drawdown), active_rungs=active_rungs,
                 max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
             )
-        except Exception:
-            pass
+        except Exception as _ledger_err:
+            import logging as _lg
+            _lg.getLogger("pecunator.bot.dorothy").error(
+                "OrderLedger.record FAILED (LIVE BUY) — audit gap: %s", _ledger_err,
+            )
 
         buy = await self._to_thread(
             lambda: client.create_order(
@@ -570,8 +576,11 @@ class DorothyRunner:
                     str(buy.get("orderId", "")),
                     str(buy.get("status", "")),
                 )
-            except Exception:
-                pass
+            except Exception as _ledger_err:
+                import logging as _lg
+                _lg.getLogger("pecunator.bot.dorothy").error(
+                    "OrderLedger.update FAILED (BUY response) — audit gap: %s", _ledger_err,
+                )
 
         self._emit(
             "INFO",
@@ -599,8 +608,11 @@ class DorothyRunner:
                 order_type="LIMIT", qty=str(sell_qty), price=str(sell_price),
                 reason="TAKE_PROFIT", execution_mode="LIVE",
             )
-        except Exception:
-            pass
+        except Exception as _ledger_err:
+            import logging as _lg
+            _lg.getLogger("pecunator.bot.dorothy").error(
+                "OrderLedger.record FAILED (SELL LIMIT) — audit gap: %s", _ledger_err,
+            )
 
         sell = await self._to_thread(
             lambda: client.create_order(
@@ -622,8 +634,11 @@ class DorothyRunner:
                     str(sell.get("orderId", "")),
                     str(sell.get("status", "")),
                 )
-            except Exception:
-                pass
+            except Exception as _ledger_err:
+                import logging as _lg
+                _lg.getLogger("pecunator.bot.dorothy").error(
+                    "OrderLedger.update FAILED (SELL response) — audit gap: %s", _ledger_err,
+                )
 
         self._emit(
             "INFO",

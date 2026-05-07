@@ -431,7 +431,8 @@ class ThusneldaRunner:
                                 symbol, client, _to_thread=self._to_thread,
                             )
                         except Exception:
-                            regime_ok = True  # Fail-open
+                            regime_ok = False  # Fail-CLOSED: block trade if filter fails
+                            regime_reason = "regime_error_BLOCKED"
                         if not regime_ok:
                             item["decision"] = "BLOCKED_REGIME"
                             item["regime_reason"] = regime_reason
@@ -475,8 +476,9 @@ class ThusneldaRunner:
         try:
             from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
+            _cred_key = self._api_key or ""
             account = await _cache.get_or_fetch(
-                "account",
+                _cache.credential_key("account", _cred_key),
                 lambda: self._signed_call(client, client.get_account),
             )
             tickers = await _cache.get_or_fetch(

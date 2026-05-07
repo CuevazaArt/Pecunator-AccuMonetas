@@ -3,6 +3,10 @@
 If 50 bots all trade BTCUSDT, they don't need 50 separate API calls
 for the same ticker. One call, cached in RAM, serves all 50.
 
+SECURITY: Private/signed data (account, open_orders) MUST be scoped
+to the API key that fetched it. Use credential_key() for cache keys
+of private endpoints. Public data (tickers, klines) is shared globally.
+
 Architecture:
     - Thread-safe with asyncio.Lock per cache key (single-flight pattern).
     - TTL-based expiration per data type.
@@ -18,6 +22,7 @@ Weight savings estimate:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 import sys
@@ -58,9 +63,17 @@ class MarketCache:
 
     Usage:
         cache = get_market_cache()
+
+        # PUBLIC data (shared across all bots):
         tickers = await cache.get_or_fetch(
             "tickers",
             fetcher=lambda: client.get_all_tickers(),
+        )
+
+        # PRIVATE data (scoped to API key):
+        account = await cache.get_or_fetch(
+            cache.credential_key("account", api_key),
+            fetcher=lambda: client.get_account(),
         )
     """
 
@@ -75,6 +88,26 @@ class MarketCache:
             "fetches": 0,
             "weight_saved": 0,
         }
+
+    @staticmethod
+    def credential_key(tier: str, api_key: str, suffix: str = "") -> str:
+        """Build a cache key scoped to a specific API credential.
+
+        Use this for private/signed endpoints (account, open_orders)
+        to prevent cross-contamination between sub-accounts.
+
+        Args:
+            tier: e.g. "account", "open_orders"
+            api_key: the Binance API key (only first 8 chars hashed)
+            suffix: optional extra qualifier (e.g. symbol)
+
+        Returns:
+            Cache key like "account@a1b2c3d4" or "open_orders@a1b2c3d4:BTCUSDT"
+        """
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:8]
+        if suffix:
+            return f"{tier}@{key_hash}:{suffix}"
+        return f"{tier}@{key_hash}"
 
     async def get_or_fetch(
         self,
