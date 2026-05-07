@@ -398,6 +398,157 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
     );
   }
 
+  Widget _consolidatedPanel() {
+    final base = _baseAssetCtrl.text.trim().toUpperCase();
+    // Compute totals per wallet type
+    double spotTotal = 0, futTotal = 0, earnTotal = 0, extTotal = 0;
+    double spotFree = 0, spotLocked = 0;
+    for (final r in _spot) {
+      final asset = (r['asset'] ?? '').toString().toUpperCase();
+      if (asset == base) {
+        spotFree = double.tryParse((r['free'] ?? '0').toString()) ?? 0;
+        spotLocked = double.tryParse((r['locked'] ?? '0').toString()) ?? 0;
+        spotTotal = double.tryParse((r['total'] ?? '0').toString()) ?? (spotFree + spotLocked);
+      }
+    }
+    for (final r in _futures) {
+      final asset = (r['asset'] ?? '').toString().toUpperCase();
+      if (asset == base) {
+        futTotal = double.tryParse((r['total'] ?? r['wallet_balance'] ?? '0').toString()) ?? 0;
+      }
+    }
+    for (final r in _earn) {
+      final asset = (r['asset'] ?? '').toString().toUpperCase();
+      if (asset == base || asset == 'LD$base') {
+        earnTotal += double.tryParse((r['total'] ?? '0').toString()) ?? 0;
+      }
+    }
+    for (final r in _external) {
+      final asset = (r['asset'] ?? '').toString().toUpperCase();
+      if (asset == base) {
+        extTotal = double.tryParse((r['total'] ?? '0').toString()) ?? 0;
+      }
+    }
+    final grandTotal = spotTotal + futTotal + earnTotal + extTotal;
+    final liquidAvailable = spotFree; // Immediately tradeable
+
+    // Equity data
+    final equityCurrent = plainNum(_equity['current']);
+    final equityAvg = plainNum(_equity['avg']);
+    final equityHighAvg = plainNum(_equity['high_avg']);
+
+    // Account health
+    final canTrade = _summary['canTrade'] == true;
+    final canWithdraw = _summary['canWithdraw'] == true;
+    final nonBaseAssets = _spot.where((r) {
+      final a = (r['asset'] ?? '').toString().toUpperCase();
+      return a != base && a.isNotEmpty;
+    }).length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                const Icon(Icons.dashboard, size: 16),
+                const SizedBox(width: 6),
+                const Text('Panel Consolidado',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: canTrade ? const Color(0x2200E676) : const Color(0x22FF1744),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    canTrade ? 'TRADE OK' : 'TRADE OFF',
+                    style: TextStyle(
+                      fontSize: 9, fontWeight: FontWeight.w800,
+                      color: canTrade ? Colors.greenAccent : Colors.redAccent,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: canWithdraw ? const Color(0x2200E676) : const Color(0x22FF1744),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    canWithdraw ? 'WITHDRAW OK' : 'WITHDRAW OFF',
+                    style: TextStyle(
+                      fontSize: 9, fontWeight: FontWeight.w800,
+                      color: canWithdraw ? Colors.greenAccent : Colors.redAccent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Row 1: Liquidity breakdown
+            Row(
+              children: [
+                _panelKpi('Líquido disponible', plainNum(liquidAvailable.toString()),
+                    Colors.greenAccent),
+                _panelKpi('Spot total $base', plainNum(spotTotal.toString()),
+                    Colors.cyanAccent),
+                _panelKpi('Bloqueado', plainNum(spotLocked.toString()),
+                    spotLocked > 0 ? Colors.orangeAccent : Colors.grey),
+                _panelKpi('Futures $base', plainNum(futTotal.toString()),
+                    futTotal > 0 ? Colors.amberAccent : Colors.grey),
+                _panelKpi('Earn/Stake', plainNum(earnTotal.toString()),
+                    earnTotal > 0 ? Colors.purpleAccent : Colors.grey),
+                _panelKpi('GRAN TOTAL', plainNum(grandTotal.toString()),
+                    Colors.white),
+              ],
+            ),
+            const SizedBox(height: 4),
+            // Row 2: Equity + portfolio
+            Row(
+              children: [
+                _panelKpi('Equity actual', equityCurrent, Colors.cyanAccent),
+                _panelKpi('Equity promedio', equityAvg, Colors.blueAccent),
+                _panelKpi('Equity máx prom', equityHighAvg, Colors.amberAccent),
+                _panelKpi('Activos Spot', '${_spot.length}', Colors.cyanAccent),
+                _panelKpi('No-$base', '$nonBaseAssets', nonBaseAssets > 0 ? Colors.orangeAccent : Colors.grey),
+                _panelKpi('Wallets', '${_spot.length + _futures.length + _earn.length + _external.length}',
+                    Colors.grey),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _panelKpi(String label, String value, Color valueColor) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Column(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 9), textAlign: TextAlign.center),
+            const SizedBox(height: 1),
+            Text(value,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: valueColor,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -428,6 +579,8 @@ class _SpotAccountPageState extends State<SpotAccountPage> {
                 ),
               ),
             _baseAssetBar(),
+            // ── Consolidated Command Panel ──
+            _consolidatedPanel(),
             _equityCard(),
             _baseTotalsCard(),
             _warningsBlock(),
