@@ -47,13 +47,13 @@ class CacheEntry:
 
 # Default TTL and weight config per cache tier
 _TIER_DEFAULTS: dict[str, dict[str, Any]] = {
-    "tickers":       {"ttl_sec": 5,    "weight": 2,  "desc": "All symbol tickers"},
-    "account":       {"ttl_sec": 10,   "weight": 10, "desc": "Account balances"},
-    "open_orders":   {"ttl_sec": 5,    "weight": 3,  "desc": "Open orders (per symbol)"},
+    "tickers":       {"ttl_sec": 3,    "weight": 2,  "desc": "All symbol tickers"},
+    "account":       {"ttl_sec": 5,    "weight": 10, "desc": "Account balances"},
+    "open_orders":   {"ttl_sec": 3,    "weight": 3,  "desc": "Open orders (per symbol)"},
     "exchange_info": {"ttl_sec": 3600, "weight": 20, "desc": "Exchange info (symbols, filters)"},
-    "symbol_ticker": {"ttl_sec": 3,    "weight": 1,  "desc": "Single symbol ticker"},
-    "server_time":   {"ttl_sec": 30,   "weight": 1,  "desc": "Binance server time"},
-    "klines":        {"ttl_sec": 60,   "weight": 5,  "desc": "Klines (per symbol/interval)"},
+    "symbol_ticker": {"ttl_sec": 2,    "weight": 1,  "desc": "Single symbol ticker"},
+    "server_time":   {"ttl_sec": 15,   "weight": 1,  "desc": "Binance server time"},
+    "klines":        {"ttl_sec": 30,   "weight": 5,  "desc": "Klines (per symbol/interval)"},
 }
 
 
