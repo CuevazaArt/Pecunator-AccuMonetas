@@ -1,7 +1,16 @@
-"""ExampleJV-inspired rule set — LIVE mode only (simulated mode removed)."""
+"""ExampleJV-inspired rule set — LIVE mode only (simulated mode removed).
+
+Dorothy activation is governed by the dual-gate TrendSignal system:
+  Gate 1 (Trend, 2h):  HA MA(1,open) > MA(2,open) on 1h → BULLISH
+  Gate 2 (Entry, 5min): price < regular 1h candle open → CLEAR
+  Dorothy buys ONLY when BULLISH + CLEAR.
+"""
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any, Callable, Optional
@@ -11,7 +20,7 @@ from runtime.bot._decimal_utils import dec as _dec, quantize as _q
 from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
-import time
+_LOG = logging.getLogger("pecunator.bot.dorothy")
 
 
 # _dec and _q imported from runtime.bot._decimal_utils
@@ -264,6 +273,93 @@ class DorothyRunner(BaseStrategyRunner):
                 }
                 self._maybe_emit_metrics()
                 return stop_report
+        # ── DUAL-GATE: Trend Signal Check ───────────────────────────
+        # Gate 1: HA MA crossover (trend direction, refreshes every 2h)
+        # Gate 2: price < regular 1h candle open (anti-peak, every 5min)
+        try:
+            from runtime.modules.trend_signal import get_trend_signal_service
+            _trend_svc = get_trend_signal_service()
+
+            # Refresh trend (Gate 1) if needed (every 2h)
+            if _trend_svc.needs_trend_refresh(symbol):
+                try:
+                    klines_1h = await self._to_thread(
+                        lambda: client.get_klines(symbol=symbol, interval="1h", limit=10)
+                    )
+                    _trend_svc.update_trend(symbol, klines_1h)
+                except Exception as kl_err:
+                    self._emit("WARNING", f"dorothy:trend_refresh_failed: {kl_err}")
+
+            # Refresh entry gate (Gate 2) — current price vs regular 1h candle open
+            if _trend_svc.needs_entry_refresh(symbol):
+                try:
+                    # Fetch current 1h candle (last = active candle)
+                    kline_now = await self._to_thread(
+                        lambda: client.get_klines(symbol=symbol, interval="1h", limit=1)
+                    )
+                    candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
+                    _trend_svc.update_entry_gate(
+                        symbol, float(market_price), candle_open_1h
+                    )
+                except Exception as eg_err:
+                    self._emit("WARNING", f"dorothy:entry_gate_refresh_failed: {eg_err}")
+
+            # Read combined decision
+            _full = _trend_svc.get_full_state(symbol)
+            trend_ok = _full.get("trend") == "BULLISH"
+            entry_ok = _full.get("entry_gate") == "CLEAR"
+            gates_open = _full.get("should_run", False)
+
+            self._emit("INFO", "dorothy:trend_gate", {
+                "symbol": symbol,
+                "trend": _full.get("trend"),
+                "ma1": _full.get("ma1"),
+                "ma2": _full.get("ma2"),
+                "entry_gate": _full.get("entry_gate"),
+                "price": _full.get("current_price"),
+                "candle_open": _full.get("candle_open_1h"),
+                "should_run": gates_open,
+            })
+
+            if not trend_ok:
+                return {
+                    "preset_id": c.preset_id, "symbol": symbol,
+                    "simulated": c.simulated, "trading_enabled": c.trading_enabled,
+                    "decision": "WAIT_TREND_BEARISH",
+                    "trend": _full.get("trend"),
+                    "ma1": _full.get("ma1"), "ma2": _full.get("ma2"),
+                    "market_price": str(market_price),
+                    "loop_interval_sec": c.loop_interval_sec,
+                }
+
+            if not entry_ok:
+                return {
+                    "preset_id": c.preset_id, "symbol": symbol,
+                    "simulated": c.simulated, "trading_enabled": c.trading_enabled,
+                    "decision": "WAIT_ENTRY_BLOCKED",
+                    "trend": _full.get("trend"),
+                    "entry_gate": _full.get("entry_gate"),
+                    "current_price": _full.get("current_price"),
+                    "candle_open_1h": _full.get("candle_open_1h"),
+                    "market_price": str(market_price),
+                    "loop_interval_sec": c.loop_interval_sec,
+                }
+
+        except ImportError:
+            self._emit("WARNING", "dorothy:trend_signal_not_available")
+        except Exception as ts_err:
+            # Fail-closed: if trend service errors, don't buy
+            self._emit("ERROR", f"dorothy:trend_service_error: {ts_err}")
+            return {
+                "preset_id": c.preset_id, "symbol": symbol,
+                "simulated": c.simulated, "trading_enabled": c.trading_enabled,
+                "decision": "WAIT_TREND_ERROR",
+                "error": str(ts_err),
+                "market_price": str(market_price),
+                "loop_interval_sec": c.loop_interval_sec,
+            }
+
+        # ── DCA entry logic (only reached when both gates are open) ──
         should_buy = False
         threshold = None
         if lowest_sell is not None:
@@ -276,10 +372,6 @@ class DorothyRunner(BaseStrategyRunner):
             self._emit("INFO", f"dorothy:foreign_sells_detected on {symbol}, skipping buy")
         else:
             should_buy = True
-
-        # Regime filter removed in v2.0 — will be rebuilt from scratch
-        regime_allowed = True
-        regime_reason = ""
 
         # T0.1: Count active rungs (open SELL LIMITs = active DCA positions)
         active_rungs = len(sell_limit)
@@ -344,7 +436,7 @@ class DorothyRunner(BaseStrategyRunner):
         if not should_buy:
             self._maybe_emit_metrics()
             return report
-        # Regime filter block removed in v2.0 — will be rebuilt from scratch
+        # Trend + entry gates already checked above — both are OPEN at this point
 
         # T0.2: Block if daily spend limit exceeded
         if should_buy:
