@@ -173,7 +173,7 @@ _guard: Optional[BudgetGuard] = None
 
 def get_budget_guard(
     data_dir: Optional[Path | str] = None,
-    max_daily_spend_usdt: Decimal = Decimal("100"),
+    max_daily_spend_usdt: Decimal = Decimal("500"),
 ) -> BudgetGuard:
     """Get or create the global BudgetGuard singleton."""
     global _guard

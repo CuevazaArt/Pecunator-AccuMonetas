@@ -283,8 +283,8 @@ class _ThusneldaHubPageState extends State<ThusneldaHubPage> {
         'max_drawdown_pct': _maxDdCtrl.text.trim(),
         'stop_loss_pct': _stopLossCtrl.text.trim(),
         'metrics_interval_cycles': int.tryParse(_metricsEveryCtrl.text.trim()) ?? 3,
-        'simulated': true,
-        'trading_enabled': false,
+        'simulated': false,
+        'trading_enabled': true,
       });
       await _reload();
     });

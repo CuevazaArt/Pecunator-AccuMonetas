@@ -110,6 +110,33 @@ class DorothyRunner(BaseStrategyRunner):
             )
         client = self._ensure_client()
         symbol = c.symbol
+
+        # ── Auto-resolve precision from Binance exchangeInfo ──────────
+        # Cached per-symbol to avoid redundant API calls each cycle.
+        if not hasattr(self, '_precision_cache'):
+            self._precision_cache: dict[str, tuple[int, int]] = {}
+        if symbol not in self._precision_cache:
+            try:
+                from decimal import Decimal as _D
+                sym_info = await self._to_thread(
+                    lambda: client.get_symbol_info(symbol)
+                )
+                if sym_info:
+                    for flt in sym_info.get('filters', []):
+                        ft = str(flt.get('filterType', '')).upper()
+                        if ft == 'LOT_SIZE':
+                            step = flt.get('stepSize', '1')
+                            c.qty_decimals = max(0, -_D(str(step)).normalize().as_tuple().exponent)
+                        elif ft == 'PRICE_FILTER':
+                            tick = flt.get('tickSize', '0.01')
+                            c.price_decimals = max(0, -_D(str(tick)).normalize().as_tuple().exponent)
+                    self._precision_cache[symbol] = (c.qty_decimals, c.price_decimals)
+                    self._emit("INFO", f"precision:resolved {symbol} qty_dec={c.qty_decimals} price_dec={c.price_decimals}")
+            except Exception as e:
+                self._emit("WARNING", f"precision:fallback {symbol} — {e}")
+        else:
+            c.qty_decimals, c.price_decimals = self._precision_cache[symbol]
+
         prev_equity = self._last_equity_usdt
         equity, capital = await self._compute_equity_usdt(client)
         drawdown, trading_blocked = self._register_equity(equity)
