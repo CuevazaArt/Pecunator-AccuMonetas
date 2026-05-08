@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-
-import 'pages/dorothy_hub_page.dart';
+import 'pages/home_shell.dart';
 
 void main() {
-  // ── Error boundary: prevent widget crashes from killing the entire app ──
-  // Critical for production: if a widget build() throws, the bots in the
-  // backend keep running. Without this, an uncaught widget error kills
-  // the Flutter process and all bots lose their coordinated state.
+  // Error boundary: prevent widget crashes from killing the entire app.
+  // Critical for production: bots in the backend keep running.
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    // Log but do NOT crash — bots must keep running
     debugPrint('FlutterError caught: ${details.exceptionAsString()}');
   };
 
@@ -29,47 +25,35 @@ void main() {
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
             const SizedBox(height: 8),
-            const Text(
-              'Error de renderizado',
-              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
+            const Text('Error de renderizado',
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text(
-              details.exceptionAsString(),
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(details.exceptionAsString(),
+                style: const TextStyle(color: Colors.grey, fontSize: 11),
+                maxLines: 3, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
-            const Text(
-              'Los bots siguen operando normalmente.',
-              style: TextStyle(color: Colors.orangeAccent, fontSize: 10),
-            ),
+            const Text('Los bots siguen operando normalmente.',
+                style: TextStyle(color: Colors.orangeAccent, fontSize: 10)),
           ],
         ),
       ),
     );
   };
 
-  runApp(const PecunatorDesktopApp());
+  runApp(const PecunatorApp());
 }
 
-class PecunatorDesktopApp extends StatelessWidget {
-  const PecunatorDesktopApp({super.key});
+class PecunatorApp extends StatelessWidget {
+  const PecunatorApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pecunator Desktop',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
-      ),
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: ThemeMode.dark,
-      home: BotControlPage(
-        darkMode: true,
-        onThemeChanged: (_) {},
-      ),
+      home: const HomeShell(),
     );
   }
 }
