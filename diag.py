@@ -12,6 +12,9 @@ def _query(db_name, sql, limit=20):
     conn.row_factory = sqlite3.Row
     try:
         return [dict(r) for r in conn.execute(sql).fetchall()[:limit]]
+    except sqlite3.OperationalError as e:
+        print(f"  (DB error: {e})")
+        return []
     finally:
         conn.close()
 
@@ -24,28 +27,28 @@ print("\n── ORDER LEDGER (last 20) ──")
 rows = _query("order_ledger.sqlite", "SELECT * FROM order_ledger ORDER BY id DESC LIMIT 20")
 if rows:
     for r in reversed(rows):
-        print(f"  [{r.get('ts_utc','')}] {r.get('bot_type','')} {r.get('side','')} {r.get('order_type','')} "
-              f"{r.get('symbol','')} qty={r.get('qty','')} reason={r.get('reason','')} "
-              f"mode={r.get('execution_mode','')} binance_id={r.get('binance_order_id','')}")
+        print(f"  [{r.get('ts_utc','')[:19]}] {r.get('bot_type',''):10s} {r.get('side',''):4s} "
+              f"{r.get('symbol',''):12s} qty={r.get('qty',''):>8s} reason={r.get('reason',''):25s} "
+              f"mode={r.get('execution_mode',''):10s} binance_id={r.get('binance_order_id','')}")
 else:
     print("  (empty)")
 
 # Budget Guard
 print("\n── BUDGET GUARD (today) ──")
-rows = _query("budget_guard.sqlite", "SELECT * FROM budget_transactions ORDER BY id DESC LIMIT 10")
+rows = _query("budget_guard.sqlite", "SELECT * FROM budget_ledger ORDER BY id DESC LIMIT 10")
 if rows:
     for r in rows:
         print(f"  [{r.get('ts_utc','')}] {r.get('bot_id','')} {r.get('symbol','')} "
               f"{r.get('side','')} {r.get('amount_usdt','')} USDT")
 else:
-    print("  (no transactions)")
+    print("  (no budget transactions yet — RegimeFilter is blocking all buys)")
 
 # Dorothy logs
 print("\n── DOROTHY LOGS (last 10) ──")
 rows = _query("dorothy_hub.sqlite", "SELECT ts_utc, level, message FROM dorothy_logs ORDER BY id DESC LIMIT 10")
 if rows:
     for r in reversed(rows):
-        print(f"  [{r.get('ts_utc','')}] [{r.get('level','')}] {r.get('message','')[:120]}")
+        print(f"  [{r.get('ts_utc','')[:19]}] [{r.get('level',''):7s}] {r.get('message','')[:120]}")
 else:
     print("  (empty)")
 
@@ -54,7 +57,7 @@ print("\n── MASHA LOGS (last 10) ──")
 rows = _query("masha_hub.sqlite", "SELECT ts_utc, level, message FROM masha_logs ORDER BY id DESC LIMIT 10")
 if rows:
     for r in reversed(rows):
-        print(f"  [{r.get('ts_utc','')}] [{r.get('level','')}] {r.get('message','')[:120]}")
+        print(f"  [{r.get('ts_utc','')[:19]}] [{r.get('level',''):7s}] {r.get('message','')[:120]}")
 else:
     print("  (empty)")
 
@@ -63,21 +66,9 @@ print("\n── THUSNELDA LOGS (last 10) ──")
 rows = _query("thusnelda_hub.sqlite", "SELECT ts_utc, level, message FROM thusnelda_logs ORDER BY id DESC LIMIT 10")
 if rows:
     for r in reversed(rows):
-        print(f"  [{r.get('ts_utc','')}] [{r.get('level','')}] {r.get('message','')[:120]}")
+        print(f"  [{r.get('ts_utc','')[:19]}] [{r.get('level',''):7s}] {r.get('message','')[:120]}")
 else:
     print("  (empty)")
-
-# Exception Zoo
-print("\n── EXCEPTION ZOO (last 5) ──")
-try:
-    rows = _query("exception_zoo.sqlite", "SELECT * FROM exceptions ORDER BY id DESC LIMIT 5")
-    if rows:
-        for r in rows:
-            print(f"  [{r.get('ts_utc','')}] {r.get('module','')} — {r.get('message','')[:100]}")
-    else:
-        print("  (no exceptions)")
-except Exception:
-    print("  (table not found)")
 
 # Hub instances
 print("\n── ACTIVE BOT INSTANCES ──")
@@ -87,6 +78,16 @@ for hub, table in [("dorothy_hub.sqlite", "dorothy_instances"), ("masha_hub.sqli
         mode = "🔴 LIVE" if not r.get("simulated") else "🟢 SIM"
         active = "▶ RUNNING" if r.get("desired_running") else "⏸ STOPPED"
         trade = "✅ ENABLED" if r.get("trading_enabled") else "❌ DISABLED"
-        print(f"  {r.get('tag','?'):20s} {r.get('bot_id','?'):30s} {mode} {trade} {active}")
+        print(f"  {r.get('tag','?'):25s} {r.get('bot_id','?')[:20]:20s} {mode} {trade} {active}")
+
+# Equity snapshots
+print("\n── EQUITY SNAPSHOTS (last 5 per bot) ──")
+for hub, pfx in [("dorothy_hub.sqlite", "dorothy"), ("masha_hub.sqlite", "masha"), ("thusnelda_hub.sqlite", "thusnelda")]:
+    rows = _query(hub, f"SELECT ts_utc, bot_id, equity_usdt, drawdown_pct, trading_blocked FROM {pfx}_equity_snapshots ORDER BY id DESC LIMIT 5")
+    if rows:
+        print(f"  [{pfx.upper()}]")
+        for r in rows:
+            blocked = "⛔" if r.get("trading_blocked") else "✅"
+            print(f"    {r.get('ts_utc','')[:19]} equity={r.get('equity_usdt','?'):>12s} dd={r.get('drawdown_pct','?'):>8s} {blocked}")
 
 print("\n" + "=" * 60)
