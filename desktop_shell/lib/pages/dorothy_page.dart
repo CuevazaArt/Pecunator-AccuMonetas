@@ -34,19 +34,20 @@ class _DorothyPageState extends State<DorothyPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Prospector panel (top, collapsible) ─────────────────
-          _ProspectorExpander(
+    return Column(
+      children: [
+        // ── Prospector panel (top, collapsible, fixed height) ─────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: _ProspectorExpander(
             api: _api,
             onSymbolSelected: _onSymbolSelected,
           ),
-          const SizedBox(height: 8),
-          // ── Standard Dorothy Hub ───────────────────────────────
-          BotHubTemplate(
+        ),
+        const SizedBox(height: 4),
+        // ── Standard Dorothy Hub (scrollable) ─────────────────────
+        Expanded(
+          child: BotHubTemplate(
             hubName: 'Dorothy',
             hubColor: Colors.greenAccent,
             hubIcon: Icons.trending_up,
@@ -103,8 +104,8 @@ class _DorothyPageState extends State<DorothyPage> {
               const BotFormField(key: 'note', label: 'Nota', hint: 'descripción'),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
