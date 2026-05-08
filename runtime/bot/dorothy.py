@@ -277,19 +277,9 @@ class DorothyRunner(BaseStrategyRunner):
         else:
             should_buy = True
 
-        # T1.1: Regime filter — block buys in unfavorable market conditions
+        # Regime filter removed in v2.0 — will be rebuilt from scratch
         regime_allowed = True
         regime_reason = ""
-        if should_buy:
-            try:
-                from runtime.core.regime_filter import get_regime_filter
-                regime_allowed, regime_reason = await get_regime_filter().is_favorable(
-                    symbol, client, _to_thread=self._to_thread,
-                )
-            except Exception as e:
-                regime_reason = f"FAIL_CLOSED:regime_error:{e}"
-                regime_allowed = False
-                # FAIL-CLOSED: if regime filter fails, block the trade
 
         # T0.1: Count active rungs (open SELL LIMITs = active DCA positions)
         active_rungs = len(sell_limit)
@@ -354,17 +344,7 @@ class DorothyRunner(BaseStrategyRunner):
         if not should_buy:
             self._maybe_emit_metrics()
             return report
-        # T1.1: Block if market regime is unfavorable
-        if should_buy and not regime_allowed:
-            report["decision"] = "BLOCKED_REGIME"
-            report["regime_reason"] = regime_reason
-            self._emit(
-                "WARNING",
-                f"bot:regime_blocked {regime_reason}",
-                {"report": report},
-            )
-            self._maybe_emit_metrics()
-            return report
+        # Regime filter block removed in v2.0 — will be rebuilt from scratch
 
         # T0.2: Block if daily spend limit exceeded
         if should_buy:

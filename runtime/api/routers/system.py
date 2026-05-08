@@ -217,13 +217,7 @@ async def order_ledger_stats() -> dict[str, Any]:
     return get_order_ledger().stats()
 
 
-# ── Regime Filter ───────────────────────────────────────────────────
-
-@router.get("/api/v1/regime-filter/status")
-async def regime_filter_status() -> dict[str, Any]:
-    """Return current regime filter state for all cached symbols."""
-    from runtime.core.regime_filter import get_regime_filter
-    return get_regime_filter().status()
+# ── Regime Filter — removed in v2.0, will be rebuilt ──────────────
 
 
 # ── API Log ─────────────────────────────────────────────────────────

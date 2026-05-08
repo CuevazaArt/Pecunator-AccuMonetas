@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'pages/dorothy_hub_page.dart';
-import 'services/vision_scraper.dart';
-import 'services/history_scraper.dart';
 
 void main() {
   // ── Error boundary: prevent widget crashes from killing the entire app ──
@@ -56,30 +54,8 @@ void main() {
   runApp(const PecunatorDesktopApp());
 }
 
-class PecunatorDesktopApp extends StatefulWidget {
+class PecunatorDesktopApp extends StatelessWidget {
   const PecunatorDesktopApp({super.key});
-
-  @override
-  State<PecunatorDesktopApp> createState() => _PecunatorDesktopAppState();
-}
-
-class _PecunatorDesktopAppState extends State<PecunatorDesktopApp> {
-  bool _darkMode = true;
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-start cold sync in patient mode (1 per hour)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final symbols = HistoryScraperService.instance.symbols;
-      if (symbols.isNotEmpty) {
-        VisionScraperService.instance.startColdSync(symbols, ['1d', '4h', '1h', '1m']);
-      } else {
-        // Fallback default symbols
-        VisionScraperService.instance.startColdSync(['BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT'], ['1d', '4h', '1h', '1m']);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +65,10 @@ class _PecunatorDesktopAppState extends State<PecunatorDesktopApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
       ),
       darkTheme: ThemeData.dark(useMaterial3: true),
-      themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: ThemeMode.dark,
       home: BotControlPage(
-        darkMode: _darkMode,
-        onThemeChanged: (v) => setState(() => _darkMode = v),
+        darkMode: true,
+        onThemeChanged: (_) {},
       ),
     );
   }

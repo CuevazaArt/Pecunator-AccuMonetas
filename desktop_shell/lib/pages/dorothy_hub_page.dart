@@ -4,20 +4,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
-import '../services/history_scraper.dart';
-import '../widgets/market_monitor.dart';
-import '../widgets/library_manager.dart';
-import '../widgets/earn_manager.dart';
-import '../widgets/carry_trade.dart';
+// Deprecated imports removed in v2.0 simplification
 import '../widgets/compact_weight_gauge.dart';
 import 'masha_hub_page.dart';
 import 'thusnelda_hub_page.dart';
 import 'bot_guide_page.dart';
 import 'spot_account_page.dart';
 import 'api_weight_page.dart';
-import 'market_events_page.dart';
+// market_events_page removed in v2.0 simplification
 import 'system_dashboard_page.dart';
-import 'api_sandbox_page.dart';
+// api_sandbox_page removed in v2.0 simplification
 import '../widgets/weight_monitor_dialog.dart';
 import '../widgets/vmo_dashboard.dart';
 import '../widgets/system_status_bar.dart';
@@ -105,10 +101,7 @@ class _BotControlPageState extends State<BotControlPage> {
         setState(_tickBinanceClock);
       }
     });
-    HistoryScraperService.instance.api = _api;
-    // NOTE: HistoryScraperService.start() disabled — it uses REST API
-    // (banned). Historical data now ingested via VisionScraper (ZIPs).
-    // HistoryScraperService.instance.start();
+    // HistoryScraperService removed in v2.0 simplification
 
     // ── Auto-start gateway & sync timestamp on boot ──
     // Fire-and-forget: UI loads immediately; gateway starts in background.
@@ -147,7 +140,7 @@ class _BotControlPageState extends State<BotControlPage> {
 
   @override
   void dispose() {
-    HistoryScraperService.instance.stop();
+    // HistoryScraperService removed in v2.0 simplification
     _tagCtrl.dispose();
     _symbolCtrl.dispose();
     _loopCtrl.dispose();
@@ -1571,17 +1564,11 @@ class _BotControlPageState extends State<BotControlPage> {
         actions: [
           // â”€â”€ Navigation: pages â”€â”€
           _navBtn(Icons.home, 'Dorothy Hub', 0),
-          _navBtn(Icons.candlestick_chart, 'Mercado', 1),
-          _navBtn(Icons.account_balance_wallet_outlined, 'Cuenta Spot', 2),
-          _navBtn(Icons.library_books, 'Biblioteca', 3),
-          _navBtn(Icons.psychology_alt_outlined, 'Masha', 4),
-          _navBtn(Icons.hub_outlined, 'Thusnelda', 5),
-          _navBtn(Icons.savings_outlined, 'Earn', 6),
-          _navBtn(Icons.currency_exchange, 'Carry', 7),
-          _navBtn(Icons.speed_outlined, 'API Weight', 8),
-          _navBtn(Icons.newspaper_outlined, 'Macro', 9),
-          _navBtn(Icons.dashboard_outlined, 'Sistema', 10),
-          _navBtn(Icons.api_outlined, 'Sandbox', 11),
+          _navBtn(Icons.account_balance_wallet_outlined, 'Cuenta Spot', 1),
+          _navBtn(Icons.psychology_alt_outlined, 'Masha', 2),
+          _navBtn(Icons.hub_outlined, 'Thusnelda', 3),
+          _navBtn(Icons.speed_outlined, 'API Weight', 4),
+          _navBtn(Icons.dashboard_outlined, 'Sistema', 5),
           const SizedBox(width: 4),
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
@@ -1656,17 +1643,11 @@ class _BotControlPageState extends State<BotControlPage> {
           Expanded(
             child: [
               _buildDorothyView(),
-              MarketMonitorPage(api: _api),
               SpotAccountPage(engineBase: _engineBase, activeSymbols: _hubBots.map((b) => (b['symbol'] ?? '').toString()).where((s) => s.isNotEmpty).toList()),
-              const LibraryManagerPage(),
               MashaHubPage(engineBase: _engineBase),
               ThusneldaHubPage(engineBase: _engineBase),
-              const EarnManagerPage(),
-              const CarryTradePage(),
               ApiWeightMonitorPage(api: _api),
-              MarketEventsPage(api: _api),
               SystemDashboardPage(api: _api),
-              ApiSandboxPage(engineBase: _engineBase),
             ][_currentIndex],
           ),
           // ── Persistent compact weight gauge + system status (visible on ALL pages) ──
