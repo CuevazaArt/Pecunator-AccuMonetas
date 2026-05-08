@@ -207,13 +207,11 @@ class HubBotLogsOut(BaseModel):
 class MashaBotCreateBody(BaseModel):
     bot_id: Optional[str] = None
     tag: str = Field(default="Masha", min_length=1, max_length=64)
-    symbol: str = Field(default="BTCUSDT", min_length=5, max_length=32)
-    base_asset: str = Field(default="BTC", min_length=2, max_length=16)
-    quote_asset: str = Field(default="USDT", min_length=2, max_length=16)
-    loop_interval_sec: int = Field(default=300, ge=1, le=86400)
+    symbols_csv: str = Field(default="BTCUSDT", min_length=3, max_length=512)
+    loop_interval_sec: int = Field(default=59, ge=1, le=86400)
     quote_min_free_to_operate: str = Field(default="6")
     buy_qty_base: str = Field(default="0.001")
-    profit_factor: str = Field(default="0.01")
+    profit_factor: str = Field(default="0.05")
     timeframe_w: str = Field(default="1w", min_length=1, max_length=8)
     periods_w: int = Field(default=2, ge=1, le=1000)
     mm_periods_w: int = Field(default=2, ge=1, le=1000)
@@ -222,8 +220,6 @@ class MashaBotCreateBody(BaseModel):
     periods_h: int = Field(default=2, ge=1, le=1000)
     mm_periods_h: int = Field(default=2, ge=1, le=1000)
     margin_low_h: str = Field(default="0.003")
-    qty_decimals: int = Field(default=8, ge=0, le=18)
-    price_decimals: int = Field(default=8, ge=0, le=18)
     note: str = Field(default="", max_length=20)
     max_drawdown_pct: str = Field(default="0.25")
     stop_loss_pct: str = Field(default="0.15")
@@ -234,9 +230,7 @@ class MashaBotCreateBody(BaseModel):
 
 class MashaBotUpdateBody(BaseModel):
     tag: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    symbol: Optional[str] = Field(default=None, min_length=5, max_length=32)
-    base_asset: Optional[str] = Field(default=None, min_length=2, max_length=16)
-    quote_asset: Optional[str] = Field(default=None, min_length=2, max_length=16)
+    symbols_csv: Optional[str] = Field(default=None, min_length=3, max_length=512)
     loop_interval_sec: Optional[int] = Field(default=None, ge=1, le=86400)
     quote_min_free_to_operate: Optional[str] = None
     buy_qty_base: Optional[str] = None
@@ -249,8 +243,6 @@ class MashaBotUpdateBody(BaseModel):
     periods_h: Optional[int] = Field(default=None, ge=1, le=1000)
     mm_periods_h: Optional[int] = Field(default=None, ge=1, le=1000)
     margin_low_h: Optional[str] = None
-    qty_decimals: Optional[int] = Field(default=None, ge=0, le=18)
-    price_decimals: Optional[int] = Field(default=None, ge=0, le=18)
     note: Optional[str] = Field(default=None, max_length=20)
     max_drawdown_pct: Optional[str] = None
     stop_loss_pct: Optional[str] = None
@@ -265,9 +257,7 @@ class MashaBotOut(BaseModel):
     created_at: str
     running: bool
     preset_id: str = ""
-    symbol: str
-    base_asset: str
-    quote_asset: str
+    symbols_csv: str = ""
     simulated: bool
     trading_enabled: bool
     loop_interval_sec: int
@@ -282,8 +272,6 @@ class MashaBotOut(BaseModel):
     periods_h: int
     mm_periods_h: int
     margin_low_h: str
-    qty_decimals: int
-    price_decimals: int
     note: str
     max_drawdown_pct: str
     stop_loss_pct: str

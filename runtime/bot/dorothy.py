@@ -173,11 +173,18 @@ class DorothyRunner(BaseStrategyRunner):
             {"symbol": symbol, "response": open_orders},
         )
         my_tag = f"dorothy-{getattr(self, '_bot_id', 'dorothy')}"
+        # Filter to only MY tagged sell limits for DCA logic
         sell_limit = [
             o
             for o in (open_orders if isinstance(open_orders, list) else [])
             if str(o.get("side")) == "SELL" and str(o.get("type")) == "LIMIT" and str(o.get("clientOrderId", "")).startswith(my_tag)
         ]
+        # SAFETY: Also detect ANY sell limits on this symbol (including manual/foreign)
+        all_sell_limits = [
+            o for o in (open_orders if isinstance(open_orders, list) else [])
+            if str(o.get("side")) == "SELL" and str(o.get("type")) == "LIMIT"
+        ]
+        has_foreign_sells = len(all_sell_limits) > len(sell_limit)
         lowest_sell = None
         if sell_limit:
             lowest_sell = min(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
@@ -263,6 +270,10 @@ class DorothyRunner(BaseStrategyRunner):
             trigger = _dec(lowest_sell.get("price", "0"), "0")
             threshold = trigger * (Decimal("1") - (c.profit_factor + c.margin_drop_factor))
             should_buy = market_price <= threshold
+        elif has_foreign_sells:
+            # Foreign/manual sell limits exist — do NOT buy, do NOT interfere
+            should_buy = False
+            self._emit("INFO", f"dorothy:foreign_sells_detected on {symbol}, skipping buy")
         else:
             should_buy = True
 
