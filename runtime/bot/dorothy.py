@@ -140,7 +140,7 @@ class DorothyRunner(BaseStrategyRunner):
             c.qty_decimals, c.price_decimals = self._precision_cache[symbol]
 
         prev_equity = self._last_equity_usdt
-        equity, capital = await self._compute_equity_usdt(client)
+        equity, capital = await self._compute_equity_usdt(client, symbol=symbol)
         drawdown, trading_blocked = self._register_equity(equity)
         self._record_return(prev_equity, equity)
         self._last_equity_usdt = equity

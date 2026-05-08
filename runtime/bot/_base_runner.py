@@ -171,8 +171,15 @@ class BaseStrategyRunner:
 
     async def _compute_equity_usdt(
         self, client: Client, base_asset: str = "USDT",
+        symbol: str = "",
     ) -> tuple[Decimal, Decimal]:
-        """Compute total equity and free capital in base_asset."""
+        """Compute equity and free capital in base_asset.
+
+        If ``symbol`` is provided (e.g. 'XRPUSDT'), equity is scoped to
+        ONLY the base-asset of that pair + free USDT.  This gives each
+        bot an accurate per-symbol equity instead of inflating with the
+        entire account.
+        """
         try:
             from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
@@ -193,6 +200,11 @@ class BaseStrategyRunner:
                 if isinstance(t, dict):
                     prices[str(t.get("symbol", "")).upper()] = _dec(t.get("price", "0"), "0")
 
+        # Determine which assets to include
+        scope_asset = ""
+        if symbol and symbol.upper().endswith(base_asset):
+            scope_asset = symbol.upper().replace(base_asset, "")
+
         equity = Decimal("0")
         base_free = Decimal("0")
         balances = account.get("balances", []) if isinstance(account, dict) else []
@@ -209,6 +221,9 @@ class BaseStrategyRunner:
                 if asset == base_asset:
                     equity += total
                     base_free = free
+                    continue
+                # When scoped, only count the bot's specific asset
+                if scope_asset and asset != scope_asset:
                     continue
                 px = prices.get(f"{asset}{base_asset}")
                 if px and px > 0:
