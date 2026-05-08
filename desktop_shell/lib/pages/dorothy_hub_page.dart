@@ -1687,103 +1687,67 @@ class _BotControlPageState extends State<BotControlPage> {
 
   Widget _buildDorothyView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_loadingHub) const LinearProgressIndicator(),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            crossAxisAlignment: WrapCrossAlignment.start,
+          // ── Dense header row ──
+          Row(
             children: [
-              // Left Column: Main Hub Info
-              SizedBox(
-                width: 400,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-          if (_gatewayRunning &&
-              _apiWeightUsed != null &&
-                _apiWeightLimit > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Tooltip(
-                  message:
-                      'Misma métrica de cabecera Binance (X-MBX-USED-WEIGHT-1M). '
-                      'Límite de referencia: variable PECUNATOR_API_WEIGHT_LIMIT_1M en el motor.',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Peso REST (1m): $_apiWeightUsed / $_apiWeightLimit',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          minHeight: 6,
-                          value:
-                              (_apiWeightUsed!.clamp(0, _apiWeightLimit)) /
-                              _apiWeightLimit,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            _restWeightColor(_apiWeightUsed, _apiWeightLimit),
+              // Weight bar compact
+              if (_gatewayRunning && _apiWeightUsed != null && _apiWeightLimit > 0)
+                Expanded(
+                  flex: 3,
+                  child: Tooltip(
+                    message: 'X-MBX-USED-WEIGHT-1M',
+                    child: Row(
+                      children: [
+                        Text('W: $_apiWeightUsed/$_apiWeightLimit',
+                          style: TextStyle(fontSize: 11, fontFamily: 'monospace',
+                            color: _restWeightColor(_apiWeightUsed, _apiWeightLimit))),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              minHeight: 4,
+                              value: (_apiWeightUsed!.clamp(0, _apiWeightLimit)) / _apiWeightLimit,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _restWeightColor(_apiWeightUsed, _apiWeightLimit)),
+                              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            ),
                           ),
-                          backgroundColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            Text(
-              'API activa: $_activeCredential',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            Text(
-              'Activo base operativo: $_opsBaseAsset',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            // â”€â”€ Dorothy Guide button â”€â”€
-            OutlinedButton.icon(
-              onPressed: _openDorothyGuide,
-              icon: const Icon(Icons.menu_book, size: 16),
-              label: const Text('Instructivo Dorothy 7.0'),
-            ),
-            const SizedBox(height: 8),
-            if (_lastError != '-')
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  _lastError,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                ),
-              ),
-                  ],
-                ),
-              ),
-              
-              // Right Column: VMO Sensor Dashboard
+                )
+              else
+                const Spacer(flex: 3),
+              const SizedBox(width: 12),
+              // API + Base asset
+              Text('API: $_activeCredential · $_opsBaseAsset',
+                style: TextStyle(fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              // Guide button compact
               SizedBox(
-                height: 280, // Constrain height so it doesn't take infinite space
-                child: VmoDashboard(api: _api),
+                height: 28,
+                child: OutlinedButton(
+                  onPressed: _openDorothyGuide,
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                  child: const Text('Doc 7.0', style: TextStyle(fontSize: 11)),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          if (_lastError != '-')
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(_lastError, style: const TextStyle(color: Colors.redAccent, fontSize: 11)),
+            ),
+          const SizedBox(height: 6),
             Card(
               child: ExpansionTile(
                 title: const Text('Herramientas de Protocolo y Cleanup (RED BUTTON)', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.redAccent)),
@@ -1883,53 +1847,46 @@ class _BotControlPageState extends State<BotControlPage> {
               ),
             ),
             Card(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: ExpansionTile(
+                title: Row(
                   children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Nueva instancia Dorothy',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 8),
-                        Tooltip(
-                          message: 'Crear instancia con este seteo',
-                          child: FilledButton.icon(
-                            onPressed: _loadingHub ? null : _createBot,
-                            icon: const Icon(Icons.add_circle_outline, size: 16),
-                            label: const Text('Nueva instancia'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                      _field(_tagCtrl, 'tag', width: 130, tooltip: _settingTooltip('tag')),
-                      _field(_symbolCtrl, 'symbol', width: 100, tooltip: _settingTooltip('symbol')),
-                      _field(_loopCtrl, 'loop', width: 70, tooltip: _settingTooltip('loop')),
-                      _field(_quoteCtrl, 'qty', width: 70, tooltip: _settingTooltip('qty')),
-                      _field(_profitCtrl, 'profit', width: 80, tooltip: _settingTooltip('profit')),
-                      _field(_dropCtrl, 'drop', width: 80, tooltip: _settingTooltip('drop')),
-                      // qDec/pDec auto-resolved from Binance exchangeInfo
-                      _field(_noteCtrl, 'note', width: 100, tooltip: _settingTooltip('note')),
-                      _field(_maxDdCtrl, 'maxDd', width: 80, tooltip: _settingTooltip('maxDd')),
-                      _field(_stopLossCtrl, 'stopLoss', width: 80, tooltip: _settingTooltip('stopLoss')),
-                      _field(_metricsEveryCtrl, 'metricsEvery', width: 85, tooltip: _settingTooltip('metricsEvery')),
-                          IconButton(
-                            tooltip: 'Seteos usados anteriormente',
-                            onPressed: _loadingHub ? null : _openConfigHistoryDialog,
-                            icon: const Icon(Icons.history, size: 18),
-                          ),
-                      ],
+                    const Icon(Icons.add_circle_outline, size: 16),
+                    const SizedBox(width: 6),
+                    const Text('Nueva instancia', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: _loadingHub ? null : _createBot,
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30)),
+                      child: const Text('Crear', style: TextStyle(fontSize: 12)),
                     ),
                   ],
                 ),
+                initiallyExpanded: false,
+                dense: true,
+                childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _field(_tagCtrl, 'tag', width: 110, tooltip: _settingTooltip('tag')),
+                      _field(_symbolCtrl, 'symbol', width: 95, tooltip: _settingTooltip('symbol')),
+                      _field(_loopCtrl, 'loop', width: 60, tooltip: _settingTooltip('loop')),
+                      _field(_quoteCtrl, 'qty', width: 60, tooltip: _settingTooltip('qty')),
+                      _field(_profitCtrl, 'profit', width: 70, tooltip: _settingTooltip('profit')),
+                      _field(_dropCtrl, 'drop', width: 70, tooltip: _settingTooltip('drop')),
+                      _field(_noteCtrl, 'note', width: 90, tooltip: _settingTooltip('note')),
+                      _field(_maxDdCtrl, 'maxDd', width: 70, tooltip: _settingTooltip('maxDd')),
+                      _field(_stopLossCtrl, 'stopLoss', width: 70, tooltip: _settingTooltip('stopLoss')),
+                      _field(_metricsEveryCtrl, 'metricsEvery', width: 75, tooltip: _settingTooltip('metricsEvery')),
+                      IconButton(
+                        tooltip: 'Historial',
+                        onPressed: _loadingHub ? null : _openConfigHistoryDialog,
+                        icon: const Icon(Icons.history, size: 16),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 6),
