@@ -43,8 +43,6 @@ class MashaService(BaseHubService):
             periods_h=int(kwargs.get("periods_h", 24)),
             mm_periods_h=int(kwargs.get("mm_periods_h", 24)),
             margin_low_h=Decimal(str(kwargs.get("margin_low_h", "0.01"))),
-            qty_decimals=int(kwargs.get("qty_decimals", 5)),
-            price_decimals=int(kwargs.get("price_decimals", 2)),
             note=str(kwargs.get("note", "")),
             max_drawdown_pct=Decimal(str(kwargs.get("max_drawdown_pct", "0.25"))),
             stop_loss_pct=Decimal(str(kwargs.get("stop_loss_pct", "0.15"))),
@@ -71,8 +69,7 @@ class MashaService(BaseHubService):
             "periods_h": cfg.periods_h,
             "mm_periods_h": cfg.mm_periods_h,
             "margin_low_h": str(cfg.margin_low_h),
-            "qty_decimals": cfg.qty_decimals,
-            "price_decimals": cfg.price_decimals,
+
             "note": cfg.note,
             "max_drawdown_pct": str(cfg.max_drawdown_pct),
             "stop_loss_pct": str(cfg.stop_loss_pct),
@@ -181,7 +178,7 @@ class MashaService(BaseHubService):
                         str(cfg.profit_factor),
                         cfg.timeframe_w, int(cfg.periods_w), int(cfg.mm_periods_w), str(cfg.margin_low_w),
                         cfg.timeframe_h, int(cfg.periods_h), int(cfg.mm_periods_h), str(cfg.margin_low_h),
-                        int(cfg.qty_decimals), int(cfg.price_decimals), str(cfg.note or ""),
+                        0, 0, str(cfg.note or ""),  # qty_decimals/price_decimals: legacy, resolved dynamically
                         str(cfg.max_drawdown_pct), str(cfg.stop_loss_pct),
                         int(cfg.metrics_interval_cycles),
                         1 if cfg.simulated else 0,
@@ -220,7 +217,7 @@ class MashaService(BaseHubService):
                 mm_periods_w=int(row["mm_periods_w"]), margin_low_w=str(row["margin_low_w"]),
                 timeframe_h=str(row["timeframe_h"]), periods_h=int(row["periods_h"]),
                 mm_periods_h=int(row["mm_periods_h"]), margin_low_h=str(row["margin_low_h"]),
-                qty_decimals=int(row["qty_decimals"]), price_decimals=int(row["price_decimals"]),
+                # qty_decimals/price_decimals no longer in MashaConfig (dynamic per-symbol resolution)
                 note=str(row["note"] or ""),
                 max_drawdown_pct=str(row["max_drawdown_pct"] or "0.25"),
                 stop_loss_pct=str(row["stop_loss_pct"] or "0.15"),
