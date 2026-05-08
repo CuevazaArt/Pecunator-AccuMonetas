@@ -202,13 +202,15 @@ class RegimeFilter:
         allowed = True
 
         # ── Condition 1: BTC > EMA200 on 1D ──────────────────────────
-        # OPERATOR OVERRIDE: BTC EMA200 gate bypassed for live stress-test.
-        # All other guards (ADX, vol, macro) remain active.
         try:
-            _, btc_reason = await self._check_btc_ema200(client, _to_thread, now)
-            _LOG.debug("regime_filter: BTC EMA200 BYPASSED (%s) — operator override", btc_reason)
+            btc_ok, btc_reason = await self._check_btc_ema200(client, _to_thread, now)
+            if not btc_ok:
+                allowed = False
+                reasons.append(btc_reason)
         except Exception as e:
-            _LOG.debug("regime_filter: BTC EMA200 check skipped: %s", e)
+            _LOG.warning("regime_filter: BTC EMA200 check failed: %s — FAIL-CLOSED", e)
+            allowed = False
+            reasons.append(f"FAIL_CLOSED:btc_ema200_error:{e}")
 
         # ── Condition 2: Symbol ADX/DI on 4H ─────────────────────────
         try:

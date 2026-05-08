@@ -104,7 +104,7 @@ def main():
         {
             "symbol": "XRPUSDT",
             "loop_interval_sec": 450,
-            "quote_order_qty": "6",
+            "quote_order_qty": "8",
             "profit_factor": "0.05",
             "margin_drop_factor": "0.03",
             "qty_decimals": 1,

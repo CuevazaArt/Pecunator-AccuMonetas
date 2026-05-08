@@ -33,7 +33,7 @@ class ThusneldaService(BaseHubService):
             symbols_csv=str(kwargs.get("symbols_csv", "PEPEUSDT,SUIUSDT,NEARUSDT,INJUSDT,FETUSDT")),
             loop_interval_sec=int(kwargs.get("loop_interval_sec", 300)),
             between_symbol_sec=int(kwargs.get("between_symbol_sec", 3)),
-            quote_order_qty_modulo=Decimal(str(kwargs.get("quote_order_qty_modulo", "6"))),
+            quote_order_qty_modulo=Decimal(str(kwargs.get("quote_order_qty_modulo", "8"))),
             factor_multiplication=Decimal(str(kwargs.get("factor_multiplication", "0.94"))),
             profit_target_pct=Decimal(str(kwargs.get("profit_target_pct", "0.06"))),
             meta_equity_usdt=Decimal(str(kwargs.get("meta_equity_usdt", "0"))),

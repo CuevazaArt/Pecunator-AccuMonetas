@@ -104,7 +104,7 @@ def main():
     dorothy_syms = ["XRPUSDT", "ADAUSDT", "DOTUSDT", "LINKUSDT", "DOGEUSDT", "LTCUSDT", "ATOMUSDT", "NEARUSDT", "MATICUSDT", "UNIUSDT"]
     for sym in dorothy_syms:
         create_and_start("/api/v1/hub/bots", f"Dorothy-{sym}", {
-            "symbol": sym, "loop_interval_sec": 5, "quote_order_qty": "10", "profit_factor": "0.05", "stop_loss_pct": "0.15", "simulated": False, "trading_enabled": True
+            "symbol": sym, "loop_interval_sec": 5, "quote_order_qty": "8", "profit_factor": "0.05", "stop_loss_pct": "0.15", "simulated": False, "trading_enabled": True
         })
         time.sleep(0.5)
 

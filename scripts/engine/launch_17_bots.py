@@ -56,7 +56,7 @@ print('\nLanzando Dorothy (10 instancias)...')
 dorothy_syms = ['XRPUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT', 'DOGEUSDT', 'LTCUSDT', 'ATOMUSDT', 'NEARUSDT', 'MATICUSDT', 'UNIUSDT']
 dorothy_loops = [4, 5, 6, 4, 7, 5, 6, 7, 4, 5]
 for sym, loop in zip(dorothy_syms, dorothy_loops):
-    start_bot('/api/v1/hub/bots', f'Dorothy-{sym}', {'symbol': sym, 'loop_interval_sec': loop, 'quote_order_qty': '10', 'profit_factor': '0.05', 'stop_loss_pct': '0.15', 'simulated': False, 'trading_enabled': True})
+    start_bot('/api/v1/hub/bots', f'Dorothy-{sym}', {'symbol': sym, 'loop_interval_sec': loop, 'quote_order_qty': '8', 'profit_factor': '0.05', 'stop_loss_pct': '0.15', 'simulated': False, 'trading_enabled': True})
     time.sleep(0.5)
 
 print('\n17 bots creados exitosamente.')
