@@ -1,9 +1,9 @@
-"""Thusnelda — volatile basket strategy runner.
+"""Thusnelda — volatile basket strategy runner — LIVE mode only.
 
 Operating Model (L0 Basket):
   - Maintains a fixed basket of 5 mid-cap volatile altcoins from sectors
     NOT overlapping with Dorothy (trend-following) or Masha (DCA range).
-  - Buys the entire basket on activation (market dip / VMO opportunity).
+  - Buys the entire basket on activation (market dip opportunity).
   - Harvests when total basket equity rises >= target (6% default).
   - Symbols: PEPE, SUI, NEAR, INJ, FET (Meme/L1/AI/DeFi sectors).
   - This bot does NOT operate BTC, ETH, SOL, or BNB (those belong
@@ -22,7 +22,7 @@ from binance.client import Client
 
 from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
-from runtime.bot._paper_log import log_paper_trade
+
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 from runtime.core.security_util import sanitize_log_message
 
@@ -136,7 +136,7 @@ class ThusneldaConfig:
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
         d["symbols"] = self.symbols()
-        d["mode"] = "SIMULATED" if self.simulated else "LIVE"
+        d["mode"] = "LIVE"
         # Remove internal frozenset from serialization
         d.pop("_RESERVED_SYMBOLS", None)
         return d
@@ -163,7 +163,7 @@ class ThusneldaRunner(BaseStrategyRunner):
         return f"thusnelda:{self.config.symbols_csv}"
 
     def _loop_log_summary(self, report: dict[str, Any]) -> str:
-        return f"thusnelda:cycle symbols={len(report.get('symbols', []))} simulated={report.get('simulated')}"
+        return f"thusnelda:cycle symbols={len(report.get('symbols', []))}"
 
     async def _qty_for_market_sell(self, client: Client, symbol: str, qty: Decimal) -> Decimal | None:
         try:
@@ -200,7 +200,7 @@ class ThusneldaRunner(BaseStrategyRunner):
             return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
-        if not c.simulated and not c.trading_enabled:
+        if not c.trading_enabled:
             raise RuntimeError("LIVE mode requires trading_enabled=true (explicit switch).")
         client = self._ensure_client()
         await self._sync_time_for_signed(client)
@@ -233,50 +233,36 @@ class ThusneldaRunner(BaseStrategyRunner):
                     # BUY_INITIAL_REFERENCE is qty=0 — no real spend.
                     # Budget guard only gates actual BUY_MARKET/DCA rungs.
                     item["decision"] = "BUY_INITIAL_REFERENCE"
-                    if c.simulated:
-                        item["execution"] = "SIMULATED"
-                        try:
-                            from runtime.core.order_ledger import get_order_ledger
-                            get_order_ledger().record(
-                                bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
-                                qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
-                                reason="BUY_INITIAL_REFERENCE", drawdown_pct="0",
-                                active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
-                            )
-                        except Exception as e:
-                            self._emit("ERROR", f"order_ledger:record_failed:{e}")
-                    else:
-                        _ledger_id = None
-                        try:
-                            from runtime.core.order_ledger import get_order_ledger
-                            _ledger_id = get_order_ledger().record(
-                                bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
-                                qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
-                                reason="BUY_INITIAL_REFERENCE", drawdown_pct="0",
-                                active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
-                            )
-                        except Exception as e:
-                            self._emit("ERROR", f"order_ledger:record_failed:{e}")
-                        
-                        order = await self._signed_call(
-                            client,
-                            lambda s=symbol: client.create_order(
-                                symbol=s,
-                                side=client.SIDE_BUY,
-                                type=client.ORDER_TYPE_MARKET,
-                                quoteOrderQty=str(c.quote_order_qty_modulo),
-                            ),
+                    _ledger_id = None
+                    try:
+                        from runtime.core.order_ledger import get_order_ledger
+                        _ledger_id = get_order_ledger().record(
+                            bot_id=getattr(self, '_bot_id', 'thusnelda'),
+                            bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
+                            qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
+                            reason="BUY_INITIAL_REFERENCE", drawdown_pct="0",
+                            active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
                         )
-                        if _ledger_id:
-                            try:
-                                from runtime.core.order_ledger import get_order_ledger
-                                get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
-                            except Exception: pass
-                        self._emit("INFO", "binance:create_order_buy_initial", {"symbol": symbol, "response": order})
-                        item["execution"] = "LIVE"
-                        item["order_id"] = order.get("orderId") if isinstance(order, dict) else None
+                    except Exception as e:
+                        self._emit("ERROR", f"order_ledger:record_failed:{e}")
+                    
+                    order = await self._signed_call(
+                        client,
+                        lambda s=symbol: client.create_order(
+                            symbol=s,
+                            side=client.SIDE_BUY,
+                            type=client.ORDER_TYPE_MARKET,
+                            quoteOrderQty=str(c.quote_order_qty_modulo),
+                        ),
+                    )
+                    if _ledger_id:
+                        try:
+                            from runtime.core.order_ledger import get_order_ledger
+                            get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
+                        except Exception: pass
+                    self._emit("INFO", "binance:create_order_buy_initial", {"symbol": symbol, "response": order})
+                    item["execution"] = "LIVE"
+                    item["order_id"] = order.get("orderId") if isinstance(order, dict) else None
                     decisions.append(item)
                 else:
                     prices = [_dec(tr.get("price", "0"), "0") for tr in buys_after_ref[-30:]]
@@ -320,16 +306,10 @@ class ThusneldaRunner(BaseStrategyRunner):
                             try:
                                 from runtime.core.budget_guard import get_budget_guard
                                 bg = get_budget_guard()
-                                if c.simulated:
-                                    if not bg.can_spend(c.quote_order_qty_modulo):
-                                        item["decision"] = "BLOCKED_BUDGET"
-                                        decisions.append(item)
-                                        continue
-                                else:
-                                    if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty_modulo):
-                                        item["decision"] = "BLOCKED_BUDGET"
-                                        decisions.append(item)
-                                        continue
+                                if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty_modulo):
+                                    item["decision"] = "BLOCKED_BUDGET"
+                                    decisions.append(item)
+                                    continue
                             except Exception as e:
                                 item["decision"] = "BLOCKED_BUDGET"
                                 item["error"] = f"FAIL_CLOSED {e}"
@@ -337,50 +317,36 @@ class ThusneldaRunner(BaseStrategyRunner):
                                 continue
 
                             item["decision"] = "BUY_MARKET"
-                            if c.simulated:
-                                item["execution"] = "SIMULATED"
-                                try:
-                                    from runtime.core.order_ledger import get_order_ledger
-                                    get_order_ledger().record(
-                                        bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                        bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
-                                        qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
-                                        reason="BUY_DCA_RUNG", drawdown_pct="0",
-                                        active_rungs=len(buys_after_ref), max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
-                                    )
-                                except Exception as e:
-                                    self._emit("ERROR", f"order_ledger:record_failed:{e}")
-                            else:
-                                _ledger_id = None
-                                try:
-                                    from runtime.core.order_ledger import get_order_ledger
-                                    _ledger_id = get_order_ledger().record(
-                                        bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                        bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
-                                        qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
-                                        reason="BUY_DCA_RUNG", drawdown_pct="0",
-                                        active_rungs=len(buys_after_ref), max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
-                                    )
-                                except Exception as e:
-                                    self._emit("ERROR", f"order_ledger:record_failed:{e}")
-
-                                order = await self._signed_call(
-                                    client,
-                                    lambda s=symbol: client.create_order(
-                                        symbol=s,
-                                        side=client.SIDE_BUY,
-                                        type=client.ORDER_TYPE_MARKET,
-                                        quoteOrderQty=str(c.quote_order_qty_modulo),
-                                    ),
+                            _ledger_id = None
+                            try:
+                                from runtime.core.order_ledger import get_order_ledger
+                                _ledger_id = get_order_ledger().record(
+                                    bot_id=getattr(self, '_bot_id', 'thusnelda'),
+                                    bot_type="thusnelda", symbol=symbol, side="BUY", order_type="MARKET",
+                                    qty="0", quote_order_qty=str(c.quote_order_qty_modulo),
+                                    reason="BUY_DCA_RUNG", drawdown_pct="0",
+                                    active_rungs=len(buys_after_ref), max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
                                 )
-                                if _ledger_id:
-                                    try:
-                                        from runtime.core.order_ledger import get_order_ledger
-                                        get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
-                                    except Exception: pass
-                                self._emit("INFO", "binance:create_order_buy_market", {"symbol": symbol, "response": order})
-                                item["execution"] = "LIVE"
-                                item["order_id"] = order.get("orderId") if isinstance(order, dict) else None
+                            except Exception as e:
+                                self._emit("ERROR", f"order_ledger:record_failed:{e}")
+
+                            order = await self._signed_call(
+                                client,
+                                lambda s=symbol: client.create_order(
+                                    symbol=s,
+                                    side=client.SIDE_BUY,
+                                    type=client.ORDER_TYPE_MARKET,
+                                    quoteOrderQty=str(c.quote_order_qty_modulo),
+                                ),
+                            )
+                            if _ledger_id:
+                                try:
+                                    from runtime.core.order_ledger import get_order_ledger
+                                    get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
+                                except Exception: pass
+                            self._emit("INFO", "binance:create_order_buy_market", {"symbol": symbol, "response": order})
+                            item["execution"] = "LIVE"
+                            item["order_id"] = order.get("orderId") if isinstance(order, dict) else None
                         else:
                             item["decision"] = "WAIT_PRICE_NOT_BELOW_LIMIT"
                         decisions.append(item)
@@ -477,20 +443,6 @@ class ThusneldaRunner(BaseStrategyRunner):
                     rec: dict[str, Any] = {"asset": asset, "symbol": sym, "free": str(free)}
                     if q is None or q <= 0:
                         rec["decision"] = "SKIP_INVALID_QTY"
-                    elif c.simulated:
-                        rec["decision"] = "SELL_MARKET"
-                        rec["execution"] = "SIMULATED"
-                        rec["quantity"] = str(q)
-                        try:
-                            from runtime.core.order_ledger import get_order_ledger
-                            get_order_ledger().record(
-                                bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                bot_type="thusnelda", symbol=sym, side="SELL", order_type="MARKET",
-                                qty=str(q), quote_order_qty="0",
-                                reason="HARVEST_BASKET", drawdown_pct=str(drawdown),
-                                active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
-                            )
-                        except Exception: pass
                     else:
                         _ledger_id = None
                         try:
@@ -562,58 +514,38 @@ class ThusneldaRunner(BaseStrategyRunner):
                         "market_price": str(cur),
                         "stop_price": str(stop_price),
                     }
-                    if c.simulated:
-                        liq_rec["execution"] = "SIMULATED"
+                    base_asset = sym.replace("USDT", "")
+                    bal = await self._signed_call(client, lambda a=base_asset: client.get_asset_balance(asset=a))
+                    free = _dec((bal or {}).get("free", "0"), "0")
+                    q = await self._qty_for_market_sell(client, sym, free)
+                    if q and q > 0:
+                        _ledger_id = None
                         try:
                             from runtime.core.order_ledger import get_order_ledger
-                            get_order_ledger().record(
+                            _ledger_id = get_order_ledger().record(
                                 bot_id=getattr(self, '_bot_id', 'thusnelda'),
                                 bot_type="thusnelda", symbol=sym, side="SELL", order_type="MARKET",
-                                qty="0", quote_order_qty="0",
+                                qty=str(q), quote_order_qty="0",
                                 reason="STOP_LOSS", drawdown_pct=str(drawdown),
-                                active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
+                                active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
                             )
                         except Exception: pass
-                    else:
-                        base_asset = sym.replace("USDT", "")
-                        bal = await self._signed_call(client, lambda a=base_asset: client.get_asset_balance(asset=a))
-                        free = _dec((bal or {}).get("free", "0"), "0")
-                        q = await self._qty_for_market_sell(client, sym, free)
-                        if q and q > 0:
-                            _ledger_id = None
+                        order = await self._signed_call(
+                            client,
+                            lambda s=sym, qty=q: client.order_market_sell(symbol=s, quantity=str(qty)),
+                        )
+                        if _ledger_id:
                             try:
                                 from runtime.core.order_ledger import get_order_ledger
-                                _ledger_id = get_order_ledger().record(
-                                    bot_id=getattr(self, '_bot_id', 'thusnelda'),
-                                    bot_type="thusnelda", symbol=sym, side="SELL", order_type="MARKET",
-                                    qty=str(q), quote_order_qty="0",
-                                    reason="STOP_LOSS", drawdown_pct=str(drawdown),
-                                    active_rungs=0, max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
-                                )
+                                get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
                             except Exception: pass
-                            order = await self._signed_call(
-                                client,
-                                lambda s=sym, qty=q: client.order_market_sell(symbol=s, quantity=str(qty)),
-                            )
-                            if _ledger_id:
-                                try:
-                                    from runtime.core.order_ledger import get_order_ledger
-                                    get_order_ledger().update_binance_response(_ledger_id, str((order or {}).get("orderId", "")), str((order or {}).get("status", "")))
-                                except Exception: pass
-                            self._emit("INFO", "binance:order_market_sell_stop_loss", {"symbol": sym, "response": order})
-                            liq_rec["execution"] = "LIVE"
-                            liq_rec["quantity"] = str(q)
-                            liq_rec["order_id"] = order.get("orderId") if isinstance(order, dict) else None
+                        self._emit("INFO", "binance:order_market_sell_stop_loss", {"symbol": sym, "response": order})
+                        liq_rec["execution"] = "LIVE"
+                        liq_rec["quantity"] = str(q)
+                        liq_rec["order_id"] = order.get("orderId") if isinstance(order, dict) else None
                     liquidations.append(liq_rec)
                     self._emit("WARNING", "thusnelda:stop_loss_triggered", liq_rec)
         self._emit("INFO", "thusnelda:decision", {"report": report})
-        if c.simulated:
-            for item in report.get("decisions", []):
-                log_paper_trade(
-                    "thusnelda",
-                    str(item.get("symbol", "")),
-                    str(item.get("decision", "")),
-                    item,
-                )
+
         self._maybe_emit_metrics()
         return report

@@ -1,4 +1,4 @@
-"""Masha2.0-inspired multi-timeframe DCA strategy runner."""
+"""Masha2.0-inspired multi-timeframe DCA strategy runner — LIVE mode only."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from binance.client import Client
 
 from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
-from runtime.bot._paper_log import log_paper_trade
+
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
 
@@ -88,7 +88,7 @@ class MashaConfig:
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
         d["symbols"] = self.symbols()
-        d["mode"] = "SIMULATED" if self.simulated else "LIVE"
+        d["mode"] = "LIVE"
         return d
 
 
@@ -121,7 +121,7 @@ class MashaRunner(BaseStrategyRunner):
         return f"masha:{self._active_symbol or self.config.symbols_csv[:20]}"
 
     def _loop_log_summary(self, report: dict[str, Any]) -> str:
-        return f"masha:{report.get('decision')} symbol={report.get('symbol', 'None')} simulated={report.get('simulated')}"
+        return f"masha:{report.get('decision')} symbol={report.get('symbol', 'None')}"
 
     async def _ohlc_signal(
         self,
@@ -197,7 +197,7 @@ class MashaRunner(BaseStrategyRunner):
             return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
-        if not c.simulated and not c.trading_enabled:
+        if not c.trading_enabled:
             raise RuntimeError("LIVE mode requires trading_enabled=true (explicit switch).")
         client = self._ensure_client()
         await self._sync_time_for_signed(client)
@@ -326,20 +326,20 @@ class MashaRunner(BaseStrategyRunner):
         # Stop Loss Check
         if dca_price > 0 and c.stop_loss_pct > 0 and close_h > 0 and close_h <= (dca_price * (Decimal("1") - c.stop_loss_pct)):
             stop_price = dca_price * (Decimal("1") - c.stop_loss_pct)
-            if not c.simulated:
-                for order in my_sell_orders:
-                    oid = order.get("orderId")
-                    if oid:
-                        await self._signed_call(client, lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid))
-                p_dec, q_dec = await self._resolve_precision(client, symbol)
-                sell_qty = _q(base_free, q_dec)
-                if sell_qty > 0:
-                    sold = await self._signed_call(
-                        client, lambda q=sell_qty: client.create_order(
-                            symbol=symbol, side=client.SIDE_SELL, type=client.ORDER_TYPE_MARKET,
-                            quantity=str(q), newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
-                        )
+            # Cancel existing sell anchors and market-sell the position
+            for order in my_sell_orders:
+                oid = order.get("orderId")
+                if oid:
+                    await self._signed_call(client, lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid))
+            p_dec, q_dec = await self._resolve_precision(client, symbol)
+            sell_qty = _q(base_free, q_dec)
+            if sell_qty > 0:
+                await self._signed_call(
+                    client, lambda q=sell_qty: client.create_order(
+                        symbol=symbol, side=client.SIDE_SELL, type=client.ORDER_TYPE_MARKET,
+                        quantity=str(q), newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
                     )
+                )
             self._active_symbol = None  # Unlock
             rep = {"decision": "STOP_LOSS", "symbol": symbol, "dca_price": str(dca_price), "stop_price": str(stop_price)}
             self._emit("WARNING", "masha:stop_loss_triggered", rep)
@@ -395,7 +395,7 @@ class MashaRunner(BaseStrategyRunner):
         try:
             from runtime.core.budget_guard import get_budget_guard
             bg = get_budget_guard()
-            if not c.simulated and not bg.try_reserve(self._bot_key(), symbol, planned_quote_cost):
+            if not bg.try_reserve(self._bot_key(), symbol, planned_quote_cost):
                 report["decision"] = "BLOCKED_BUDGET"
                 self._emit("WARNING", "masha:budget_blocked", {"report": report})
                 self._maybe_emit_metrics()
@@ -406,11 +406,7 @@ class MashaRunner(BaseStrategyRunner):
             self._maybe_emit_metrics()
             return report
 
-        if c.simulated:
-            report["execution"] = "SIMULATED"
-            self._emit("INFO", "masha:decision", {"report": report})
-            self._maybe_emit_metrics()
-            return report
+
 
         # LIVE BUY
         buy_cid = f"{my_tag}-buy-{int(time.time())}"

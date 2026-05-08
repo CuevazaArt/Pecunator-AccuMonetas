@@ -15,7 +15,7 @@ from typing import Any, Callable, Optional
 
 from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
-from runtime.bot._paper_log import log_paper_trade
+
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
 
@@ -36,7 +36,7 @@ class DorothyConfig:
     note: str = ""
     # [MEJORA] Proteccion de riesgo configurable.
     max_drawdown_pct: Decimal = Decimal("0.20")
-    stop_loss_pct: Decimal = Decimal("0.15")  # Wider stop for DCA compatibility
+    stop_loss_pct: Decimal = Decimal("0")  # L0: disabled — symmetric hub with Elphaba replaces SL
     metrics_interval_cycles: int = 5
     # T0.1: Hard ceiling on DCA rungs per symbol.
     # Each BUY_AND_SELL creates a SELL LIMIT anchor = 1 rung.
@@ -55,7 +55,7 @@ class DorothyConfig:
         self.simulated = False
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
-        self.quote_order_qty = max(_dec(self.quote_order_qty, "0.0001"), Decimal("0.0001"))
+        self.quote_order_qty = max(_dec(self.quote_order_qty, "5.0"), Decimal("5.0"))
         # L0 floor: 3% minimum profit to ensure viability after commissions
         self.profit_factor = max(_dec(self.profit_factor), Decimal("0.03"))
         self.margin_drop_factor = max(_dec(self.margin_drop_factor), Decimal("0"))
@@ -91,6 +91,7 @@ class DorothyRunner(BaseStrategyRunner):
         super().__init__(log, event_log)
         self.config = DorothyConfig()
         self.config.normalize()
+        self._precision_cache: dict[str, tuple[int, int]] = {}
 
     def apply_config(self, cfg: DorothyConfig) -> None:
         cfg.normalize()
@@ -100,7 +101,7 @@ class DorothyRunner(BaseStrategyRunner):
         return f"dorothy:{self.config.symbol}"
 
     def _loop_log_summary(self, report: dict[str, Any]) -> str:
-        return f"bot:{report.get('decision')} symbol={report.get('symbol')} simulated={report.get('simulated')}"
+        return f"bot:{report.get('decision')} symbol={report.get('symbol')}"
 
     async def run_once(self) -> dict[str, Any]:
         from runtime.core.api_fuse import get_api_fuse
@@ -111,17 +112,30 @@ class DorothyRunner(BaseStrategyRunner):
             return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
-        if not c.simulated and not c.trading_enabled:
+        if not c.trading_enabled:
             raise RuntimeError(
                 "LIVE mode requires trading_enabled=true (explicit switch).",
             )
+
+        # ── SymmetryGuard: check if hub is paused due to failures ──
+        try:
+            from runtime.core.symmetry_guard import get_symmetry_guard
+            _guard = get_symmetry_guard()
+            if _guard.is_hub_paused():
+                reason = _guard.get_pause_reason()
+                self._emit("CRITICAL", "dorothy:HUB_PAUSED", {
+                    "reason": reason,
+                    "action": "Resolve failures then call symmetry_guard.reset_pause()",
+                })
+                return {"decision": "HUB_PAUSED", "reason": reason}
+        except Exception:
+            pass
+
         client = self._ensure_client()
         symbol = c.symbol
 
         # ── Auto-resolve precision from Binance exchangeInfo ──────────
         # Cached per-symbol to avoid redundant API calls each cycle.
-        if not hasattr(self, '_precision_cache'):
-            self._precision_cache: dict[str, tuple[int, int]] = {}
         if symbol not in self._precision_cache:
             try:
                 from decimal import Decimal as _D
@@ -224,37 +238,55 @@ class DorothyRunner(BaseStrategyRunner):
                         "stop_price": str(stop_price),
                         "market_price": str(market_price),
                     }
-                    if c.simulated:
-                        stop_payload["execution"] = "SIMULATED"
-                        self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
-                        stop_loss_triggered = True
-                    else:
-                        oid = sl_order.get("orderId")
-                        qty = _dec(sl_order.get("origQty", "0"), "0")
-                        if oid is not None:
-                            try:
-                                cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
-                                self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
-                            except Exception as e:
-                                self._emit("ERROR", f"binance:cancel_order_stop_loss_failed: {e}")
-                        if qty > 0:
-                            try:
-                                sold = await self._to_thread(
-                                    lambda q=qty: client.create_order(
-                                        symbol=symbol,
-                                        side=client.SIDE_SELL,
-                                        type=client.ORDER_TYPE_MARKET,
-                                        quantity=str(_q(q, c.qty_decimals)),
-                                        newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
-                                    )
+                    oid = sl_order.get("orderId")
+                    qty = _dec(sl_order.get("origQty", "0"), "0")
+                    if oid is not None:
+                        try:
+                            cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
+                            self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
+                        except Exception as e:
+                            self._emit("ERROR", f"binance:cancel_order_stop_loss_failed: {e}")
+                    if qty > 0:
+                        # Record stop-loss in forensic ledger
+                        _sl_lid = None
+                        try:
+                            from runtime.core.order_ledger import get_order_ledger
+                            _sl_lid = get_order_ledger().record(
+                                bot_id=getattr(self, '_bot_id', 'dorothy'),
+                                bot_type="dorothy", symbol=symbol, side="SELL",
+                                order_type="MARKET", qty=str(_q(qty, c.qty_decimals)),
+                                reason="STOP_LOSS",
+                                execution_mode="LIVE",
+                            )
+                        except Exception:
+                            pass
+                        try:
+                            sold = await self._to_thread(
+                                lambda q=qty: client.create_order(
+                                    symbol=symbol,
+                                    side=client.SIDE_SELL,
+                                    type=client.ORDER_TYPE_MARKET,
+                                    quantity=str(_q(q, c.qty_decimals)),
+                                    newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
                                 )
-                                self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
-                                liquidated_qty += qty
-                            except Exception as e:
-                                self._emit("ERROR", f"binance:create_order_sell_market_stop_loss_failed: {e}")
-                        stop_payload["execution"] = "LIVE"
-                        self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
-                        stop_loss_triggered = True
+                            )
+                            self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
+                            if _sl_lid:
+                                try:
+                                    from runtime.core.order_ledger import get_order_ledger
+                                    get_order_ledger().update_binance_response(
+                                        _sl_lid,
+                                        str(sold.get("orderId", "")),
+                                        str(sold.get("status", "")),
+                                    )
+                                except Exception:
+                                    pass
+                            liquidated_qty += qty
+                        except Exception as e:
+                            self._emit("ERROR", f"binance:create_order_sell_market_stop_loss_failed: {e}")
+                    stop_payload["execution"] = "LIVE"
+                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
+                    stop_loss_triggered = True
                         
             if stop_loss_triggered:
                 stop_report = {
@@ -408,14 +440,6 @@ class DorothyRunner(BaseStrategyRunner):
                                "Manual intervention required.",
                 })
                 report["decision"] = "CRITICAL_PAUSE_DRAWDOWN"
-            elif (c.drawdown_liquidate_pct > 0
-                    and drawdown > c.drawdown_liquidate_pct
-                    and c.simulated):
-                report["decision"] = "FORCED_LIQUIDATION_SIMULATED"
-                self._emit("WARNING", "bot:forced_liquidation_simulated", {
-                    "drawdown_pct": str(drawdown),
-                    "threshold": str(c.drawdown_liquidate_pct),
-                })
             self._emit("WARNING", "bot:drawdown_guard_active", {"report": report})
             self._maybe_emit_metrics()
             return report
@@ -439,18 +463,11 @@ class DorothyRunner(BaseStrategyRunner):
             try:
                 from runtime.core.budget_guard import get_budget_guard
                 bg = get_budget_guard()
-                if c.simulated:
-                    if not bg.can_spend(c.quote_order_qty):
-                        report["decision"] = "BLOCKED_BUDGET"
-                        self._emit("WARNING", "bot:budget_blocked", {"report": report})
-                        self._maybe_emit_metrics()
-                        return report
-                else:
-                    if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty):
-                        report["decision"] = "BLOCKED_BUDGET"
-                        self._emit("WARNING", "bot:budget_blocked", {"report": report})
-                        self._maybe_emit_metrics()
-                        return report
+                if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty):
+                    report["decision"] = "BLOCKED_BUDGET"
+                    self._emit("WARNING", "bot:budget_blocked", {"report": report})
+                    self._maybe_emit_metrics()
+                    return report
             except Exception as e:
                 report["decision"] = "BLOCKED_BUDGET"
                 self._emit("WARNING", f"bot:budget_error FAIL_CLOSED {e}", {"report": report})
@@ -472,27 +489,6 @@ class DorothyRunner(BaseStrategyRunner):
         report["planned_qty"] = str(_q(est_qty, c.qty_decimals))
         report["fee_slippage_bps"] = str(_FEE_BPS + _SLIPPAGE_BPS)
 
-        if c.simulated:
-            report["execution"] = "SIMULATED"
-            report["message"] = "Dry run only; no orders sent."
-            # T0.3: Record simulated order in forensic ledger
-            try:
-                from runtime.core.order_ledger import get_order_ledger
-                get_order_ledger().record(
-                    bot_id=getattr(self, '_bot_id', 'dorothy'),
-                    bot_type="dorothy", symbol=symbol, side="BUY",
-                    order_type="MARKET", qty=str(_q(est_qty, c.qty_decimals)),
-                    quote_order_qty=str(c.quote_order_qty), reason="BUY_AND_SELL",
-                    drawdown_pct=str(drawdown), active_rungs=active_rungs,
-                    max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
-                )
-            except Exception as e:
-                self._emit("ERROR", f"order_ledger:record_failed:{e}")
-            self._emit("INFO", "bot:decision", {"report": report})
-            log_paper_trade("dorothy", symbol, report.get("decision", ""), report)
-            self._maybe_emit_metrics()
-            return report
-
         # T0.3: Record LIVE order in forensic ledger BEFORE sending
         _ledger_id = None
         try:
@@ -508,15 +504,40 @@ class DorothyRunner(BaseStrategyRunner):
         except Exception as e:
             self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
-        buy = await self._to_thread(
-            lambda: client.create_order(
-                symbol=symbol,
-                side=client.SIDE_BUY,
-                type=client.ORDER_TYPE_MARKET,
-                quoteOrderQty=str(c.quote_order_qty),
-                newClientOrderId=f"{my_tag}-buy-{int(time.time())}"
+        try:
+            buy = await self._to_thread(
+                lambda: client.create_order(
+                    symbol=symbol,
+                    side=client.SIDE_BUY,
+                    type=client.ORDER_TYPE_MARKET,
+                    quoteOrderQty=str(c.quote_order_qty),
+                    newClientOrderId=f"{my_tag}-buy-{int(time.time())}"
+                )
             )
-        )
+        except Exception as buy_err:
+            # ── Alert: BUY order failed → feed SymmetryGuard ──────
+            try:
+                from runtime.core.symmetry_guard import get_symmetry_guard
+                get_symmetry_guard().record_order_failure(
+                    self._bot_key(), str(buy_err)
+                )
+            except Exception:
+                pass
+            self._emit("CRITICAL", "dorothy:BUY_ORDER_FAILED", {
+                "symbol": symbol, "error": str(buy_err)[:300],
+                "action": "Hub may auto-pause after 3 consecutive failures.",
+            })
+            report["decision"] = "ORDER_FAILED"
+            report["error"] = str(buy_err)[:300]
+            self._maybe_emit_metrics()
+            return report
+
+        # ── Alert: BUY succeeded → reset failure counter ──────────
+        try:
+            from runtime.core.symmetry_guard import get_symmetry_guard
+            get_symmetry_guard().record_order_success(self._bot_key())
+        except Exception:
+            pass
 
         # T0.3: Update ledger with Binance response
         if _ledger_id:
@@ -559,17 +580,45 @@ class DorothyRunner(BaseStrategyRunner):
         except Exception as e:
             self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
-        sell = await self._to_thread(
-            lambda: client.create_order(
-                symbol=symbol,
-                side=client.SIDE_SELL,
-                type=client.ORDER_TYPE_LIMIT,
-                timeInForce=client.TIME_IN_FORCE_GTC,
-                quantity=str(sell_qty),
-                price=str(sell_price),
-                newClientOrderId=f"{my_tag}-sell-{int(time.time())}"
+        try:
+            sell = await self._to_thread(
+                lambda: client.create_order(
+                    symbol=symbol,
+                    side=client.SIDE_SELL,
+                    type=client.ORDER_TYPE_LIMIT,
+                    timeInForce=client.TIME_IN_FORCE_GTC,
+                    quantity=str(sell_qty),
+                    price=str(sell_price),
+                    newClientOrderId=f"{my_tag}-sell-{int(time.time())}"
+                )
             )
-        )
+        except Exception as tp_err:
+            # ── CRITICAL: BUY succeeded but SELL LIMIT failed ─────
+            # Position is now "orphaned" — asset bought but no TP set.
+            self._emit("CRITICAL", "dorothy:TP_LIMIT_FAILED_ORPHAN", {
+                "symbol": symbol,
+                "buy_order_id": buy.get("orderId"),
+                "filled_qty": str(qty),
+                "filled_buy_price": str(buy_price),
+                "intended_sell_price": str(sell_price),
+                "error": str(tp_err)[:300],
+                "action": "MANUAL INTERVENTION REQUIRED — asset bought without TP.",
+            })
+            try:
+                from runtime.core.symmetry_guard import get_symmetry_guard
+                get_symmetry_guard().record_order_failure(
+                    self._bot_key(), f"TP_ORPHAN: {tp_err}"
+                )
+            except Exception:
+                pass
+            report["decision"] = "TP_FAILED_ORPHAN"
+            report["execution"] = "LIVE"
+            report["buy_order_id"] = buy.get("orderId")
+            report["filled_qty"] = str(qty)
+            report["filled_buy_price"] = str(buy_price)
+            report["error"] = str(tp_err)[:300]
+            self._maybe_emit_metrics()
+            return report
 
         # T0.3: Update sell ledger
         if _sell_ledger_id:

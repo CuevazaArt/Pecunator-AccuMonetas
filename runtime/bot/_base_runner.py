@@ -325,7 +325,7 @@ class BaseStrategyRunner:
 
     def _loop_log_summary(self, report: dict[str, Any]) -> str:
         """Return a one-line summary for cycle log."""
-        return f"{self.BOT_TYPE}:cycle simulated={report.get('simulated')}"
+        return f"{self.BOT_TYPE}:cycle"
 
     async def run_once(self) -> dict[str, Any]:
         """Execute one strategy cycle. Must be implemented by subclass."""

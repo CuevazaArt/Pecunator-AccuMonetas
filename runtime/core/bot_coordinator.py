@@ -109,8 +109,7 @@ class BotCoordinator:
         # Callback to actually start the bot runner
         self._start_callbacks: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
 
-        # VMO Sensor removed in v2.0 — replaced by TrendSignal dual-gate
-        # (dorothy checks trend_signal.should_run() inside run_once)
+
 
     # ── Staging ─────────────────────────────────────────────────────
 
@@ -120,16 +119,12 @@ class BotCoordinator:
         hub_type: str,
         loop_interval_sec: float,
         credential_ref: str = "",
-        override_vmo: bool = True,
     ) -> dict[str, Any]:
         """Stage a bot for coordinated launch.
 
         Returns immediately with the computed launch delay.
         Credentials are NOT stored here — the caller retains them and
         uses launch_delay_sec to sleep before actually starting the bot.
-        
-        If override_vmo is False, the VMO heuristic will block staging
-        if the market regime is hostile to the requested bot type.
         """
         delay = self._compute_optimal_delay(loop_interval_sec)
 

@@ -43,7 +43,7 @@ class TestDorothyConfig:
         """Test quote order qty minimum floor."""
         cfg = DorothyConfig(quote_order_qty=Decimal("0"))
         cfg.normalize()
-        assert cfg.quote_order_qty == Decimal("0.0001")
+        assert cfg.quote_order_qty == Decimal("5.0")
 
     def test_normalize_decimals_bounds(self):
         """Test decimal place clamping [0, 18]."""

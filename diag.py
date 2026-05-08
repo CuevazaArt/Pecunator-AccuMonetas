@@ -41,7 +41,7 @@ if rows:
         print(f"  [{r.get('ts_utc','')}] {r.get('bot_id','')} {r.get('symbol','')} "
               f"{r.get('side','')} {r.get('amount_usdt','')} USDT")
 else:
-    print("  (no budget transactions yet — RegimeFilter is blocking all buys)")
+    print("  (no budget transactions yet)")
 
 # Dorothy logs
 print("\n── DOROTHY LOGS (last 10) ──")

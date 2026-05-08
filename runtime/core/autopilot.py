@@ -443,7 +443,6 @@ class AutoStager:
                             loop_interval_sec=float(
                                 tune_result["params"].get("interval_sec", 450)
                             ),
-                            override_vmo=True,
                         )
 
                         action = {
