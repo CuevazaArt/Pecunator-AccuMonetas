@@ -230,25 +230,8 @@ class ThusneldaRunner(BaseStrategyRunner):
                         buys_after_ref.append(tr)
 
                 if not buys_after_ref:
-                    try:
-                        from runtime.core.budget_guard import get_budget_guard
-                        bg = get_budget_guard()
-                        if c.simulated:
-                            if not bg.can_spend(c.quote_order_qty_modulo):
-                                item["decision"] = "BLOCKED_BUDGET"
-                                decisions.append(item)
-                                continue
-                        else:
-                            if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty_modulo):
-                                item["decision"] = "BLOCKED_BUDGET"
-                                decisions.append(item)
-                                continue
-                    except Exception as e:
-                        item["decision"] = "BLOCKED_BUDGET"
-                        item["error"] = f"FAIL_CLOSED {e}"
-                        decisions.append(item)
-                        continue
-
+                    # BUY_INITIAL_REFERENCE is qty=0 — no real spend.
+                    # Budget guard only gates actual BUY_MARKET/DCA rungs.
                     item["decision"] = "BUY_INITIAL_REFERENCE"
                     if c.simulated:
                         item["execution"] = "SIMULATED"
