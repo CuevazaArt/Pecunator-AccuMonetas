@@ -393,8 +393,7 @@ class EngineApi {
   Future<Map<String, dynamic>> orderLedgerRecent({int limit = 50}) =>
       _client.get('/api/v1/order-ledger/recent?limit=$limit');
 
-  Future<Map<String, dynamic>> regimeFilterStatus() =>
-      _client.get('/api/v1/regime-filter/status');
+  // regimeFilterStatus removed in v2.0 — replaced by GTI
 
   Future<Map<String, dynamic>> healthDeep() =>
       _client.get('/api/v1/health/deep');

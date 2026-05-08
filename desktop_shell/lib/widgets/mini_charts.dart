@@ -435,3 +435,157 @@ class _SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant _SparklinePainter old) =>
       old.data.length != data.length || old.color != color;
 }
+
+/// Weight oscillator with adjustable sync interval and time window.
+/// Shows the full 0-100% range (fixed Y axis) for reference against
+/// the auto-scaled MiniWeightChart.
+class WeightOscillator extends StatefulWidget {
+  final EngineApi api;
+  final double height;
+
+  const WeightOscillator({
+    super.key,
+    required this.api,
+    this.height = 52,
+  });
+
+  @override
+  State<WeightOscillator> createState() => _WeightOscillatorState();
+}
+
+class _WeightOscillatorState extends State<WeightOscillator> {
+  Timer? _timer;
+  final List<_Sample> _data = [];
+  int _weightLimit = 6000;
+  bool _fuseTripped = false;
+
+  // Adjustable controls
+  int _syncMs = 200;
+  int _windowMin = 10;
+  static const _syncOptions = [100, 200, 500, 1000, 3000];
+  static const _windowOptions = [1, 5, 10, 30, 60];
+
+  @override
+  void initState() {
+    super.initState();
+    _tick();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(Duration(milliseconds: _syncMs), (_) => _tick());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _tick() async {
+    try {
+      final snap = await widget.api.gatewaySnapshot();
+      final usedRaw = snap['used_weight_1m'];
+      int? used;
+      if (usedRaw is int) { used = usedRaw; }
+      else if (usedRaw is num) { used = usedRaw.toInt(); }
+      else { used = int.tryParse('$usedRaw'); }
+
+      final limitRaw = snap['weight_limit_1m'];
+      int limit = 6000;
+      if (limitRaw is int) { limit = limitRaw; }
+      else if (limitRaw is num) { limit = limitRaw.toInt(); }
+      else { limit = int.tryParse('$limitRaw') ?? 6000; }
+
+      bool fuse = false;
+      try {
+        final fs = await widget.api.apiFuseStatus();
+        fuse = fs['tripped'] == true;
+      } catch (_) {}
+
+      if (!mounted) return;
+      final now = DateTime.now();
+      final cutoff = now.subtract(Duration(minutes: _windowMin));
+      setState(() {
+        if (used != null) { _data.add(_Sample(now, used)); }
+        _data.removeWhere((s) => s.time.isBefore(cutoff));
+        _weightLimit = limit > 0 ? limit : 6000;
+        _fuseTripped = fuse;
+      });
+    } catch (_) {}
+  }
+
+  Color _colorForPct(double pct) {
+    if (_fuseTripped) return const Color(0xFFFF1744);
+    if (pct >= 0.80) return const Color(0xFFFF1744);
+    if (pct >= 0.60) return const Color(0xFFFF9100);
+    if (pct >= 0.40) return const Color(0xFFFFEA00);
+    return const Color(0xFF00E5FF);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = _data.isEmpty ? 0.0 : (_data.last.value / _weightLimit).clamp(0.0, 1.0);
+    final color = _colorForPct(pct);
+    final pctStr = (pct * 100).toStringAsFixed(1);
+
+    return Container(
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          // Label + controls
+          Padding(
+            padding: const EdgeInsets.only(left: 4, right: 2),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$pctStr%', style: TextStyle(fontSize: 9, color: color, fontFamily: 'monospace', fontWeight: FontWeight.w800)),
+                // Sync selector
+                GestureDetector(
+                  onTap: () {
+                    final idx = _syncOptions.indexOf(_syncMs);
+                    setState(() {
+                      _syncMs = _syncOptions[(idx + 1) % _syncOptions.length];
+                      _startTimer();
+                    });
+                  },
+                  child: Text('${_syncMs}ms', style: const TextStyle(fontSize: 7, color: Colors.white30, fontFamily: 'monospace')),
+                ),
+                // Window selector
+                GestureDetector(
+                  onTap: () {
+                    final idx = _windowOptions.indexOf(_windowMin);
+                    setState(() {
+                      _windowMin = _windowOptions[(idx + 1) % _windowOptions.length];
+                    });
+                  },
+                  child: Text('${_windowMin}m', style: const TextStyle(fontSize: 7, color: Colors.white30, fontFamily: 'monospace')),
+                ),
+              ],
+            ),
+          ),
+          // Chart — fixed 0-100% Y axis
+          Expanded(
+            child: CustomPaint(
+              painter: _SparklinePainter(
+                data: _data,
+                maxY: _weightLimit.toDouble(), // Fixed range
+                color: color,
+                fuseTripped: _fuseTripped,
+              ),
+              size: Size.infinite,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

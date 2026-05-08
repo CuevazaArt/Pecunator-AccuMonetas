@@ -52,6 +52,8 @@ class MashaHubPage extends StatelessWidget {
             inputType: TextInputType.number),
         BotFormField(key: 'buy_qty', label: 'Buy Qty', hint: '0.001', defaultValue: '0.001',
             inputType: TextInputType.number),
+        BotFormField(key: 'max_drawdown_pct', label: 'Max DD %', hint: '0.20', defaultValue: '0.20',
+            inputType: TextInputType.number),
         BotFormField(key: 'note', label: 'Nota', hint: 'descripción'),
       ],
     );

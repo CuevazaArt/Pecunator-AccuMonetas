@@ -222,15 +222,10 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                 ),
               ),
               const SizedBox(width: 6),
-              // Global equity
+              // Weight oscillator (100% ref, adjustable sync/window)
               Expanded(
                 flex: 3,
-                child: MiniEquityChart(
-                  api: widget.api,
-                  label: 'Global',
-                  color: const Color(0xFF448AFF),
-                  height: 52,
-                ),
+                child: WeightOscillator(api: widget.api, height: 52),
               ),
               const SizedBox(width: 6),
               // Global equity

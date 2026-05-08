@@ -50,6 +50,12 @@ class ThusneldaHubPage extends StatelessWidget {
             inputType: TextInputType.number),
         BotFormField(key: 'quote_order_qty_modulo', label: 'Qty USDT', hint: '8', defaultValue: '8',
             inputType: TextInputType.number),
+        BotFormField(key: 'qty_decimals', label: 'Qty Dec', hint: '0', defaultValue: '0',
+            inputType: TextInputType.number),
+        BotFormField(key: 'price_decimals', label: 'Price Dec', hint: '8', defaultValue: '8',
+            inputType: TextInputType.number),
+        BotFormField(key: 'max_drawdown_pct', label: 'Max DD %', hint: '0.20', defaultValue: '0.20',
+            inputType: TextInputType.number),
         BotFormField(key: 'note', label: 'Nota', hint: 'descripción'),
       ],
     );

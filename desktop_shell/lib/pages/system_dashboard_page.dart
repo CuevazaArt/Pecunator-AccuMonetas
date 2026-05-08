@@ -2,9 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 
-/// System Dashboard — replaces browser-based backend access.
-/// Dense, information-rich view of all v0.11+ risk controls,
-/// order ledger, regime filter, budget guard, and system health.
+/// System Dashboard — dense view of all risk controls,
+/// order ledger, budget guard, guard chain, and system health.
 class SystemDashboardPage extends StatefulWidget {
   final EngineApi api;
   const SystemDashboardPage({super.key, required this.api});
@@ -19,7 +18,6 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
   Map<String, dynamic> _budget = {};
   Map<String, dynamic> _ledgerStats = {};
   List<dynamic> _ledgerRecent = [];
-  Map<String, dynamic> _regime = {};
   bool _loading = false;
   String _error = '';
 
@@ -44,7 +42,6 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
         widget.api.budgetGuardStatus(),
         widget.api.orderLedgerStats(),
         widget.api.orderLedgerRecent(limit: 20),
-        widget.api.regimeFilterStatus(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -52,7 +49,6 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
         _budget = results[1];
         _ledgerStats = results[2];
         _ledgerRecent = (results[3]['items'] as List?) ?? [];
-        _regime = results[4];
         _error = '';
         _loading = false;
       });
@@ -122,8 +118,8 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
                 // Budget Guard
                 Expanded(child: _buildBudgetGuard()),
                 const SizedBox(width: 8),
-                // Regime Filter
-                Expanded(child: _buildRegimeFilter()),
+                // GTI — Global Trend Indicator (coming soon)
+                Expanded(child: _buildGtiPlaceholder()),
               ],
             ),
             const SizedBox(height: 6),
@@ -249,13 +245,7 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
     );
   }
 
-  Widget _buildRegimeFilter() {
-    final entries = _regime.entries.where((e) => e.key != '_btc_global').toList();
-    final btc = _regime['_btc_global'] as Map?;
-    final btcOk = btc?['allowed'] == true;
-    final btcReason = (btc?['reason'] ?? 'no data').toString();
-    final btcColor = btcOk ? const Color(0xFF00E676) : const Color(0xFFFF1744);
-
+  Widget _buildGtiPlaceholder() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -263,59 +253,42 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.filter_alt_outlined, size: 14, color: btcColor),
+              const Icon(Icons.insights_outlined, size: 14, color: Color(0xFF448AFF)),
               const SizedBox(width: 6),
-              const Text('REGIME FILTER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
+              const Text('GLOBAL TREND INDICATOR', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: btcColor.withOpacity(0.15),
+                  color: Colors.amber.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(btcOk ? 'ALLOWING' : 'BLOCKING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: btcColor)),
+                child: const Text('PENDING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.amber)),
               ),
             ]),
-            const SizedBox(height: 6),
-            // BTC Global
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: btcColor.withOpacity(0.05),
+                color: Colors.white.withOpacity(0.03),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Row(children: [
-                Text('BTC', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: btcColor)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(btcReason, style: const TextStyle(fontSize: 9, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis)),
-              ]),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Capas del GTI:', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600)),
+                  SizedBox(height: 4),
+                  Text('1. Trend Detector — EMA/RSI por símbolo', style: TextStyle(fontSize: 8, color: Colors.white38)),
+                  Text('2. Session Clock — 24H market activity', style: TextStyle(fontSize: 8, color: Colors.white38)),
+                  Text('3. Event Detector — FOMC/CPI watchlist', style: TextStyle(fontSize: 8, color: Colors.white38)),
+                  SizedBox(height: 4),
+                  Text('Reemplaza al Regime Filter (deprecado)', style: TextStyle(fontSize: 8, color: Colors.amber, fontStyle: FontStyle.italic)),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            // Per-symbol
-            for (final e in entries)
-              _regimeRow(e.key, e.value as Map? ?? {}),
-            if (entries.isEmpty && btc == null)
-              const Text('Sin datos de régimen. Ejecuta un bot para activar.', style: TextStyle(fontSize: 10, color: Colors.grey)),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _regimeRow(String symbol, Map data) {
-    final ok = data['allowed'] == true;
-    final reason = (data['reason'] ?? '').toString();
-    final age = data['age_sec'] ?? 0;
-    final color = ok ? const Color(0xFF00E676) : const Color(0xFFFF9100);
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Row(children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        SizedBox(width: 70, child: Text(symbol, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, fontFamily: 'monospace'))),
-        Expanded(child: Text(reason, style: const TextStyle(fontSize: 8, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis)),
-        Text('${age}s ago', style: const TextStyle(fontSize: 8, color: Colors.grey)),
-      ]),
     );
   }
 
@@ -410,7 +383,7 @@ class _SystemDashboardPageState extends State<SystemDashboardPage> {
       ('PanicLock', Icons.lock_outline, 'Bloqueo de emergencia', true, 'CLEAR'),
       ('DrawdownGuard', Icons.trending_down, 'Bloquea en drawdown alto', true, 'ACTIVE'),
       ('MaxRungs', Icons.stacked_line_chart, 'Límite DCA por símbolo (5)', true, 'ENFORCED'),
-      ('RegimeFilter', Icons.filter_alt, 'BTC>EMA200 + ADX + Vol', _regime['_btc_global']?['allowed'] != false, _regime.isEmpty ? 'NO DATA' : (_regime['_btc_global']?['allowed'] == true ? 'ALLOWING' : 'BLOCKING')),
+      ('GTI', Icons.insights, 'Global Trend Indicator (pendiente)', true, 'PENDING'),
       ('BudgetGuard', Icons.shield, 'Techo de gasto 24h', _budget['blocked'] != true, _budget.isEmpty ? 'NO DATA' : (_budget['blocked'] == true ? 'BLOCKED' : 'CLEAR')),
       ('OrderLedger', Icons.receipt_long, 'Auditoría forense', true, 'RECORDING'),
       ('FeeModel', Icons.calculate, 'Fees+slippage 15bps', true, 'ACTIVE'),
