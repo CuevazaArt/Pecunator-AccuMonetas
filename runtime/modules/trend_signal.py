@@ -1,16 +1,18 @@
-"""Trend Signal Service — Heikin Ashi MA crossover for Dorothy on/off.
+"""Trend Signal Service — Dual-gate system for Dorothy execution.
 
-Computes Heikin Ashi candles from raw Binance klines, then derives:
-  MA1 = SMA(1, HA_open)  →  simply the current HA open
-  MA2 = SMA(2, HA_open)  →  average of last 2 HA opens
+Gate 1 — TREND (every 2h, Heikin Ashi 1h):
+  Computes HA candles from raw Binance klines, then:
+    MA1 = SMA(1, HA_open) — current HA open
+    MA2 = SMA(2, HA_open) — avg of last 2 HA opens
+  MA1 > MA2 → BULLISH  |  MA1 < MA2 → BEARISH
+  MA1 == MA2 → keep last *effective* (non-neutral) trend forever
 
-Signal:
-  MA1 > MA2  →  BULLISH  →  Dorothy bots for this symbol = ON
-  MA1 < MA2  →  BEARISH  →  Dorothy bots for this symbol = OFF
-  MA1 == MA2 →  keep last known signal (tie-breaker)
+Gate 2 — ENTRY (every ≤5min, regular candles 1h):
+  Current price vs open of the *active* regular 1h candle:
+    price < candle_open → CLEAR (dip within candle = good entry)
+    price ≥ candle_open → BLOCKED (at or above open = possible peak)
 
-Refresh cadence: every 2 hours per symbol (configurable).
-One signal per symbol applies to ALL Dorothy instances on that symbol.
+Dorothy executes ONLY when:  Gate1 == BULLISH  AND  Gate2 == CLEAR
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import logging
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -45,6 +47,19 @@ CREATE TABLE IF NOT EXISTS trend_signals (
 );
 CREATE INDEX IF NOT EXISTS idx_trend_sym_ts
     ON trend_signals(symbol, ts_utc DESC);
+
+CREATE TABLE IF NOT EXISTS entry_gate_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts_utc        TEXT    NOT NULL,
+    symbol        TEXT    NOT NULL,
+    current_price REAL    NOT NULL,
+    candle_open   REAL    NOT NULL,
+    gate          TEXT    NOT NULL,  -- 'CLEAR' | 'BLOCKED'
+    trend         TEXT    NOT NULL DEFAULT 'NEUTRAL',
+    combined      TEXT    NOT NULL DEFAULT 'OFF'  -- 'ON' | 'OFF'
+);
+CREATE INDEX IF NOT EXISTS idx_entry_sym_ts
+    ON entry_gate_log(symbol, ts_utc DESC);
 """
 
 
@@ -90,8 +105,8 @@ def compute_heikin_ashi(klines: List[List]) -> List[Dict[str, float]]:
     return result
 
 
-def compute_signal(ha_candles: List[Dict[str, float]]) -> Dict[str, Any]:
-    """Compute MA1/MA2 crossover signal from HA candles.
+def compute_trend(ha_candles: List[Dict[str, float]]) -> Dict[str, Any]:
+    """Compute MA1/MA2 crossover signal from HA candles (Gate 1).
 
     MA1 = SMA(1, HA_open) = last HA_open
     MA2 = SMA(2, HA_open) = avg of last 2 HA_opens
@@ -107,7 +122,7 @@ def compute_signal(ha_candles: List[Dict[str, float]]) -> Dict[str, Any]:
     elif ma1 < ma2:
         signal = "BEARISH"
     else:
-        signal = "NEUTRAL"  # Caller resolves with last known
+        signal = "NEUTRAL"  # Caller resolves with last effective
 
     return {
         "signal": signal,
@@ -118,37 +133,78 @@ def compute_signal(ha_candles: List[Dict[str, float]]) -> Dict[str, Any]:
     }
 
 
-# ── Trend Signal Store ──────────────────────────────────────────────
+def compute_entry_gate(
+    current_price: float,
+    candle_open_1h: float,
+) -> Dict[str, Any]:
+    """Check entry gate (Gate 2): price vs regular 1h candle open.
+
+    price < candle_open → CLEAR  (dip = good entry for long)
+    price ≥ candle_open → BLOCKED (at/above open = potential peak)
+    """
+    if candle_open_1h <= 0:
+        return {"gate": "BLOCKED", "reason": "invalid_candle_open"}
+
+    if current_price < candle_open_1h:
+        gate = "CLEAR"
+    else:
+        gate = "BLOCKED"
+
+    return {
+        "gate": gate,
+        "current_price": round(current_price, 8),
+        "candle_open": round(candle_open_1h, 8),
+        "diff": round(current_price - candle_open_1h, 8),
+        "diff_pct": round(((current_price - candle_open_1h) / candle_open_1h) * 100, 4),
+    }
+
+
+# ── In-memory state ────────────────────────────────────────────────
 
 @dataclass
 class SymbolState:
-    """In-memory cache for a symbol's trend state."""
-    signal: str = "NEUTRAL"
+    """In-memory cache for a symbol's full gate state."""
+    # Gate 1: Trend
+    trend: str = "NEUTRAL"           # BULLISH | BEARISH | NEUTRAL
+    last_effective_trend: str = ""   # Last non-NEUTRAL trend (persists through ties)
     ma1: float = 0.0
     ma2: float = 0.0
-    last_check_mono: float = 0.0
-    last_ts_utc: str = ""
+    trend_check_mono: float = 0.0
+    trend_ts_utc: str = ""
 
+    # Gate 2: Entry
+    entry_gate: str = "BLOCKED"      # CLEAR | BLOCKED
+    current_price: float = 0.0
+    candle_open: float = 0.0
+    entry_check_mono: float = 0.0
+    entry_ts_utc: str = ""
+
+    @property
+    def should_run(self) -> bool:
+        """Dorothy executes ONLY when both gates are open."""
+        effective = self.last_effective_trend or self.trend
+        return effective == "BULLISH" and self.entry_gate == "CLEAR"
+
+    @property
+    def effective_trend(self) -> str:
+        return self.last_effective_trend or self.trend
+
+
+# ── Service ─────────────────────────────────────────────────────────
 
 class TrendSignalService:
-    """Manages trend signals for Dorothy symbols.
+    """Dual-gate trend + entry service for Dorothy.
 
-    Fetches klines from Binance, computes HA + MA crossover,
-    stores results in SQLite, and caches in memory.
+    Gate 1 (trend):  Refreshes every 2h — HA MA crossover on 1h klines.
+    Gate 2 (entry):  Refreshes every 5min — price vs regular 1h open.
     """
 
-    def __init__(
-        self,
-        db_path: Path,
-        refresh_seconds: float = 7200.0,  # 2 hours default
-        kline_interval: str = "1h",
-        kline_limit: int = 10,  # Only need last few candles
-    ) -> None:
+    TREND_REFRESH_SEC = 7200.0   # 2 hours
+    ENTRY_REFRESH_SEC = 300.0    # 5 minutes
+
+    def __init__(self, db_path: Path) -> None:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._refresh_sec = refresh_seconds
-        self._kline_interval = kline_interval
-        self._kline_limit = kline_limit
         self._lock = threading.Lock()
         self._cache: Dict[str, SymbolState] = {}
         self._init_schema()
@@ -162,104 +218,217 @@ class TrendSignalService:
 
     # ── Public API ──────────────────────────────────────────────────
 
-    def get_signal(self, symbol: str) -> str:
-        """Get current signal for symbol. Returns 'BULLISH' or 'BEARISH'.
+    def should_run(self, symbol: str) -> bool:
+        """Returns True if Dorothy bots for this symbol should execute.
 
-        If no data yet, returns 'NEUTRAL' (Dorothy should stay off).
+        Both gates must be open:
+          Gate 1: trend == BULLISH (effective, including tie-break)
+          Gate 2: entry == CLEAR  (price < regular 1h open)
         """
-        s = self._cache.get(symbol.upper())
-        if s is None:
-            # Try loading from DB
-            s = self._load_from_db(symbol.upper())
-            if s:
-                self._cache[symbol.upper()] = s
-        return s.signal if s else "NEUTRAL"
+        sym = symbol.upper()
+        s = self._ensure_state(sym)
+        return s.should_run
+
+    def get_signal(self, symbol: str) -> str:
+        """Get effective trend for symbol (BULLISH/BEARISH)."""
+        sym = symbol.upper()
+        s = self._ensure_state(sym)
+        return s.effective_trend
+
+    def get_entry_gate(self, symbol: str) -> str:
+        """Get entry gate status (CLEAR/BLOCKED)."""
+        sym = symbol.upper()
+        s = self._ensure_state(sym)
+        return s.entry_gate
+
+    def get_full_state(self, symbol: str) -> Dict[str, Any]:
+        """Get complete state for a symbol."""
+        sym = symbol.upper()
+        s = self._ensure_state(sym)
+        return {
+            "symbol": sym,
+            "should_run": s.should_run,
+            "trend": s.effective_trend,
+            "trend_raw": s.trend,
+            "ma1": s.ma1,
+            "ma2": s.ma2,
+            "ma_diff": round(s.ma1 - s.ma2, 8),
+            "trend_last_check": s.trend_ts_utc,
+            "entry_gate": s.entry_gate,
+            "current_price": s.current_price,
+            "candle_open_1h": s.candle_open,
+            "price_vs_open": round(s.current_price - s.candle_open, 8),
+            "entry_last_check": s.entry_ts_utc,
+        }
 
     def get_all_signals(self) -> Dict[str, Dict[str, Any]]:
         """Get all cached signals."""
         result = {}
-        for sym, state in self._cache.items():
+        for sym, s in self._cache.items():
             result[sym] = {
-                "signal": state.signal,
-                "ma1": state.ma1,
-                "ma2": state.ma2,
-                "last_check": state.last_ts_utc,
+                "should_run": s.should_run,
+                "trend": s.effective_trend,
+                "ma1": s.ma1,
+                "ma2": s.ma2,
+                "entry_gate": s.entry_gate,
+                "price": s.current_price,
+                "candle_open": s.candle_open,
+                "trend_check": s.trend_ts_utc,
+                "entry_check": s.entry_ts_utc,
             }
         return result
 
-    def should_run(self, symbol: str) -> bool:
-        """Returns True if Dorothy bots for this symbol should be active."""
-        sig = self.get_signal(symbol.upper())
-        return sig == "BULLISH"
+    # ── Refresh checks ──────────────────────────────────────────────
 
-    def needs_refresh(self, symbol: str) -> bool:
-        """Check if a symbol needs a fresh kline fetch."""
+    def needs_trend_refresh(self, symbol: str) -> bool:
+        """Check if trend (Gate 1) needs refresh (every 2h)."""
         s = self._cache.get(symbol.upper())
-        if s is None:
+        if s is None or s.trend_check_mono == 0.0:
             return True
-        elapsed = time.monotonic() - s.last_check_mono
-        return elapsed >= self._refresh_sec
+        return (time.monotonic() - s.trend_check_mono) >= self.TREND_REFRESH_SEC
 
-    def update_from_klines(
-        self, symbol: str, klines: List[List]
-    ) -> Dict[str, Any]:
-        """Compute trend from raw Binance klines and update cache + DB.
+    def needs_entry_refresh(self, symbol: str) -> bool:
+        """Check if entry gate (Gate 2) needs refresh (every 5min)."""
+        s = self._cache.get(symbol.upper())
+        if s is None or s.entry_check_mono == 0.0:
+            return True
+        return (time.monotonic() - s.entry_check_mono) >= self.ENTRY_REFRESH_SEC
+
+    # ── Gate 1: Trend update ────────────────────────────────────────
+
+    def update_trend(self, symbol: str, klines_1h: List[List]) -> Dict[str, Any]:
+        """Update trend from 1h HA klines (Gate 1).
 
         Args:
             symbol: e.g. "BTCUSDT"
-            klines: Raw Binance kline data (list of lists)
-
-        Returns:
-            Signal result dict with ma1, ma2, signal.
+            klines_1h: Raw Binance 1h klines
         """
-        symbol = symbol.upper()
-        ha_candles = compute_heikin_ashi(klines)
-        result = compute_signal(ha_candles)
-
+        sym = symbol.upper()
+        ha = compute_heikin_ashi(klines_1h)
+        result = compute_trend(ha)
         now_utc = datetime.now(timezone.utc).isoformat()
         now_mono = time.monotonic()
 
-        # Resolve NEUTRAL (tie) with last known signal
-        if result["signal"] == "NEUTRAL":
-            prev = self._cache.get(symbol)
-            if prev and prev.signal in ("BULLISH", "BEARISH"):
-                result["signal"] = prev.signal
-                result["reason"] = "tie_kept_previous"
-            else:
-                # Load from DB as fallback
-                db_state = self._load_from_db(symbol)
-                if db_state and db_state.signal in ("BULLISH", "BEARISH"):
-                    result["signal"] = db_state.signal
-                    result["reason"] = "tie_kept_db"
-                else:
-                    result["signal"] = "BEARISH"  # Conservative default
-                    result["reason"] = "tie_default_bearish"
-
-        # Update cache
-        state = SymbolState(
-            signal=result["signal"],
-            ma1=result["ma1"],
-            ma2=result["ma2"],
-            last_check_mono=now_mono,
-            last_ts_utc=now_utc,
-        )
         with self._lock:
-            self._cache[symbol] = state
+            s = self._cache.get(sym) or SymbolState()
 
-        # Persist to DB
-        self._persist(symbol, result, now_utc)
+            # Resolve tie: if NEUTRAL, keep last effective trend
+            if result["signal"] == "NEUTRAL":
+                if s.last_effective_trend:
+                    result["signal"] = s.last_effective_trend
+                    result["reason"] = "tie_kept_effective"
+                else:
+                    # Try DB for historical effective trend
+                    db_trend = self._load_last_effective_trend(sym)
+                    if db_trend:
+                        result["signal"] = db_trend
+                        result["reason"] = "tie_kept_db"
+                    else:
+                        result["signal"] = "BEARISH"  # Conservative
+                        result["reason"] = "tie_default_bearish"
+
+            # Update effective trend only when signal is definitive
+            if result["signal"] in ("BULLISH", "BEARISH"):
+                s.last_effective_trend = result["signal"]
+
+            s.trend = result["signal"]
+            s.ma1 = result["ma1"]
+            s.ma2 = result["ma2"]
+            s.trend_check_mono = now_mono
+            s.trend_ts_utc = now_utc
+            self._cache[sym] = s
+
+        # Persist
+        self._persist_trend(sym, result, now_utc)
 
         _LOG.info(
-            "TrendSignal %s: %s (MA1=%.2f, MA2=%.2f, diff=%.4f)",
-            symbol, result["signal"], result["ma1"], result["ma2"],
+            "Gate1 TREND %s: %s (MA1=%.2f MA2=%.2f diff=%.4f)",
+            sym, result["signal"], result["ma1"], result["ma2"],
             result["ma1"] - result["ma2"],
         )
-
         return result
+
+    # ── Gate 2: Entry gate update ───────────────────────────────────
+
+    def update_entry_gate(
+        self,
+        symbol: str,
+        current_price: float,
+        candle_open_1h: float,
+    ) -> Dict[str, Any]:
+        """Update entry gate from current price vs regular 1h candle open.
+
+        Args:
+            symbol: e.g. "BTCUSDT"
+            current_price: Latest ticker price
+            candle_open_1h: Open of the *current active* regular 1h candle
+        """
+        sym = symbol.upper()
+        gate_result = compute_entry_gate(current_price, candle_open_1h)
+        now_utc = datetime.now(timezone.utc).isoformat()
+        now_mono = time.monotonic()
+
+        with self._lock:
+            s = self._cache.get(sym) or SymbolState()
+            s.entry_gate = gate_result["gate"]
+            s.current_price = gate_result["current_price"]
+            s.candle_open = gate_result["candle_open"]
+            s.entry_check_mono = now_mono
+            s.entry_ts_utc = now_utc
+            self._cache[sym] = s
+
+            combined = "ON" if s.should_run else "OFF"
+
+        # Persist (throttled — only log when gate changes or every ~5min)
+        self._persist_entry(sym, gate_result, s.effective_trend, combined, now_utc)
+
+        _LOG.info(
+            "Gate2 ENTRY %s: %s (price=%.2f open=%.2f diff=%.2f) → combined=%s",
+            sym, gate_result["gate"],
+            current_price, candle_open_1h,
+            current_price - candle_open_1h, combined,
+        )
+
+        return {
+            **gate_result,
+            "trend": s.effective_trend,
+            "combined": combined,
+            "should_run": combined == "ON",
+        }
+
+    # ── Combined update (convenience) ───────────────────────────────
+
+    def update_both(
+        self,
+        symbol: str,
+        klines_1h: List[List],
+        current_price: float,
+    ) -> Dict[str, Any]:
+        """Update both gates in one call.
+
+        Extracts regular 1h candle open from the last kline,
+        then runs both gate computations.
+        """
+        sym = symbol.upper()
+
+        # Gate 1: Trend from HA klines
+        trend_result = self.update_trend(sym, klines_1h)
+
+        # Gate 2: Entry from regular candle open
+        # Last kline = current active 1h candle
+        candle_open = float(klines_1h[-1][1]) if klines_1h else 0.0
+        entry_result = self.update_entry_gate(sym, current_price, candle_open)
+
+        return {
+            "symbol": sym,
+            "trend": trend_result,
+            "entry": entry_result,
+            "should_run": entry_result.get("should_run", False),
+        }
 
     # ── DB persistence ──────────────────────────────────────────────
 
-    def _persist(self, symbol: str, result: Dict, ts_utc: str) -> None:
+    def _persist_trend(self, symbol: str, result: Dict, ts_utc: str) -> None:
         try:
             conn = open_db(self._db_path)
             try:
@@ -268,65 +437,89 @@ class TrendSignalService:
                     INSERT INTO trend_signals
                         (ts_utc, symbol, interval, ma1_value, ma2_value,
                          signal, ha_open, ha_close, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'binance_klines')
+                    VALUES (?, ?, '1h', ?, ?, ?, ?, ?, 'binance_klines')
                     """,
                     (
-                        ts_utc,
-                        symbol,
-                        self._kline_interval,
-                        result["ma1"],
-                        result["ma2"],
-                        result["signal"],
-                        result.get("ha_open", 0),
-                        result.get("ha_close", 0),
+                        ts_utc, symbol,
+                        result["ma1"], result["ma2"], result["signal"],
+                        result.get("ha_open", 0), result.get("ha_close", 0),
                     ),
                 )
                 conn.commit()
             finally:
                 conn.close()
         except Exception as exc:
-            _LOG.warning("TrendSignal persist error: %s", exc)
+            _LOG.warning("Persist trend error: %s", exc)
 
-    def _load_from_db(self, symbol: str) -> Optional[SymbolState]:
+    def _persist_entry(
+        self, symbol: str, gate: Dict, trend: str, combined: str, ts_utc: str
+    ) -> None:
         try:
             conn = open_db(self._db_path)
             try:
-                conn.row_factory = sqlite3.Row
+                conn.execute(
+                    """
+                    INSERT INTO entry_gate_log
+                        (ts_utc, symbol, current_price, candle_open,
+                         gate, trend, combined)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        ts_utc, symbol,
+                        gate["current_price"], gate["candle_open"],
+                        gate["gate"], trend, combined,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as exc:
+            _LOG.warning("Persist entry error: %s", exc)
+
+    def _load_last_effective_trend(self, symbol: str) -> Optional[str]:
+        """Load the last non-NEUTRAL trend from DB history."""
+        try:
+            conn = open_db(self._db_path)
+            try:
                 row = conn.execute(
                     """
-                    SELECT signal, ma1_value, ma2_value, ts_utc
-                    FROM trend_signals
-                    WHERE symbol = ?
+                    SELECT signal FROM trend_signals
+                    WHERE symbol = ? AND signal IN ('BULLISH', 'BEARISH')
                     ORDER BY ts_utc DESC LIMIT 1
                     """,
                     (symbol,),
                 ).fetchone()
-                if row:
-                    return SymbolState(
-                        signal=row["signal"],
-                        ma1=row["ma1_value"],
-                        ma2=row["ma2_value"],
-                        last_ts_utc=row["ts_utc"],
-                    )
+                return row[0] if row else None
             finally:
                 conn.close()
         except Exception:
-            pass
-        return None
+            return None
 
-    def get_history(
-        self, symbol: str, limit: int = 50
-    ) -> List[Dict[str, Any]]:
-        """Get historical signals for a symbol."""
+    def _ensure_state(self, symbol: str) -> SymbolState:
+        """Get or create state, loading from DB if needed."""
+        s = self._cache.get(symbol)
+        if s is not None:
+            return s
+        # Try DB
+        db_trend = self._load_last_effective_trend(symbol)
+        s = SymbolState()
+        if db_trend:
+            s.trend = db_trend
+            s.last_effective_trend = db_trend
+        with self._lock:
+            self._cache[symbol] = s
+        return s
+
+    # ── History queries ─────────────────────────────────────────────
+
+    def get_trend_history(self, symbol: str, limit: int = 50) -> List[Dict[str, Any]]:
         conn = open_db(self._db_path)
         try:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
-                SELECT ts_utc, ma1_value, ma2_value, signal,
-                       ha_open, ha_close
-                FROM trend_signals
-                WHERE symbol = ?
+                SELECT ts_utc, ma1_value, ma2_value, signal, ha_open, ha_close
+                FROM trend_signals WHERE symbol = ?
                 ORDER BY ts_utc DESC LIMIT ?
                 """,
                 (symbol.upper(), min(limit, 500)),
@@ -335,15 +528,35 @@ class TrendSignalService:
         finally:
             conn.close()
 
+    def get_entry_history(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:
+        conn = open_db(self._db_path)
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT ts_utc, current_price, candle_open, gate, trend, combined
+                FROM entry_gate_log WHERE symbol = ?
+                ORDER BY ts_utc DESC LIMIT ?
+                """,
+                (symbol.upper(), min(limit, 1000)),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
     def purge_old(self, days: int = 30) -> int:
         conn = open_db(self._db_path)
         try:
-            c = conn.execute(
+            c1 = conn.execute(
                 "DELETE FROM trend_signals WHERE ts_utc < datetime('now', ?)",
                 (f"-{days} days",),
             ).rowcount
+            c2 = conn.execute(
+                "DELETE FROM entry_gate_log WHERE ts_utc < datetime('now', ?)",
+                (f"-{days} days",),
+            ).rowcount
             conn.commit()
-            return c
+            return c1 + c2
         finally:
             conn.close()
 

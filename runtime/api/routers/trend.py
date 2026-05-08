@@ -1,11 +1,15 @@
-"""API router for Trend Signal — Dorothy MA crossover on/off gate.
+"""API router for Trend Signal — Dorothy dual-gate on/off system.
+
+Gate 1 (trend):  HA MA crossover every 2h
+Gate 2 (entry):  price < regular 1h open every ≤5min
 
 Endpoints:
-  GET  /trend/signals          — All cached signals
-  GET  /trend/signal/{symbol}  — Signal for one symbol
-  POST /trend/refresh/{symbol} — Force refresh from Binance klines
-  POST /trend/refresh-all      — Refresh all tracked symbols
-  GET  /trend/history/{symbol} — Historical signal log
+  GET  /trend/signals              — All cached signals
+  GET  /trend/signal/{symbol}      — Full state for one symbol
+  POST /trend/refresh/{symbol}     — Force refresh both gates
+  POST /trend/refresh-all          — Refresh all Dorothy symbols
+  GET  /trend/history/{symbol}     — Trend signal history
+  GET  /trend/entry-log/{symbol}   — Entry gate log
 """
 
 from __future__ import annotations
@@ -24,21 +28,30 @@ _LOG = logging.getLogger("pecunator.api.routers.trend")
 router = APIRouter(prefix="/trend", tags=["trend"])
 
 
-async def _fetch_klines(symbol: str, interval: str = "1h", limit: int = 10) -> list:
-    """Fetch klines from Binance via the gateway client."""
+async def _fetch_klines_1h(symbol: str, limit: int = 10) -> list:
+    """Fetch 1h klines from Binance."""
     ctx = get_ctx()
     client = ctx.binance_client
     if client is None:
         raise RuntimeError("Binance client not available")
-    klines = await asyncio.to_thread(
-        client.get_klines, symbol=symbol, interval=interval, limit=limit
+    return await asyncio.to_thread(
+        client.get_klines, symbol=symbol, interval="1h", limit=limit
     )
-    return klines
+
+
+async def _fetch_ticker_price(symbol: str) -> float:
+    """Fetch current ticker price from Binance."""
+    ctx = get_ctx()
+    client = ctx.binance_client
+    if client is None:
+        raise RuntimeError("Binance client not available")
+    ticker = await asyncio.to_thread(client.get_symbol_ticker, symbol=symbol)
+    return float(ticker.get("price", 0))
 
 
 @router.get("/signals")
 async def get_all_signals() -> dict[str, Any]:
-    """Return all cached trend signals."""
+    """Return all cached trend + entry signals."""
     ctx = get_ctx()
     svc = get_trend_signal_service(ctx.config.data_dir)
     return {"signals": svc.get_all_signals()}
@@ -46,54 +59,37 @@ async def get_all_signals() -> dict[str, Any]:
 
 @router.get("/signal/{symbol}")
 async def get_signal(symbol: str) -> dict[str, Any]:
-    """Return current trend signal for a symbol."""
+    """Return full dual-gate state for a symbol."""
     ctx = get_ctx()
     svc = get_trend_signal_service(ctx.config.data_dir)
-    sym = symbol.upper()
-    sig = svc.get_signal(sym)
-    state = svc._cache.get(sym)
-    return {
-        "symbol": sym,
-        "signal": sig,
-        "should_run": sig == "BULLISH",
-        "ma1": state.ma1 if state else None,
-        "ma2": state.ma2 if state else None,
-        "last_check": state.last_ts_utc if state else None,
-    }
+    return svc.get_full_state(symbol.upper())
 
 
 @router.post("/refresh/{symbol}")
 async def refresh_signal(symbol: str) -> dict[str, Any]:
-    """Force-refresh trend signal for a symbol by fetching fresh klines."""
+    """Force-refresh both gates for a symbol."""
     ctx = get_ctx()
     svc = get_trend_signal_service(ctx.config.data_dir)
     sym = symbol.upper()
 
     try:
-        klines = await _fetch_klines(sym, interval="1h", limit=10)
-        result = svc.update_from_klines(sym, klines)
-        return {
-            "symbol": sym,
-            "ok": True,
-            "signal": result["signal"],
-            "ma1": result["ma1"],
-            "ma2": result["ma2"],
-            "should_run": result["signal"] == "BULLISH",
-            "candles_used": len(klines),
-        }
+        klines = await _fetch_klines_1h(sym, limit=10)
+        price = await _fetch_ticker_price(sym)
+        result = svc.update_both(sym, klines, price)
+        return {"ok": True, **result}
     except Exception as exc:
         _LOG.error("Trend refresh failed for %s: %s", sym, exc)
         return {
-            "symbol": sym,
             "ok": False,
+            "symbol": sym,
             "error": str(exc),
-            "signal": svc.get_signal(sym),
+            "should_run": svc.should_run(sym),
         }
 
 
 @router.post("/refresh-all")
 async def refresh_all() -> dict[str, Any]:
-    """Refresh signals for all Dorothy symbols that need it."""
+    """Refresh both gates for all Dorothy symbols."""
     ctx = get_ctx()
     svc = get_trend_signal_service(ctx.config.data_dir)
 
@@ -115,26 +111,33 @@ async def refresh_all() -> dict[str, Any]:
     results = {}
     for sym in symbols:
         try:
-            klines = await _fetch_klines(sym, interval="1h", limit=10)
-            result = svc.update_from_klines(sym, klines)
+            klines = await _fetch_klines_1h(sym, limit=10)
+            price = await _fetch_ticker_price(sym)
+            result = svc.update_both(sym, klines, price)
             results[sym] = {
-                "signal": result["signal"],
-                "ma1": result["ma1"],
-                "ma2": result["ma2"],
-                "should_run": result["signal"] == "BULLISH",
+                "should_run": result["should_run"],
+                "trend": result["trend"]["signal"],
+                "entry": result["entry"]["gate"],
+                "price": price,
             }
         except Exception as exc:
             results[sym] = {"error": str(exc)}
-        # Small delay between symbols to respect API weight
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
 
     return {"ok": True, "refreshed": len(results), "results": results}
 
 
 @router.get("/history/{symbol}")
-async def get_history(symbol: str, limit: int = 50) -> dict[str, Any]:
-    """Get historical signal log for a symbol."""
+async def get_trend_history(symbol: str, limit: int = 50) -> dict[str, Any]:
+    """Get trend signal history."""
     ctx = get_ctx()
     svc = get_trend_signal_service(ctx.config.data_dir)
-    history = svc.get_history(symbol.upper(), limit=limit)
-    return {"symbol": symbol.upper(), "items": history}
+    return {"symbol": symbol.upper(), "items": svc.get_trend_history(symbol, limit)}
+
+
+@router.get("/entry-log/{symbol}")
+async def get_entry_log(symbol: str, limit: int = 100) -> dict[str, Any]:
+    """Get entry gate log."""
+    ctx = get_ctx()
+    svc = get_trend_signal_service(ctx.config.data_dir)
+    return {"symbol": symbol.upper(), "items": svc.get_entry_history(symbol, limit)}
