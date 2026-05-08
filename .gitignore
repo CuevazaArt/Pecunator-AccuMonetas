@@ -32,3 +32,7 @@ earn_rates_last.txt
 loan_rates_last.txt
 token_classification.txt
 scratch/
+
+# === Root-level runtime databases (not source code) ===
+*.sqlite
+scratch_db.py

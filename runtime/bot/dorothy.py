@@ -11,6 +11,8 @@ from runtime.bot._decimal_utils import dec as _dec, quantize as _q
 from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
+import time
+
 
 # _dec and _q imported from runtime.bot._decimal_utils
 
