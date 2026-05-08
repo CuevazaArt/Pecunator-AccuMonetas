@@ -203,14 +203,21 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
             ),
           ),
           // ── Section 1: Telemetry Charts ─────────────────────────
+          // Pairs: [Weight auto-scaled + 100% ref] | [Hub Equity + Global Equity]
           Row(
             children: [
-              // Weight chart
+              // Weight auto-scaled oscillator
               Expanded(
                 flex: 3,
                 child: MiniWeightChart(api: widget.api, height: 52),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
+              // Weight 100% reference oscillator (adjustable sync/window)
+              Expanded(
+                flex: 3,
+                child: WeightOscillator(api: widget.api, height: 52),
+              ),
+              const SizedBox(width: 8),
               // Hub equity
               Expanded(
                 flex: 3,
@@ -221,13 +228,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                   height: 52,
                 ),
               ),
-              const SizedBox(width: 6),
-              // Weight oscillator (100% ref, adjustable sync/window)
-              Expanded(
-                flex: 3,
-                child: WeightOscillator(api: widget.api, height: 52),
-              ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               // Global equity
               Expanded(
                 flex: 3,
