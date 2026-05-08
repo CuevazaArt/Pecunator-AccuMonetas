@@ -561,16 +561,24 @@ class TrendSignalService:
             conn.close()
 
 
+
 # ── Singleton ───────────────────────────────────────────────────────
 
 _service: Optional[TrendSignalService] = None
+_service_lock = threading.Lock()
 
 
 def get_trend_signal_service(
     data_dir: Optional[Path] = None,
 ) -> TrendSignalService:
     global _service
-    if _service is None:
-        d = data_dir or Path("runtime/data")
-        _service = TrendSignalService(Path(d) / "trend_signals.sqlite")
+    with _service_lock:
+        if _service is None:
+            d = data_dir or Path("runtime/data")
+            _service = TrendSignalService(Path(d) / "trend_signals.sqlite")
+        elif data_dir is not None:
+            expected = Path(data_dir) / "trend_signals.sqlite"
+            if _service._db_path != expected:
+                _service = TrendSignalService(expected)
     return _service
+

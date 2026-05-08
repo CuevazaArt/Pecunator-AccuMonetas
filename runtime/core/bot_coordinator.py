@@ -37,7 +37,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Optional
 
-from runtime.core.regime_detector import RegimeDetector
 
 _LOG = logging.getLogger("pecunator.core.bot_coordinator")
 
@@ -110,8 +109,8 @@ class BotCoordinator:
         # Callback to actually start the bot runner
         self._start_callbacks: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
 
-        # VMO Sensor
-        self._regime_detector = RegimeDetector()
+        # VMO Sensor removed in v2.0 — replaced by TrendSignal dual-gate
+        # (dorothy checks trend_signal.should_run() inside run_once)
 
     # ── Staging ─────────────────────────────────────────────────────
 
@@ -145,40 +144,8 @@ class BotCoordinator:
         )
         self._staged[bot_id] = staged
 
-        # Validate against VMO recommendation
-        try:
-            parts = bot_id.split("_")
-            symbol = parts[-1] if len(parts) > 1 else ""
-            if symbol and len(symbol) >= 5:
-                rec = self._regime_detector.get_recommendation(symbol)
-                is_hostile = rec.bot != "none" and rec.bot != hub_type
-                
-                if is_hostile:
-                    if not override_vmo:
-                        msg = (
-                            f"VMO BLOCK: '{hub_type}' is blocked for {symbol}. "
-                            f"Regime is {rec.regime} (conf={rec.confidence:.2f}). "
-                            f"Recommended: {rec.bot}"
-                        )
-                        _LOG.warning(msg)
-                        # We delete the staging so it never executes
-                        del self._staged[bot_id]
-                        raise ValueError(msg)
-                    else:
-                        _LOG.warning(
-                            "VMO OVERRIDE: Staging '%s' for %s despite VMO "
-                            "recommending '%s' (%s regime). External injection prioritized.",
-                            hub_type, symbol, rec.bot, rec.regime
-                        )
-                elif rec.bot == hub_type:
-                    _LOG.info(
-                        "VMO ALIGNED: '%s' is the optimal bot for %s (%s).",
-                        hub_type, symbol, rec.regime
-                    )
-        except ValueError:
-            raise
-        except Exception as e:
-            _LOG.debug("Could not validate bot against VMO: %s", e)
+        # VMO regime validation removed in v2.0 — replaced by TrendSignal.
+        # Bots now self-govern via should_run() inside their run_once() loop.
 
         _LOG.info(
             "Bot %s STAGED for launch in %.1fs (interval=%ds, active_bots=%d)",

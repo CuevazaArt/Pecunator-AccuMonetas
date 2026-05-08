@@ -385,20 +385,8 @@ class MashaRunner(BaseStrategyRunner):
             self._maybe_emit_metrics()
             return report
 
-        try:
-            from runtime.core.regime_filter import get_regime_filter
-            regime_ok, regime_reason = await get_regime_filter().is_favorable(symbol, client, _to_thread=self._to_thread)
-            if not regime_ok:
-                report["decision"] = "BLOCKED_REGIME"
-                report["regime_reason"] = regime_reason
-                self._emit("WARNING", f"masha:regime_blocked {regime_reason}", {"report": report})
-                self._maybe_emit_metrics()
-                return report
-        except Exception:
-            report["decision"] = "BLOCKED_REGIME"
-            self._emit("WARNING", "masha:regime_blocked FAIL_CLOSED", {"report": report})
-            self._maybe_emit_metrics()
-            return report
+        # Regime filter removed in v2.0 — replaced by TrendSignal dual-gate system.
+        # Masha is OFF by directive; when reactivated, integrate TrendSignal here.
 
         p_dec, q_dec = await self._resolve_precision(client, symbol)
         planned_buy_qty = _q(c.buy_qty_base, q_dec)

@@ -57,31 +57,57 @@ class TestOrderLedger:
         assert stats["simulated_orders"] == 1
 
 
-# ── RegimeFilter unit tests ────────────────────────────────────────
+# ── TrendSignal unit tests (replaced RegimeFilter) ─────────────────
 
-class TestRegimeFilterHelpers:
-    def test_ema_basic(self):
-        from runtime.core.regime_filter import _ema
+class TestTrendSignalHelpers:
+    def test_compute_heikin_ashi_basic(self):
+        from runtime.modules.trend_signal import compute_heikin_ashi
 
-        data = [Decimal(str(i)) for i in range(1, 11)]
-        result = _ema(data, 5)
-        assert result > 0
+        # Simulate 3 raw klines: [open_time, open, high, low, close, ...]
+        klines = [
+            [0, "100", "110", "95", "105", "1000"],
+            [1, "106", "112", "100", "108", "1000"],
+            [2, "107", "115", "103", "110", "1000"],
+        ]
+        ha = compute_heikin_ashi(klines)
+        assert len(ha) == 3
+        # HA[0] open = (100 + 105) / 2 = 102.5
+        assert ha[0]["ha_open"] == 102.5
+        # HA[0] close = (100 + 110 + 95 + 105) / 4 = 102.5
+        assert ha[0]["ha_close"] == 102.5
 
-    def test_adx_di_insufficient_data(self):
-        from runtime.core.regime_filter import _adx_di
+    def test_compute_trend_bullish(self):
+        from runtime.modules.trend_signal import compute_trend
 
-        highs = [Decimal("10")] * 5
-        lows = [Decimal("9")] * 5
-        closes = [Decimal("9.5")] * 5
-        adx, plus_di, minus_di = _adx_di(highs, lows, closes, period=14)
-        assert adx == Decimal("0")
+        ha = [
+            {"ha_open": 100.0, "ha_close": 102.0, "ha_high": 103.0, "ha_low": 99.0, "ts": 0},
+            {"ha_open": 105.0, "ha_close": 107.0, "ha_high": 108.0, "ha_low": 104.0, "ts": 1},
+        ]
+        result = compute_trend(ha)
+        assert result["signal"] == "BULLISH"
+        assert result["ma1"] > result["ma2"]
 
-    def test_vol_zscore_insufficient(self):
-        from runtime.core.regime_filter import _vol_zscore
+    def test_compute_trend_bearish(self):
+        from runtime.modules.trend_signal import compute_trend
 
-        closes = [Decimal("100")] * 5
-        z = _vol_zscore(closes, lookback=20)
-        assert z == Decimal("0")
+        ha = [
+            {"ha_open": 110.0, "ha_close": 108.0, "ha_high": 111.0, "ha_low": 107.0, "ts": 0},
+            {"ha_open": 100.0, "ha_close": 98.0, "ha_high": 101.0, "ha_low": 97.0, "ts": 1},
+        ]
+        result = compute_trend(ha)
+        assert result["signal"] == "BEARISH"
+
+    def test_compute_entry_gate_clear(self):
+        from runtime.modules.trend_signal import compute_entry_gate
+
+        result = compute_entry_gate(current_price=99.0, candle_open_1h=100.0)
+        assert result["gate"] == "CLEAR"
+
+    def test_compute_entry_gate_blocked(self):
+        from runtime.modules.trend_signal import compute_entry_gate
+
+        result = compute_entry_gate(current_price=101.0, candle_open_1h=100.0)
+        assert result["gate"] == "BLOCKED"
 
 
 # ── VolSizer tests ──────────────────────────────────────────────────

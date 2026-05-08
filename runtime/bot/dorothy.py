@@ -8,8 +8,6 @@ Dorothy activation is governed by the dual-gate TrendSignal system:
 
 from __future__ import annotations
 
-import asyncio
-import logging
 import time
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -19,8 +17,6 @@ from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
 from runtime.bot._paper_log import log_paper_trade
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
-
-_LOG = logging.getLogger("pecunator.bot.dorothy")
 
 
 # _dec and _q imported from runtime.bot._decimal_utils
@@ -284,7 +280,7 @@ class DorothyRunner(BaseStrategyRunner):
             if _trend_svc.needs_trend_refresh(symbol):
                 try:
                     klines_1h = await self._to_thread(
-                        lambda: client.get_klines(symbol=symbol, interval="1h", limit=10)
+                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=10)
                     )
                     _trend_svc.update_trend(symbol, klines_1h)
                 except Exception as kl_err:
@@ -295,7 +291,7 @@ class DorothyRunner(BaseStrategyRunner):
                 try:
                     # Fetch current 1h candle (last = active candle)
                     kline_now = await self._to_thread(
-                        lambda: client.get_klines(symbol=symbol, interval="1h", limit=1)
+                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=1)
                     )
                     candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
                     _trend_svc.update_entry_gate(

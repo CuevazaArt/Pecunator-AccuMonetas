@@ -1,6 +1,12 @@
-"""Tests for the market_events router."""
+"""Tests for the market_events router.
+
+SKIPPED: market_events router removed in v2.0 refactor.
+These tests are kept for reference but module no longer exists.
+"""
 import pytest
 from datetime import datetime, timezone
+
+pytestmark = pytest.mark.skip(reason="market_events router removed in v2.0")
 
 
 def test_economic_calendar():

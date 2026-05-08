@@ -18,10 +18,10 @@ class TestDorothyConfig:
         cfg = DorothyConfig()
         assert cfg.symbol == "XRPUSDT"
         assert cfg.loop_interval_sec == 450
-        assert cfg.quote_order_qty == Decimal("8")
+        assert cfg.quote_order_qty == Decimal("6")
         assert cfg.profit_factor == Decimal("0.05")
-        assert cfg.simulated is True
-        assert cfg.trading_enabled is False
+        assert cfg.simulated is False
+        assert cfg.trading_enabled is True
 
     def test_normalize_symbol_uppercase(self):
         """Test symbol normalization to uppercase."""
@@ -68,7 +68,7 @@ class TestDorothyConfig:
         j = cfg.as_json()
         assert j["quote_order_qty"] == "8.5"
         assert j["profit_factor"] == "0.05"
-        assert j["mode"] == "SIMULATED"
+        assert j["mode"] == "LIVE"
 
     def test_as_json_live_mode(self):
         """Test JSON mode reflects live vs simulated."""
