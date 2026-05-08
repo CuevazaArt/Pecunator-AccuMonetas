@@ -37,6 +37,7 @@ from runtime.api.routers import dorothy as _dorothy_router
 from runtime.api.routers import gateway as _gateway_router
 # sandbox router removed in v2.0 simplification
 from runtime.api.routers import vision as _vision_router
+from runtime.api.routers import trend as _trend_router
 # market_events router removed in v2.0 simplification
 
 from runtime.core.settings import (
@@ -157,6 +158,7 @@ def create_app() -> FastAPI:
     app.include_router(_gateway_router.router)
     # sandbox and market_events routers removed in v2.0 simplification
     app.include_router(_vision_router.router)
+    app.include_router(_trend_router.router)
 
     # ── All routes have been extracted to routers/ ─────────────────
     # dorothy.py  — health, presets, config, hub CRUD
