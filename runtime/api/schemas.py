@@ -149,7 +149,7 @@ class HubBotCreateBody(BaseModel):
     price_decimals: int = Field(default=4, ge=0, le=18)
     note: str = Field(default="", max_length=20)
     max_drawdown_pct: str = Field(default="0.20")
-    stop_loss_pct: str = Field(default="0.10")
+    stop_loss_pct: str = Field(default="0")  # DISABLED for testing phase (was 0.10)
     metrics_interval_cycles: int = Field(default=5, ge=1, le=10000)
     simulated: bool = True
     trading_enabled: bool = False
@@ -222,7 +222,7 @@ class MashaBotCreateBody(BaseModel):
     margin_low_h: str = Field(default="0.003")
     note: str = Field(default="", max_length=20)
     max_drawdown_pct: str = Field(default="0.25")
-    stop_loss_pct: str = Field(default="0.15")
+    stop_loss_pct: str = Field(default="0")  # DISABLED for testing phase (was 0.15)
     metrics_interval_cycles: int = Field(default=5, ge=1, le=10000)
     simulated: bool = True
     trading_enabled: bool = False
@@ -304,7 +304,7 @@ class ThusneldaBotCreateBody(BaseModel):
     price_decimals: int = Field(default=8, ge=0, le=18)
     note: str = Field(default="", max_length=20)
     max_drawdown_pct: str = Field(default="0.30")
-    stop_loss_pct: str = Field(default="0.25")
+    stop_loss_pct: str = Field(default="0")  # DISABLED for testing phase (was 0.25)
     metrics_interval_cycles: int = Field(default=3, ge=1, le=10000)
     simulated: bool = True
     trading_enabled: bool = False
