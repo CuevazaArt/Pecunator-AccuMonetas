@@ -169,6 +169,39 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── Hub Header ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Icon(widget.hubIcon, size: 18, color: widget.hubColor),
+                const SizedBox(width: 6),
+                Text(widget.hubName,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: widget.hubColor, letterSpacing: 0.5)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _botsRunning > 0 ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$_botsRunning/${_bots.length} active',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                        color: _botsRunning > 0 ? Colors.greenAccent : Colors.white38),
+                  ),
+                ),
+                const Spacer(),
+                StatusLights(
+                  gatewayRunning: _gatewayRunning,
+                  fuseTripped: _fuseTripped,
+                  botsRunning: _botsRunning,
+                  botsTotal: _bots.length,
+                  hubName: widget.hubName.toUpperCase(),
+                ),
+              ],
+            ),
+          ),
           // ── Section 1: Telemetry Charts ─────────────────────────
           Row(
             children: [
@@ -200,13 +233,15 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                 ),
               ),
               const SizedBox(width: 6),
-              // Status lights
-              StatusLights(
-                gatewayRunning: _gatewayRunning,
-                fuseTripped: _fuseTripped,
-                botsRunning: _botsRunning,
-                botsTotal: _bots.length,
-                hubName: widget.hubName.toUpperCase(),
+              // Global equity
+              Expanded(
+                flex: 3,
+                child: MiniEquityChart(
+                  api: widget.api,
+                  label: 'Global',
+                  color: const Color(0xFF448AFF),
+                  height: 52,
+                ),
               ),
             ],
           ),

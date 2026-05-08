@@ -394,15 +394,39 @@ class _SparklinePainter extends CustomPainter {
       canvas.drawCircle(Offset(lx, ly), 4, Paint()..color = color.withValues(alpha: 0.3));
     }
 
-    // Threshold lines for weight charts
+    // Threshold lines for weight charts (with 100% reference)
     if (maxY != null) {
-      final thresholds = [0.4, 0.6, 0.8];
-      for (final t in thresholds) {
+      // 100% ceiling — the critical reference
+      final fullY = size.height - (1.0 * size.height * 0.85) - size.height * 0.05;
+      final ceilPaint = Paint()
+        ..color = const Color(0x66FF1744)
+        ..strokeWidth = 1.0;
+      canvas.drawLine(Offset(0, fullY), Offset(size.width, fullY), ceilPaint);
+      // "100%" label
+      final tp100 = TextPainter(
+        text: const TextSpan(text: '100%', style: TextStyle(fontSize: 7, color: Color(0x88FF1744), fontFamily: 'monospace')),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp100.paint(canvas, Offset(size.width - tp100.width - 1, fullY - tp100.height - 1));
+
+      // Threshold guide lines: 40%, 60%, 80%
+      final thresholds = [
+        (0.4, '40%', const Color(0x3300E5FF)),
+        (0.6, '60%', const Color(0x33FFEA00)),
+        (0.8, '80%', const Color(0x33FF9100)),
+      ];
+      for (final (t, label, tColor) in thresholds) {
         final ty = size.height - (t * size.height * 0.85) - size.height * 0.05;
         final tp = Paint()
-          ..color = Colors.white.withValues(alpha: 0.08)
+          ..color = tColor
           ..strokeWidth = 0.5;
         canvas.drawLine(Offset(0, ty), Offset(size.width, ty), tp);
+        // Small label on right edge
+        final tpLabel = TextPainter(
+          text: TextSpan(text: label, style: TextStyle(fontSize: 6, color: tColor.withAlpha(180), fontFamily: 'monospace')),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tpLabel.paint(canvas, Offset(size.width - tpLabel.width - 1, ty + 1));
       }
     }
   }

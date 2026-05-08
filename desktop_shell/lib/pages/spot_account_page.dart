@@ -28,6 +28,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
   bool _loading = true;
   bool _operating = false;
   String? _opResult;
+  bool _opsExpanded = false; // Collapsed by default — rarely used
 
   // System state
   bool _gatewayRunning = false;
@@ -251,42 +252,55 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
   }
 
   Widget _operationsPanel() {
+    // Collapsed by default — emergency tools, rarely used
     return Container(
-      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A0000),
+        color: _opsExpanded ? const Color(0xFF1A0000) : const Color(0xFF0D0D0D),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: _opsExpanded ? 0.3 : 0.1)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.redAccent),
-              const SizedBox(width: 4),
-              const Text('OPERATIONS',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.redAccent, letterSpacing: 1)),
-              const Spacer(),
-              if (_opResult != null)
-                Flexible(
-                  child: Text(_opResult!, style: const TextStyle(fontSize: 9, color: Colors.white54, fontFamily: 'monospace'),
-                      overflow: TextOverflow.ellipsis),
-                ),
-            ],
+          InkWell(
+            onTap: () => setState(() => _opsExpanded = !_opsExpanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 12,
+                      color: Colors.redAccent.withValues(alpha: _opsExpanded ? 1.0 : 0.4)),
+                  const SizedBox(width: 4),
+                  Text('Operaciones de emergencia',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+                          color: Colors.redAccent.withValues(alpha: _opsExpanded ? 1.0 : 0.4))),
+                  const Spacer(),
+                  if (_opResult != null)
+                    Flexible(
+                      child: Text(_opResult!, style: const TextStyle(fontSize: 8, color: Colors.white38, fontFamily: 'monospace'),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  Icon(_opsExpanded ? Icons.expand_less : Icons.expand_more, size: 14,
+                      color: Colors.redAccent.withValues(alpha: 0.4)),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              _opButton('Close Protocol', Icons.cancel_outlined, Colors.orangeAccent, () => _executeOp('close')),
-              _opButton('Cancel Limits', Icons.remove_circle_outline, Colors.amber, () => _executeOp('cancel_limits')),
-              _opButton('Cancel Stops', Icons.remove_circle, Colors.deepOrange, () => _executeOp('cancel_stops')),
-              _opButton('RED BUTTON', Icons.emergency, Colors.red, () => _executeOp('red_button')),
-              _opButton('Reset Fuse', Icons.flash_on, Colors.cyanAccent, () => _executeOp('reset_fuse')),
-            ],
-          ),
+          if (_opsExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  _opButton('Close Protocol', Icons.cancel_outlined, Colors.orangeAccent, () => _executeOp('close')),
+                  _opButton('Cancel Limits', Icons.remove_circle_outline, Colors.amber, () => _executeOp('cancel_limits')),
+                  _opButton('Cancel Stops', Icons.remove_circle, Colors.deepOrange, () => _executeOp('cancel_stops')),
+                  _opButton('RED BUTTON', Icons.emergency, Colors.red, () => _executeOp('red_button')),
+                  _opButton('Reset Fuse', Icons.flash_on, Colors.cyanAccent, () => _executeOp('reset_fuse')),
+                ],
+              ),
+            ),
         ],
       ),
     );
