@@ -17,13 +17,15 @@ from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 # _dec and _q imported from runtime.bot._decimal_utils
 
 
+import random
+import time
+import uuid
+
 @dataclass
 class MashaConfig:
     preset_id: str = "M2"
-    symbol: str = "BTCUSDT"
-    base_asset: str = "BTC"
-    quote_asset: str = "USDT"
-    loop_interval_sec: int = 300
+    symbols_csv: str = "BTCUSDT"
+    loop_interval_sec: int = 59
     quote_min_free_to_operate: Decimal = Decimal("6")
     buy_qty_base: Decimal = Decimal("0.001")
     profit_factor: Decimal = Decimal("0.05")  # L0: min 3%, default 5%
@@ -35,33 +37,31 @@ class MashaConfig:
     periods_h: int = 2
     mm_periods_h: int = 2
     margin_low_h: Decimal = Decimal("0.003")
-    qty_decimals: int = 8
-    price_decimals: int = 8
     note: str = ""
-    # [MEJORA] Proteccion de riesgo configurable.
     max_drawdown_pct: Decimal = Decimal("0.25")
     stop_loss_pct: Decimal = Decimal("0.20")  # DCA-wide: avoid premature exit
     metrics_interval_cycles: int = 5
-    # T0.1: Hard ceiling on DCA rungs.
     max_rungs_per_symbol: int = 3  # Conservative: limits BTC exposure
-    # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
-    # Use trading_enabled as the sole on/off switch.
     simulated: bool = False
     trading_enabled: bool = True
 
     def normalize(self) -> None:
-        # simulated mode permanently disabled — always LIVE.
         self.simulated = False
-        self.symbol = normalize_binance_spot_symbol(self.symbol)
-        self.base_asset = (self.base_asset or "").strip().upper() or "BTC"
-        self.quote_asset = (self.quote_asset or "").strip().upper() or "USDT"
-        if not self.symbol.endswith(self.quote_asset):
-            # Keep config coherent with symbol quote by default.
-            self.quote_asset = self.symbol[-4:] if len(self.symbol) >= 4 else self.quote_asset
+        symbols = []
+        for raw in (self.symbols_csv or "").split(","):
+            s = raw.strip().upper()
+            if not s:
+                continue
+            try:
+                symbols.append(normalize_binance_spot_symbol(s))
+            except Exception:
+                continue
+        if not symbols:
+            symbols = ["BTCUSDT"]
+        self.symbols_csv = ",".join(symbols)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_min_free_to_operate = max(_dec(self.quote_min_free_to_operate, "0.0001"), Decimal("0.0001"))
         self.buy_qty_base = max(_dec(self.buy_qty_base, "0.00000001"), Decimal("0.00000001"))
-        # L0 floor: 3% minimum profit to ensure viability after commissions
         self.profit_factor = max(_dec(self.profit_factor), Decimal("0.03"))
         self.margin_low_w = max(_dec(self.margin_low_w), Decimal("0"))
         self.margin_low_h = max(_dec(self.margin_low_h), Decimal("0"))
@@ -69,13 +69,14 @@ class MashaConfig:
         self.mm_periods_w = max(1, min(int(self.mm_periods_w), self.periods_w))
         self.periods_h = max(1, min(int(self.periods_h), 1000))
         self.mm_periods_h = max(1, min(int(self.mm_periods_h), self.periods_h))
-        self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
-        self.price_decimals = max(0, min(int(self.price_decimals), 18))
         self.note = (self.note or "").strip()[:20]
         self.max_drawdown_pct = max(_dec(self.max_drawdown_pct), Decimal("0"))
         self.stop_loss_pct = max(_dec(self.stop_loss_pct), Decimal("0"))
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
         self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
+
+    def symbols(self) -> list[str]:
+        return [s for s in self.symbols_csv.split(",") if s]
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -86,6 +87,7 @@ class MashaConfig:
         d["margin_low_h"] = str(self.margin_low_h)
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
+        d["symbols"] = self.symbols()
         d["mode"] = "SIMULATED" if self.simulated else "LIVE"
         return d
 
@@ -103,16 +105,23 @@ class MashaRunner(BaseStrategyRunner):
         self.config = MashaConfig()
         self.config.normalize()
         self._last_buy_price: Optional[Decimal] = None
+        self._active_symbol: Optional[str] = None
+        self._runner_id = uuid.uuid4().hex[:8]
+
+    def restore_risk_state(self, **kwargs: Any) -> None:
+        super().restore_risk_state(**{k: v for k, v in kwargs.items() if k != "active_symbol"})
+        if "active_symbol" in kwargs:
+            self._active_symbol = kwargs["active_symbol"]
 
     def apply_config(self, cfg: MashaConfig) -> None:
         cfg.normalize()
         self.config = cfg
 
     def _bot_key(self) -> str:
-        return f"masha:{self.config.symbol}"
+        return f"masha:{self._active_symbol or self.config.symbols_csv[:20]}"
 
     def _loop_log_summary(self, report: dict[str, Any]) -> str:
-        return f"masha:{report.get('decision')} symbol={report.get('symbol')} simulated={report.get('simulated')}"
+        return f"masha:{report.get('decision')} symbol={report.get('symbol', 'None')} simulated={report.get('simulated')}"
 
     async def _ohlc_signal(
         self,
@@ -157,6 +166,28 @@ class MashaRunner(BaseStrategyRunner):
         last_close = _dec(klines[-1][4], "0")
         return mm_price, last_low, last_close
 
+    async def _resolve_precision(self, client: Client, symbol: str) -> tuple[int, int]:
+        try:
+            info = await self._to_thread(lambda: client.get_symbol_info(symbol))
+        except Exception:
+            return 8, 8
+        if not isinstance(info, dict):
+            return 8, 8
+        filters = info.get("filters", [])
+        p_dec, q_dec = 8, 8
+        for f in filters:
+            if not isinstance(f, dict): continue
+            ftype = str(f.get("filterType", "")).upper()
+            if ftype == "PRICE_FILTER":
+                tick = str(f.get("tickSize", "0")).rstrip("0").split(".")
+                if len(tick) > 1: p_dec = len(tick[1])
+                elif float(f.get("tickSize", "0")) == 1: p_dec = 0
+            elif ftype == "LOT_SIZE":
+                step = str(f.get("stepSize", "0")).rstrip("0").split(".")
+                if len(step) > 1: q_dec = len(step[1])
+                elif float(f.get("stepSize", "0")) == 1: q_dec = 0
+        return p_dec, q_dec
+
     async def run_once(self) -> dict[str, Any]:
         from runtime.core.api_fuse import get_api_fuse
         fuse = get_api_fuse()
@@ -169,212 +200,194 @@ class MashaRunner(BaseStrategyRunner):
         if not c.simulated and not c.trading_enabled:
             raise RuntimeError("LIVE mode requires trading_enabled=true (explicit switch).")
         client = self._ensure_client()
-        symbol = c.symbol
-
         await self._sync_time_for_signed(client)
 
-        # DCA anchor: current SELL LIMIT.
+        symbols = c.symbols()
+        if not symbols:
+            return {"decision": "WAIT", "message": "No symbols configured"}
+
+        # Fetch global open orders to find our active slots
         try:
             from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
             open_orders = await _cache.get_or_fetch(
-                MarketCache.scoped_key(f"open_orders:{symbol}", self._api_key),
-                lambda: self._signed_call(client, lambda: client.get_open_orders(symbol=symbol)),
+                MarketCache.scoped_key("open_orders_global", self._api_key),
+                lambda: self._signed_call(client, client.get_open_orders),
+                ttl_sec=15
             )
         except Exception:
-            open_orders = await self._signed_call(client, lambda: client.get_open_orders(symbol=symbol))
-        self._emit("INFO", "binance:get_open_orders", {"symbol": symbol, "response": open_orders})
+            open_orders = await self._signed_call(client, client.get_open_orders)
+        
+        my_tag = f"masha-{getattr(self, '_bot_id', self._runner_id)}"
+        
+        # Determine active symbol by checking if we own any SELL LIMIT orders
+        detected_active_symbol = None
         dca_price = Decimal("0")
         dca_volume = Decimal("0")
         dca_cost = Decimal("0")
+        my_sell_orders = []
+        
         if isinstance(open_orders, list):
             for order in open_orders:
-                if not isinstance(order, dict):
-                    continue
-                if str(order.get("side", "")).upper() != "SELL":
-                    continue
-                if str(order.get("status", "")).upper() != "NEW":
-                    continue
-                dca_price = _dec(order.get("price", "0"), "0")
-                dca_volume = _dec(order.get("origQty", order.get("executedQty", "0")), "0")
-                dca_cost = dca_price * dca_volume
-                break
-
-        mm_w, low_w, close_w = await self._ohlc_signal(
-            client,
-            symbol,
-            c.timeframe_w,
-            c.periods_w,
-            c.mm_periods_w,
-        )
-        mm_h, low_h, close_h = await self._ohlc_signal(
-            client,
-            symbol,
-            c.timeframe_h,
-            c.periods_h,
-            c.mm_periods_h,
-        )
-
+                if not isinstance(order, dict): continue
+                cid = str(order.get("clientOrderId", ""))
+                sym = str(order.get("symbol", ""))
+                if cid.startswith(my_tag) and str(order.get("side", "")).upper() == "SELL" and str(order.get("type", "")).upper() == "LIMIT":
+                    detected_active_symbol = sym
+                    my_sell_orders.append(order)
+                    dca_price = _dec(order.get("price", "0"), "0")
+                    dca_volume = _dec(order.get("origQty", order.get("executedQty", "0")), "0")
+                    dca_cost = dca_price * dca_volume
+        
+        # Re-lock if we found orders, or use persisted state, or stay None
+        if detected_active_symbol:
+            self._active_symbol = detected_active_symbol
+        elif self._active_symbol and self._active_symbol not in symbols:
+            # If our persisted active_symbol isn't in open orders, the position likely closed! Unlock.
+            self._active_symbol = None
+            
+        symbol = self._active_symbol
+        is_hunting = (symbol is None)
+        
         try:
-            from runtime.core.market_cache import get_market_cache, MarketCache
-            _cache = get_market_cache()
-            account = await _cache.get_or_fetch(
-                MarketCache.scoped_key("account", self._api_key),
-                lambda: self._signed_call(client, client.get_account),
-            )
-        except Exception:
             account = await self._signed_call(client, client.get_account)
-        self._emit("INFO", "binance:get_account", {"symbol": symbol, "response": account})
+        except Exception:
+            account = {}
+        
+        balances = account.get("balances", []) if isinstance(account, dict) else []
+        quote_free = Decimal("0")
+        for row in balances:
+            if not isinstance(row, dict): continue
+            if str(row.get("asset", "")).upper() == "USDT":
+                quote_free = _dec(row.get("free", "0"), "0")
+
+        report: dict[str, Any] = {
+            "preset_id": c.preset_id,
+            "simulated": c.simulated,
+            "trading_enabled": c.trading_enabled,
+            "loop_interval_sec": c.loop_interval_sec,
+        }
+
+        if is_hunting:
+            random.shuffle(symbols)
+            for sym in symbols:
+                try:
+                    mm_w, low_w, close_w = await self._ohlc_signal(client, sym, c.timeframe_w, c.periods_w, c.mm_periods_w)
+                    mm_h, low_h, close_h = await self._ohlc_signal(client, sym, c.timeframe_h, c.periods_h, c.mm_periods_h)
+                    
+                    cond_w = close_w < (low_w + c.margin_low_w) < mm_w
+                    cond_h = close_h < (low_h + c.margin_low_h) < mm_h
+                    if cond_w and cond_h:
+                        symbol = sym
+                        self._active_symbol = sym
+                        self._last_buy_price = None  # Reset for new asset
+                        report["close_h"] = str(close_h)
+                        break
+                except Exception as e:
+                    self._emit("DEBUG", f"hunting_error {sym}: {e}")
+                    continue
+                    
+        if not symbol:
+            report["decision"] = "WAIT_HUNTING"
+            report["message"] = f"Hunting across {len(symbols)} symbols. No conditions met."
+            self._emit("INFO", "masha:decision", {"report": report})
+            self._maybe_emit_metrics()
+            return report
+
+        # We have an active symbol (either locked or just acquired)
+        report["symbol"] = symbol
+        base_asset = symbol.replace("USDT", "")
         base_free = Decimal("0")
         base_locked = Decimal("0")
-        quote_free = Decimal("0")
-        quote_locked = Decimal("0")
-        balances = account.get("balances", []) if isinstance(account, dict) else []
-        if isinstance(balances, list):
-            for row in balances:
-                if not isinstance(row, dict):
-                    continue
-                asset = str(row.get("asset", "")).upper()
-                if asset == c.base_asset:
-                    base_free = _dec(row.get("free", "0"), "0")
-                    base_locked = _dec(row.get("locked", "0"), "0")
-                elif asset == c.quote_asset:
-                    quote_free = _dec(row.get("free", "0"), "0")
-                    quote_locked = _dec(row.get("locked", "0"), "0")
+        for row in balances:
+            if not isinstance(row, dict): continue
+            if str(row.get("asset", "")).upper() == base_asset:
+                base_free = _dec(row.get("free", "0"), "0")
+                base_locked = _dec(row.get("locked", "0"), "0")
 
-        cond_w = close_w < (low_w + c.margin_low_w) < mm_w
-        cond_h = close_h < (low_h + c.margin_low_h) < mm_h
+        if "close_h" not in report:
+            try:
+                ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
+                close_h = _dec((ticker or {}).get("price", "0"), "0")
+            except Exception:
+                close_h = Decimal("0")
+
         equity = quote_free + (base_free + base_locked) * close_h
         drawdown, trading_blocked = self._register_equity(equity)
         prev_eq = self._last_equity_usdt
         self._last_equity_usdt = equity
         self._record_return(prev_eq, equity)
-        self._emit(
-            "SYSTEM",
-            "masha:equity_snapshot",
-            {
-                "equity_usdt": str(equity),
-                "capital_usdt": str(quote_free),
-                "peak_equity_usdt": str(self._peak_equity_usdt or equity),
-                "drawdown_pct": str(drawdown),
-                "trading_blocked": trading_blocked,
-            },
-        )
-        if dca_price > 0 and c.stop_loss_pct > 0 and close_h <= (dca_price * (Decimal("1") - c.stop_loss_pct)):
+        self._emit("SYSTEM", "masha:equity_snapshot", {
+            "equity_usdt": str(equity), "capital_usdt": str(quote_free),
+            "peak_equity_usdt": str(self._peak_equity_usdt or equity),
+            "drawdown_pct": str(drawdown), "trading_blocked": trading_blocked,
+        })
+        
+        # Stop Loss Check
+        if dca_price > 0 and c.stop_loss_pct > 0 and close_h > 0 and close_h <= (dca_price * (Decimal("1") - c.stop_loss_pct)):
             stop_price = dca_price * (Decimal("1") - c.stop_loss_pct)
-            payload = {
-                "symbol": symbol,
-                "dca_price": str(dca_price),
-                "market_price": str(close_h),
-                "stop_price": str(stop_price),
-            }
-            if c.simulated:
-                payload["execution"] = "SIMULATED"
-                self._emit("WARNING", "masha:stop_loss_triggered", payload)
-            else:
-                if isinstance(open_orders, list):
-                    for order in open_orders:
-                        if not isinstance(order, dict):
-                            continue
-                        if str(order.get("side", "")).upper() != "SELL":
-                            continue
-                        oid = order.get("orderId")
-                        if oid is None:
-                            continue
-                        cancelled = await self._signed_call(
-                            client,
-                            lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid),
-                        )
-                        self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
-                sell_qty = _q(base_free, c.qty_decimals)
+            if not c.simulated:
+                for order in my_sell_orders:
+                    oid = order.get("orderId")
+                    if oid:
+                        await self._signed_call(client, lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid))
+                p_dec, q_dec = await self._resolve_precision(client, symbol)
+                sell_qty = _q(base_free, q_dec)
                 if sell_qty > 0:
                     sold = await self._signed_call(
-                        client,
-                        lambda q=sell_qty: client.create_order(
-                            symbol=symbol,
-                            side=client.SIDE_SELL,
-                            type=client.ORDER_TYPE_MARKET,
-                            quantity=str(q),
-                        ),
+                        client, lambda q=sell_qty: client.create_order(
+                            symbol=symbol, side=client.SIDE_SELL, type=client.ORDER_TYPE_MARKET,
+                            quantity=str(q), newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
+                        )
                     )
-                    self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
-                payload["execution"] = "LIVE"
-                self._emit("WARNING", "masha:stop_loss_triggered", payload)
-            rep = {
-                "preset_id": c.preset_id,
-                "symbol": symbol,
-                "simulated": c.simulated,
-                "trading_enabled": c.trading_enabled,
-                "decision": "STOP_LOSS",
-                "dca_price": str(dca_price),
-                "market_price": str(close_h),
-                "stop_price": str(stop_price),
-                "loop_interval_sec": c.loop_interval_sec,
-            }
+            self._active_symbol = None  # Unlock
+            rep = {"decision": "STOP_LOSS", "symbol": symbol, "dca_price": str(dca_price), "stop_price": str(stop_price)}
+            self._emit("WARNING", "masha:stop_loss_triggered", rep)
             self._maybe_emit_metrics()
             return rep
-        should_buy = cond_w and cond_h
+
+        if is_hunting:
+            # We just found it, condition is already known true
+            cond_w, cond_h = True, True
+            below_last_buy = True
+        else:
+            try:
+                mm_w, low_w, close_w = await self._ohlc_signal(client, symbol, c.timeframe_w, c.periods_w, c.mm_periods_w)
+                mm_h, low_h, close_h = await self._ohlc_signal(client, symbol, c.timeframe_h, c.periods_h, c.mm_periods_h)
+                cond_w = close_w < (low_w + c.margin_low_w) < mm_w
+                cond_h = close_h < (low_h + c.margin_low_h) < mm_h
+            except Exception:
+                cond_w, cond_h = False, False
+
         below_last_buy = self._last_buy_price is None or close_h < self._last_buy_price
         enough_quote = quote_free > c.quote_min_free_to_operate
-        can_execute = should_buy and enough_quote and below_last_buy and (not trading_blocked)
+        can_execute = cond_w and cond_h and enough_quote and below_last_buy and (not trading_blocked)
 
-        report: dict[str, Any] = {
-            "preset_id": c.preset_id,
-            "symbol": symbol,
-            "base_asset": c.base_asset,
-            "quote_asset": c.quote_asset,
-            "simulated": c.simulated,
-            "trading_enabled": c.trading_enabled,
-            "decision": "BUY_AND_REPRICE_SELL" if can_execute else "WAIT",
-            "condition_w": cond_w,
-            "condition_h": cond_h,
-            "enough_quote": enough_quote,
-            "below_last_buy": below_last_buy,
-            "close_w": str(close_w),
-            "close_h": str(close_h),
-            "mm_w": str(mm_w),
-            "mm_h": str(mm_h),
-            "low_w": str(low_w),
-            "low_h": str(low_h),
-            "quote_free": str(quote_free),
-            "quote_locked": str(quote_locked),
-            "base_free": str(base_free),
-            "base_locked": str(base_locked),
-            "dca_price": str(dca_price),
-            "dca_volume": str(dca_volume),
-            "dca_cost": str(dca_cost),
-            "loop_interval_sec": c.loop_interval_sec,
-            "trading_blocked": trading_blocked,
-            "drawdown_pct": str(drawdown),
-        }
-        # T0.1: Count active DCA rungs (open SELL orders = active positions)
-        sell_orders = [o for o in (open_orders if isinstance(open_orders, list) else [])
-                       if str(o.get("side", "")).upper() == "SELL"]
-        active_rungs = len(sell_orders)
-        report["active_rungs"] = active_rungs
-        report["max_rungs"] = c.max_rungs_per_symbol
+        active_rungs = len(my_sell_orders)
+        report.update({
+            "decision": "BUY_AND_REPRICE_SELL" if can_execute else "WAIT_DCA",
+            "condition_w": cond_w, "condition_h": cond_h, "enough_quote": enough_quote,
+            "below_last_buy": below_last_buy, "close_h": str(close_h),
+            "quote_free": str(quote_free), "base_free": str(base_free),
+            "dca_price": str(dca_price), "dca_volume": str(dca_volume), "dca_cost": str(dca_cost),
+            "active_rungs": active_rungs, "max_rungs": c.max_rungs_per_symbol,
+            "trading_blocked": trading_blocked, "drawdown_pct": str(drawdown),
+        })
 
         if not can_execute:
+            self._emit("INFO", "masha:decision", {"report": report})
             self._maybe_emit_metrics()
             return report
 
-        # T0.1: Block new buys when rung ceiling is reached
         if active_rungs >= c.max_rungs_per_symbol:
             report["decision"] = "BLOCKED_MAX_RUNGS"
-            self._emit(
-                "WARNING",
-                f"masha:max_rungs_reached {active_rungs}/{c.max_rungs_per_symbol}",
-                {"report": report},
-            )
+            self._emit("WARNING", f"masha:max_rungs_reached {active_rungs}/{c.max_rungs_per_symbol}", {"report": report})
             self._maybe_emit_metrics()
             return report
 
-        # T1.1: Regime filter gate
         try:
             from runtime.core.regime_filter import get_regime_filter
-            regime_ok, regime_reason = await get_regime_filter().is_favorable(
-                symbol, client, _to_thread=self._to_thread,
-            )
+            regime_ok, regime_reason = await get_regime_filter().is_favorable(symbol, client, _to_thread=self._to_thread)
             if not regime_ok:
                 report["decision"] = "BLOCKED_REGIME"
                 report["regime_reason"] = regime_reason
@@ -382,94 +395,45 @@ class MashaRunner(BaseStrategyRunner):
                 self._maybe_emit_metrics()
                 return report
         except Exception:
-            # FAIL-CLOSED: if regime filter fails, block the trade
             report["decision"] = "BLOCKED_REGIME"
-            report["regime_reason"] = "FAIL_CLOSED:regime_filter_error"
             self._emit("WARNING", "masha:regime_blocked FAIL_CLOSED", {"report": report})
             self._maybe_emit_metrics()
             return report
 
-        planned_buy_qty = _q(c.buy_qty_base, c.qty_decimals)
-        report["planned_buy_qty_base"] = str(planned_buy_qty)
+        p_dec, q_dec = await self._resolve_precision(client, symbol)
+        planned_buy_qty = _q(c.buy_qty_base, q_dec)
         planned_quote_cost = planned_buy_qty * close_h
 
-        # T0.2: Block if daily spend limit exceeded
         try:
             from runtime.core.budget_guard import get_budget_guard
             bg = get_budget_guard()
-            if c.simulated:
-                if not bg.can_spend(planned_quote_cost):
-                    report["decision"] = "BLOCKED_BUDGET"
-                    self._emit("WARNING", "masha:budget_blocked", {"report": report})
-                    self._maybe_emit_metrics()
-                    return report
-            else:
-                if not bg.try_reserve(self._bot_key(), symbol, planned_quote_cost):
-                    report["decision"] = "BLOCKED_BUDGET"
-                    self._emit("WARNING", "masha:budget_blocked", {"report": report})
-                    self._maybe_emit_metrics()
-                    return report
+            if not c.simulated and not bg.try_reserve(self._bot_key(), symbol, planned_quote_cost):
+                report["decision"] = "BLOCKED_BUDGET"
+                self._emit("WARNING", "masha:budget_blocked", {"report": report})
+                self._maybe_emit_metrics()
+                return report
         except Exception as e:
             report["decision"] = "BLOCKED_BUDGET"
-            self._emit("WARNING", f"masha:budget_error FAIL_CLOSED {e}", {"report": report})
+            self._emit("WARNING", f"masha:budget_error {e}", {"report": report})
             self._maybe_emit_metrics()
             return report
 
         if c.simulated:
             report["execution"] = "SIMULATED"
-            report["message"] = "Dry run only; no orders sent."
-            try:
-                from runtime.core.order_ledger import get_order_ledger
-                get_order_ledger().record(
-                    bot_id=getattr(self, '_bot_id', 'masha'),
-                    bot_type="masha", symbol=symbol, side="BUY",
-                    order_type="MARKET", qty=str(planned_buy_qty),
-                    quote_order_qty=str(planned_quote_cost), reason="BUY_AND_REPRICE_SELL",
-                    drawdown_pct=str(drawdown), active_rungs=active_rungs,
-                    max_rungs=c.max_rungs_per_symbol, execution_mode="SIMULATED",
-                )
-            except Exception as e:
-                self._emit("ERROR", f"order_ledger:record_failed:{e}")
             self._emit("INFO", "masha:decision", {"report": report})
-            log_paper_trade("masha", symbol, report.get("decision", ""), report)
             self._maybe_emit_metrics()
             return report
 
-        _ledger_id = None
-        try:
-            from runtime.core.order_ledger import get_order_ledger
-            _ledger_id = get_order_ledger().record(
-                bot_id=getattr(self, '_bot_id', 'masha'),
-                bot_type="masha", symbol=symbol, side="BUY",
-                order_type="MARKET", qty=str(planned_buy_qty),
-                quote_order_qty=str(planned_quote_cost), reason="BUY_AND_REPRICE_SELL",
-                drawdown_pct=str(drawdown), active_rungs=active_rungs,
-                max_rungs=c.max_rungs_per_symbol, execution_mode="LIVE",
-            )
-        except Exception as e:
-            self._emit("ERROR", f"order_ledger:record_failed:{e}")
-
+        # LIVE BUY
+        buy_cid = f"{my_tag}-buy-{int(time.time())}"
         buy = await self._signed_call(
-            client,
-            lambda: client.create_order(
-                symbol=symbol,
-                side=client.SIDE_BUY,
-                type=client.ORDER_TYPE_MARKET,
-                quantity=str(planned_buy_qty),
-            ),
+            client, lambda: client.create_order(
+                symbol=symbol, side=client.SIDE_BUY, type=client.ORDER_TYPE_MARKET,
+                quantity=str(planned_buy_qty), newClientOrderId=buy_cid
+            )
         )
-        if _ledger_id:
-            try:
-                from runtime.core.order_ledger import get_order_ledger
-                get_order_ledger().update_binance_response(
-                    _ledger_id,
-                    str((buy or {}).get("orderId", "")),
-                    str((buy or {}).get("status", "")),
-                )
-            except Exception as e:
-                self._emit("ERROR", f"order_ledger:update_failed:{e}")
-
         self._emit("INFO", "binance:create_order_buy_market", {"symbol": symbol, "response": buy})
+        
         fills = buy.get("fills") if isinstance(buy, dict) else None
         if isinstance(fills, list) and fills:
             buy_price = _dec(fills[0].get("price", "0"), "0")
@@ -477,83 +441,39 @@ class MashaRunner(BaseStrategyRunner):
         else:
             buy_qty = _dec((buy or {}).get("executedQty", "0"), "0")
             quote_cost = _dec((buy or {}).get("cummulativeQuoteQty", "0"), "0")
-            buy_price = quote_cost / buy_qty if buy_qty > 0 else Decimal("0")
+            buy_price = quote_cost / buy_qty if buy_qty > 0 else close_h
+            
         self._last_buy_price = buy_price if buy_price > 0 else self._last_buy_price
         buy_cost = buy_price * buy_qty
 
         total_cost = dca_cost + buy_cost
         total_volume = dca_volume + buy_qty
-        if total_volume <= 0:
-            raise RuntimeError("Invalid DCA volume after buy")
-        dca_new_price = total_cost / total_volume
-        target_sell_price = _q(
-            dca_new_price * (Decimal("1") + c.profit_factor),
-            c.price_decimals,
-        )
-        target_sell_qty = _q(total_volume, c.qty_decimals)
+        dca_new_price = total_cost / total_volume if total_volume > 0 else close_h
+        target_sell_price = _q(dca_new_price * (Decimal("1") + c.profit_factor), p_dec)
+        target_sell_qty = _q(total_volume, q_dec)
 
-        # Cancel previous SELL LIMITs first (same as original script).
-        if isinstance(open_orders, list):
-            for order in open_orders:
-                if not isinstance(order, dict):
-                    continue
-                if str(order.get("side", "")).upper() == "SELL" and str(order.get("type", "")).upper() == "LIMIT":
-                    oid = order.get("orderId")
-                    if oid is None:
-                        continue
-                    cancelled = await self._signed_call(
-                        client,
-                        lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid),
-                    )
-                    self._emit(
-                        "INFO",
-                        "binance:cancel_order_sell_limit",
-                        {"symbol": symbol, "response": cancelled},
-                    )
+        # Cancel previous SELL LIMITs
+        for order in my_sell_orders:
+            oid = order.get("orderId")
+            if oid:
+                await self._signed_call(client, lambda oid=oid: client.cancel_order(symbol=symbol, orderId=oid))
 
-        _sell_ledger_id = None
-        try:
-            from runtime.core.order_ledger import get_order_ledger
-            _sell_ledger_id = get_order_ledger().record(
-                bot_id=getattr(self, '_bot_id', 'masha'),
-                bot_type="masha", symbol=symbol, side="SELL",
-                order_type="LIMIT", qty=str(target_sell_qty), price=str(target_sell_price),
-                reason="TAKE_PROFIT", execution_mode="LIVE",
-            )
-        except Exception as e:
-            self._emit("ERROR", f"order_ledger:record_failed:{e}")
-
+        # LIVE SELL LIMIT
+        sell_cid = f"{my_tag}-sell-{int(time.time())}"
         sell = await self._signed_call(
-            client,
-            lambda: client.create_order(
-                symbol=symbol,
-                side=client.SIDE_SELL,
-                type=client.ORDER_TYPE_LIMIT,
-                timeInForce=client.TIME_IN_FORCE_GTC,
-                quantity=str(target_sell_qty),
-                price=str(target_sell_price),
-            ),
+            client, lambda: client.create_order(
+                symbol=symbol, side=client.SIDE_SELL, type=client.ORDER_TYPE_LIMIT,
+                timeInForce=client.TIME_IN_FORCE_GTC, quantity=str(target_sell_qty),
+                price=str(target_sell_price), newClientOrderId=sell_cid
+            )
         )
-        if _sell_ledger_id:
-            try:
-                from runtime.core.order_ledger import get_order_ledger
-                get_order_ledger().update_binance_response(
-                    _sell_ledger_id,
-                    str((sell or {}).get("orderId", "")),
-                    str((sell or {}).get("status", "")),
-                )
-            except Exception as e:
-                self._emit("ERROR", f"order_ledger:update_failed:{e}")
-
         self._emit("INFO", "binance:create_order_sell_limit", {"symbol": symbol, "response": sell})
-        report["execution"] = "LIVE"
-        report["buy_order_id"] = (buy or {}).get("orderId")
-        report["sell_order_id"] = (sell or {}).get("orderId")
-        report["filled_buy_price"] = str(buy_price)
-        report["filled_buy_qty"] = str(buy_qty)
-        report["new_dca_price"] = str(dca_new_price)
-        report["target_sell_price"] = str(target_sell_price)
-        report["target_sell_qty"] = str(target_sell_qty)
+
+        report.update({
+            "execution": "LIVE", "buy_order_id": (buy or {}).get("orderId"), "sell_order_id": (sell or {}).get("orderId"),
+            "filled_buy_price": str(buy_price), "new_dca_price": str(dca_new_price),
+            "target_sell_price": str(target_sell_price), "target_sell_qty": str(target_sell_qty)
+        })
         self._emit("INFO", "masha:decision", {"report": report})
         self._maybe_emit_metrics()
         return report

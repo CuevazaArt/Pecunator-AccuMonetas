@@ -172,11 +172,11 @@ class VMObserver:
                     raise RuntimeError(f"Capture failed: {cap.error}")
 
                 # Index capture in TelemetryVault
-                if cap.path:
+                if cap.saved_path:
                     vault.index_capture(
                         symbol=symbol, timeframe=timeframe,
                         captured_at=cap.captured_at,
-                        file_path=str(cap.path),
+                        file_path=str(cap.saved_path),
                         file_size=len(cap.png) if cap.png else 0,
                         source=cap.source,
                         indicators="RSI:14,MACD,BB:20,2",
@@ -218,11 +218,11 @@ class VMObserver:
                 )
 
                 # Update capture index with regime result
-                if cap.path:
+                if cap.saved_path:
                     vault.index_capture(
                         symbol=symbol, timeframe=timeframe,
                         captured_at=cap.captured_at,
-                        file_path=str(cap.path),
+                        file_path=str(cap.saved_path),
                         regime=regime.regime,
                         confidence=regime.confidence,
                         recommended_bot=regime.recommended_bot,

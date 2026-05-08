@@ -30,10 +30,8 @@ class MashaService(BaseHubService):
 
     def _make_config(self, **kwargs: Any) -> MashaConfig:
         cfg = MashaConfig(
-            symbol=kwargs.get("symbol", "BTCUSDT"),
-            base_asset=kwargs.get("base_asset", "BTC"),
-            quote_asset=kwargs.get("quote_asset", "USDT"),
-            loop_interval_sec=int(kwargs.get("loop_interval_sec", 3600)),
+            symbols_csv=kwargs.get("symbols_csv", kwargs.get("symbol", "BTCUSDT")),
+            loop_interval_sec=int(kwargs.get("loop_interval_sec", 59)),
             quote_min_free_to_operate=Decimal(str(kwargs.get("quote_min_free_to_operate", "10"))),
             buy_qty_base=Decimal(str(kwargs.get("buy_qty_base", "0.001"))),
             profit_factor=Decimal(str(kwargs.get("profit_factor", "0.015"))),
@@ -60,9 +58,7 @@ class MashaService(BaseHubService):
     def _record_extra(self, runner: MashaRunner) -> dict[str, Any]:
         cfg = runner.config
         return {
-            "symbol": cfg.symbol,
-            "base_asset": cfg.base_asset,
-            "quote_asset": cfg.quote_asset,
+            "symbols_csv": cfg.symbols_csv,
             "loop_interval_sec": cfg.loop_interval_sec,
             "quote_min_free_to_operate": str(cfg.quote_min_free_to_operate),
             "buy_qty_base": str(cfg.buy_qty_base),
@@ -178,8 +174,8 @@ class MashaService(BaseHubService):
                         desired_running=excluded.desired_running
                     """,
                     (
-                        rec.bot_id, rec.tag, rec.created_at, cfg.symbol,
-                        cfg.base_asset, cfg.quote_asset,
+                        rec.bot_id, rec.tag, rec.created_at, cfg.symbols_csv,
+                        "DYN", "DYN",
                         int(cfg.loop_interval_sec),
                         str(cfg.quote_min_free_to_operate), str(cfg.buy_qty_base),
                         str(cfg.profit_factor),
@@ -215,8 +211,7 @@ class MashaService(BaseHubService):
             if not bot_id or bot_id in self._bots:
                 continue
             cfg = self._make_config(
-                symbol=str(row["symbol"]), base_asset=str(row["base_asset"]),
-                quote_asset=str(row["quote_asset"]),
+                symbols_csv=str(row["symbol"]),
                 loop_interval_sec=int(row["loop_interval_sec"]),
                 quote_min_free_to_operate=str(row["quote_min_free_to_operate"]),
                 buy_qty_base=str(row["buy_qty_base"]),
@@ -236,7 +231,7 @@ class MashaService(BaseHubService):
             runner = self._make_runner(self._runner_log_sink(bot_id), self._runner_event_sink(bot_id))
             st = self._load_runtime_state(bot_id)
             if st is not None:
-                runner.restore_risk_state(**{k: st.get(k) for k in ("peak_equity_usdt", "max_drawdown_seen", "cycle_count")})
+                runner.restore_risk_state(**{k: st.get(k) for k in ("peak_equity_usdt", "max_drawdown_seen", "cycle_count", "active_symbol")})
             runner.apply_config(cfg)
             rec = BotRecord(
                 bot_id=bot_id,

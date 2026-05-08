@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:candlesticks/candlesticks.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
 // import 'package:webview_windows/webview_windows.dart';
 import '../api_client.dart'; // EngineApi
 import '../utils/histogram_storage.dart';
@@ -349,11 +348,9 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
           Container(
             padding: const EdgeInsets.all(8.0),
             color: Theme.of(context).cardColor,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  SizedBox(
+            child: Row(
+              children: [
+                SizedBox(
                   width: 150,
                   child: TextField(
                     controller: _symbolCtrl,
@@ -469,9 +466,9 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                             const SizedBox(
                               width: 10,
                               height: 10,
-                              child: SpinKitPulse(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.orangeAccent,
-                                size: 10.0,
                               ),
                             ),
                           ],
@@ -519,12 +516,13 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                           ),
                         ),
                         onChanged: (v) {
-                          if (v != null)
+                          if (v != null) {
                             HistoryScraperService
                                     .instance
                                     .concurrencyNotifier
                                     .value =
                                 v;
+                          }
                         },
                       ),
                     );
@@ -570,12 +568,13 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                           ),
                         ],
                         onChanged: (v) {
-                          if (v != null)
+                          if (v != null) {
                             HistoryScraperService
                                     .instance
                                     .delayMsNotifier
                                     .value =
                                 v;
+                          }
                         },
                       ),
                     );
@@ -598,9 +597,8 @@ class _MarketMonitorPageState extends State<MarketMonitorPage> {
                     activeThumbColor: Colors.greenAccent,
                   ),
                 ),
-                  if (_loading) const SpinKitThreeBounce(color: Colors.orangeAccent, size: 20.0),
-                ],
-              ),
+                if (_loading) const CircularProgressIndicator(),
+              ],
             ),
           ),
           Expanded(
@@ -901,7 +899,7 @@ class _TradingViewChartWidgetState extends State<TradingViewChartWidget> {
   Widget build(BuildContext context) {
     if (widget.candles.isEmpty) {
       return const Center(
-        child: SpinKitCubeGrid(color: Colors.orangeAccent, size: 40.0),
+        child: CircularProgressIndicator(color: Colors.orangeAccent),
       );
     }
 

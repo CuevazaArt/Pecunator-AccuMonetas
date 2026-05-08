@@ -1,4 +1,5 @@
 /// Application preferences persistence layer using SharedPreferences.
+library;
 
 import 'package:shared_preferences/shared_preferences.dart';
 

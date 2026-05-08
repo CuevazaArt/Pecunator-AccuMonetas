@@ -162,6 +162,7 @@ async def _classify_gemini(
         "generationConfig": {
             "temperature": 0.2,
             "maxOutputTokens": 1024,
+            "responseMimeType": "application/json",
         },
     }
     headers = {"Content-Type": "application/json"}
@@ -252,16 +253,16 @@ def _parse_json_response(text: str) -> dict[str, Any]:
 
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as jde:
         # Try to find JSON object in the text
         start = text.find("{")
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
             try:
                 return json.loads(text[start:end])
-            except json.JSONDecodeError:
-                pass
-        raise ValueError(f"Could not parse JSON from LLM response: {text[:200]}")
+            except json.JSONDecodeError as jde2:
+                raise ValueError(f"Could not parse JSON from LLM response (substring). Error: {jde2}. Text: {text}")
+        raise ValueError(f"Could not parse JSON from LLM response. Error: {jde}. Text: {text}")
 
 
 # ── Unified classifier ─────────────────────────────────────────────

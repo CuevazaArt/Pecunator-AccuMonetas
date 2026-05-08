@@ -2079,44 +2079,7 @@ class _BotControlPageState extends State<BotControlPage> {
                     ],
                   ),
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Modo simulado'),
-                        subtitle: Text(
-                          ((b['simulated'] ?? true) == true)
-                              ? 'Sin órdenes reales en Binance (recomendado para pruebas).'
-                              : (((b['trading_enabled'] ?? false) == true)
-                                    ? 'LIVE: Dorothy puede colocar órdenes reales.'
-                                    : 'Configuración incompleta: LIVE requiere confirmación.'),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        value: (b['simulated'] ?? true) == true,
-                        activeThumbColor: Colors.redAccent,
-                        activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
-                        onChanged: _loadingHub
-                            ? null
-                            : (wantSim) async {
-                                if (wantSim) {
-                                  await _patchBotLiveSim(
-                                    botId,
-                                    simulated: true,
-                                    tradingEnabled: false,
-                                  );
-                                } else {
-                                  final ok = await _confirmLiveTradingDialog();
-                                  if (ok == true && mounted) {
-                                    await _patchBotLiveSim(
-                                      botId,
-                                      simulated: false,
-                                      tradingEnabled: true,
-                                    );
-                                  }
-                                }
-                              },
-                      ),
-                    ),
+
                     Padding(
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                       child: SingleChildScrollView(

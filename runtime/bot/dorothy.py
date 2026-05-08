@@ -170,10 +170,11 @@ class DorothyRunner(BaseStrategyRunner):
             "binance:get_open_orders",
             {"symbol": symbol, "response": open_orders},
         )
+        my_tag = f"dorothy-{getattr(self, '_bot_id', 'dorothy')}"
         sell_limit = [
             o
-            for o in open_orders
-            if str(o.get("side")) == "SELL" and str(o.get("type")) == "LIMIT"
+            for o in (open_orders if isinstance(open_orders, list) else [])
+            if str(o.get("side")) == "SELL" and str(o.get("type")) == "LIMIT" and str(o.get("clientOrderId", "")).startswith(my_tag)
         ]
         lowest_sell = None
         if sell_limit:
@@ -230,6 +231,7 @@ class DorothyRunner(BaseStrategyRunner):
                                         side=client.SIDE_SELL,
                                         type=client.ORDER_TYPE_MARKET,
                                         quantity=str(_q(q, c.qty_decimals)),
+                                        newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
                                     )
                                 )
                                 self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
@@ -431,6 +433,7 @@ class DorothyRunner(BaseStrategyRunner):
                 side=client.SIDE_BUY,
                 type=client.ORDER_TYPE_MARKET,
                 quoteOrderQty=str(c.quote_order_qty),
+                newClientOrderId=f"{my_tag}-buy-{int(time.time())}"
             )
         )
 
@@ -483,6 +486,7 @@ class DorothyRunner(BaseStrategyRunner):
                 timeInForce=client.TIME_IN_FORCE_GTC,
                 quantity=str(sell_qty),
                 price=str(sell_price),
+                newClientOrderId=f"{my_tag}-sell-{int(time.time())}"
             )
         )
 
