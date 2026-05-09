@@ -254,14 +254,14 @@ class _HomeShellState extends State<HomeShell> {
 
   // ── Credential Manager Dialog ──────────────────────────────────
 
-  /// Known sub-account registry (defined in .env, no backend endpoint).
+  /// Known sub-account registry (no secrets, display-only).
   static const _subAccountRegistry = [
-    {'account_id': 'dorothy', 'role': 'bot', 'description': 'DCA long hub', 'env_key': 'DOROTHY_API_KEY', 'enabled': true},
-    {'account_id': 'elphaba', 'role': 'bot', 'description': 'Short/hedge hub (shared key with Dorothy)', 'env_key': 'DOROTHY_API_KEY', 'enabled': true},
-    {'account_id': 'masha', 'role': 'bot', 'description': 'Hunter fleet', 'env_key': 'MASHA_API_KEY', 'enabled': false},
-    {'account_id': 'bluechip', 'role': 'reserve', 'description': 'Blue-chip DCA reserve', 'env_key': 'BLUECHIP_API_KEY', 'enabled': false},
-    {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'env_key': 'RESERVE_API_KEY', 'enabled': false},
-    {'account_id': 'thusnelda', 'role': 'isolated', 'description': 'Isolated margin sub-account', 'env_key': 'THUSNELDA_API_KEY', 'enabled': false},
+    {'account_id': 'dorothy', 'role': 'bot', 'description': 'DCA long hub', 'enabled': true},
+    {'account_id': 'elphaba', 'role': 'bot', 'description': 'Short/hedge hub', 'enabled': true},
+    {'account_id': 'masha', 'role': 'bot', 'description': 'Hunter fleet', 'enabled': false},
+    {'account_id': 'bluechip', 'role': 'reserve', 'description': 'Blue-chip DCA reserve', 'enabled': false},
+    {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'enabled': false},
+    {'account_id': 'thusnelda', 'role': 'isolated', 'description': 'Isolated margin', 'enabled': false},
   ];
 
   void _openCredentialManager() {
@@ -397,7 +397,6 @@ class _HomeShellState extends State<HomeShell> {
                         final enabled = sa['enabled'] == true;
                         final role = '${sa['role'] ?? ''}';
                         final desc = '${sa['description'] ?? ''}';
-                        final envKey = '${sa['env_key'] ?? ''}';
                         return Container(
                           margin: const EdgeInsets.symmetric(vertical: 2),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -410,7 +409,7 @@ class _HomeShellState extends State<HomeShell> {
                             children: [
                               // Credential status indicator
                               Tooltip(
-                                message: enabled ? 'Cuenta activa · ${sa['env_key']}' : 'Cuenta inactiva',
+                                message: enabled ? 'Cuenta activa' : 'Cuenta inactiva',
                                 child: Container(
                                   width: 8, height: 8,
                                   decoration: BoxDecoration(
@@ -452,8 +451,15 @@ class _HomeShellState extends State<HomeShell> {
                                   ],
                                 ),
                               ),
-                              // Key label
-                              Text(envKey, style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.white24)),
+                              // Status badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: (enabled ? Colors.greenAccent : Colors.grey).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(enabled ? 'ACTIVE' : 'IDLE', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: enabled ? Colors.greenAccent : Colors.grey)),
+                              ),
                             ],
                           ),
                         );
