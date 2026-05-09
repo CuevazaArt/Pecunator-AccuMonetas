@@ -95,210 +95,235 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Prospector panel (shared, top) ─────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: _ProspectorExpander(
-            api: _api,
-            onSymbolSelected: _onSymbolSelected,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // ── Shared Telemetry (1 juego, compartido) ────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: MiniWeightChart(api: _api, height: 48),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                flex: 3,
-                child: WeightOscillator(api: _api, height: 48),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 3,
-                child: MiniEquityChart(
-                  api: _api,
-                  label: 'Dorothy',
-                  color: Colors.greenAccent,
-                  height: 48,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                flex: 3,
-                child: MiniEquityChart(
-                  api: _api,
-                  label: 'Elphaba',
-                  color: const Color(0xFF00E676),
-                  height: 48,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                flex: 3,
-                child: MiniEquityChart(
-                  api: _api,
-                  label: 'Global',
-                  color: const Color(0xFF448AFF),
-                  height: 48,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        // ── Hub Status Explainer ──────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: HubStatusExplainer(
-            dorothyReport: _dorothyReport,
-            elphabaReport: _elphabaReport,
-            fuseTripped: _fuseTripped,
-            budgetBlocked: _budgetBlocked,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // ── Paired Instances List ─────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: BotInstancesPairedList(
-            dorothyBots: _dorothyBots,
-            elphabaBots: _elphabaBots,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // ── Side-by-side hubs ─────────────────────────────────
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Dorothy (LONG) ──────────────────────────────
-              Expanded(
-                child: BotHubTemplate(
-                  hubName: 'Dorothy',
-                  hubColor: Colors.greenAccent,
-                  hubIcon: Icons.trending_up,
-                  api: _api,
-                  engineBase: widget.engineBase,
-                  fetchBots: () async {
-                    final resp = await _api.hubBots();
-                    final items = resp['items'];
-                    if (items is List) return items.cast<Map<String, dynamic>>();
-                    return [];
-                  },
-                  createBot: (config) async {
-                    await _api.hubCreateBot(config);
-                  },
-                  startBot: (id) async {
-                    await _api.hubStartBot(id);
-                  },
-                  stopBot: (id) async {
-                    await _api.hubStopBot(id);
-                  },
-                  deleteBot: (id) async {
-                    await _api.hubDeleteBot(id);
-                  },
-                  fetchLogs: (id) async {
-                    try {
-                      final resp = await _api.hubLogs(id, limit: 50);
-                      final items = resp['items'];
-                      if (items is List) return items.map((e) => '$e').toList();
-                    } catch (_) {}
-                    return [];
-                  },
-                  formFields: [
-                    const BotFormField(key: 'tag', label: 'Tag', hint: 'dorothy-ton', defaultValue: 'dorothy',
-                        tooltip: 'Identificador único de la instancia'),
-                    BotFormField(
-                      key: 'symbol', label: 'Symbol', hint: 'TONUSDT',
-                      defaultValue: _injectedSymbol ?? 'TONUSDT',
-                      tooltip: 'Par de trading (debe tener margen aislado)',
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Reserve space for the side-by-side hubs at the bottom
+        // Minimum hub height ensures they remain usable
+        const double minHubHeight = 200;
+        return Column(
+          children: [
+            // ── Scrollable top section ─────────────────────────
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  // Prospector panel
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                      child: _ProspectorExpander(
+                        api: _api,
+                        onSymbolSelected: _onSymbolSelected,
+                      ),
                     ),
-                    const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
-                        inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos de análisis (L0: 60s)'),
-                    const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
-                        inputType: TextInputType.number, tooltip: 'USDT por rung/escalón (L0 Doctrine: \$6)'),
-                    const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
-                        inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo por operación'),
-                    const BotFormField(key: 'drop_factor', label: 'Drop %', hint: '0.02', defaultValue: '0.02',
-                        inputType: TextInputType.number, tooltip: 'Caída porcentual para abrir siguiente rung DCA'),
-                    const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
-                        tooltip: 'Nota libre para identificar la instancia'),
-                  ],
-                ),
-              ),
-              // ── Divider ──────────────────────────────────────
-              Container(
-                width: 1,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-              // ── Elphaba (SHORT) ─────────────────────────────
-              Expanded(
-                child: BotHubTemplate(
-                  hubName: 'Elphaba',
-                  hubColor: const Color(0xFF00E676),
-                  hubIcon: Icons.bolt,
-                  api: _api,
-                  engineBase: widget.engineBase,
-                  fetchBots: () async {
-                    final resp = await _api.elphabaBots();
-                    final items = resp['items'];
-                    if (items is List) return items.cast<Map<String, dynamic>>();
-                    return [];
-                  },
-                  createBot: (config) async {
-                    await _api.elphabaCreateBot(config);
-                  },
-                  startBot: (id) async {
-                    await _api.elphabaStartBot(id);
-                  },
-                  stopBot: (id) async {
-                    await _api.elphabaStopBot(id);
-                  },
-                  deleteBot: (id) async {
-                    await _api.elphabaDeleteBot(id);
-                  },
-                  fetchLogs: (id) async {
-                    try {
-                      final resp = await _api.elphabaLogs(id, limit: 50);
-                      final items = resp['items'];
-                      if (items is List) return items.map((e) => '$e').toList();
-                    } catch (_) {}
-                    return [];
-                  },
-                  formFields: [
-                    const BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba',
-                        tooltip: 'Identificador único de la instancia'),
-                    BotFormField(
-                      key: 'symbol', label: 'Symbol', hint: 'TONUSDT',
-                      defaultValue: _injectedSymbol ?? 'TONUSDT',
-                      tooltip: 'Par de trading (debe coincidir con Dorothy)',
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  // Shared Telemetry
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: MiniWeightChart(api: _api, height: 48),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            flex: 3,
+                            child: WeightOscillator(api: _api, height: 48),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            flex: 3,
+                            child: MiniEquityChart(
+                              api: _api,
+                              label: 'Dorothy',
+                              color: Colors.greenAccent,
+                              height: 48,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            flex: 3,
+                            child: MiniEquityChart(
+                              api: _api,
+                              label: 'Elphaba',
+                              color: const Color(0xFF00E676),
+                              height: 48,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            flex: 3,
+                            child: MiniEquityChart(
+                              api: _api,
+                              label: 'Global',
+                              color: const Color(0xFF448AFF),
+                              height: 48,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
-                        inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos (debe coincidir con Dorothy)'),
-                    const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
-                        inputType: TextInputType.number, tooltip: 'USDT por operación short (L0: \$6)'),
-                    const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
-                        inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo por short'),
-                    const BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03',
-                        inputType: TextInputType.number, tooltip: 'Subida porcentual para abrir siguiente rung short'),
-                    const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
-                        tooltip: 'Nota libre para identificar la instancia'),
-                  ],
-                ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  // Hub Status Explainer
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: HubStatusExplainer(
+                        dorothyReport: _dorothyReport,
+                        elphabaReport: _elphabaReport,
+                        fuseTripped: _fuseTripped,
+                        budgetBlocked: _budgetBlocked,
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  // Paired Instances List
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: BotInstancesPairedList(
+                        dorothyBots: _dorothyBots,
+                        elphabaBots: _elphabaBots,
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  // ── Side-by-side hubs ────────────────────────
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: (constraints.maxHeight * 0.55).clamp(minHubHeight, 600),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Dorothy (LONG) ──────────────────
+                          Expanded(
+                            child: BotHubTemplate(
+                              hubName: 'Dorothy',
+                              hubColor: Colors.greenAccent,
+                              hubIcon: Icons.trending_up,
+                              api: _api,
+                              engineBase: widget.engineBase,
+                              fetchBots: () async {
+                                final resp = await _api.hubBots();
+                                final items = resp['items'];
+                                if (items is List) return items.cast<Map<String, dynamic>>();
+                                return [];
+                              },
+                              createBot: (config) async {
+                                await _api.hubCreateBot(config);
+                              },
+                              startBot: (id) async {
+                                await _api.hubStartBot(id);
+                              },
+                              stopBot: (id) async {
+                                await _api.hubStopBot(id);
+                              },
+                              deleteBot: (id) async {
+                                await _api.hubDeleteBot(id);
+                              },
+                              fetchLogs: (id) async {
+                                try {
+                                  final resp = await _api.hubLogs(id, limit: 50);
+                                  final items = resp['items'];
+                                  if (items is List) return items.map((e) => '$e').toList();
+                                } catch (_) {}
+                                return [];
+                              },
+                              formFields: [
+                                const BotFormField(key: 'tag', label: 'Tag', hint: 'dorothy-ton', defaultValue: 'dorothy',
+                                    tooltip: 'Identificador único de la instancia'),
+                                BotFormField(
+                                  key: 'symbol', label: 'Symbol', hint: 'TONUSDT',
+                                  defaultValue: _injectedSymbol ?? 'TONUSDT',
+                                  tooltip: 'Par de trading (debe tener margen aislado)',
+                                ),
+                                const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
+                                    inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos de análisis (L0: 60s)'),
+                                const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
+                                    inputType: TextInputType.number, tooltip: 'USDT por rung/escalón (L0 Doctrine: \$6)'),
+                                const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
+                                    inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo por operación'),
+                                const BotFormField(key: 'drop_factor', label: 'Drop %', hint: '0.02', defaultValue: '0.02',
+                                    inputType: TextInputType.number, tooltip: 'Caída porcentual para abrir siguiente rung DCA'),
+                                const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
+                                    tooltip: 'Nota libre para identificar la instancia'),
+                              ],
+                            ),
+                          ),
+                          // ── Divider ──────────────────────────
+                          Container(
+                            width: 1,
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                          // ── Elphaba (SHORT) ─────────────────
+                          Expanded(
+                            child: BotHubTemplate(
+                              hubName: 'Elphaba',
+                              hubColor: const Color(0xFF00E676),
+                              hubIcon: Icons.bolt,
+                              api: _api,
+                              engineBase: widget.engineBase,
+                              fetchBots: () async {
+                                final resp = await _api.elphabaBots();
+                                final items = resp['items'];
+                                if (items is List) return items.cast<Map<String, dynamic>>();
+                                return [];
+                              },
+                              createBot: (config) async {
+                                await _api.elphabaCreateBot(config);
+                              },
+                              startBot: (id) async {
+                                await _api.elphabaStartBot(id);
+                              },
+                              stopBot: (id) async {
+                                await _api.elphabaStopBot(id);
+                              },
+                              deleteBot: (id) async {
+                                await _api.elphabaDeleteBot(id);
+                              },
+                              fetchLogs: (id) async {
+                                try {
+                                  final resp = await _api.elphabaLogs(id, limit: 50);
+                                  final items = resp['items'];
+                                  if (items is List) return items.map((e) => '$e').toList();
+                                } catch (_) {}
+                                return [];
+                              },
+                              formFields: [
+                                const BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba',
+                                    tooltip: 'Identificador único de la instancia'),
+                                BotFormField(
+                                  key: 'symbol', label: 'Symbol', hint: 'TONUSDT',
+                                  defaultValue: _injectedSymbol ?? 'TONUSDT',
+                                  tooltip: 'Par de trading (debe coincidir con Dorothy)',
+                                ),
+                                const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
+                                    inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos (debe coincidir con Dorothy)'),
+                                const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
+                                    inputType: TextInputType.number, tooltip: 'USDT por operación short (L0: \$6)'),
+                                const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
+                                    inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo por short'),
+                                const BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03',
+                                    inputType: TextInputType.number, tooltip: 'Subida porcentual para abrir siguiente rung short'),
+                                const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
+                                    tooltip: 'Nota libre para identificar la instancia'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -173,7 +173,7 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Escanea pares USDT y rankea por Electric Volatility Index (EVI = NATR × Speed × Freq × CHOP).',
+                'SEVI-M = EVI × Safety (Macro × Liquidity). Hard vetos pre-filtran activos letales.',
                 style: TextStyle(
                   fontSize: 9,
                   color: Colors.white.withValues(alpha: 0.35),
@@ -234,7 +234,10 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
         // ── Results table ────────────────────────────────────────
         if (_results.isNotEmpty && !_scanning) ...[
           const SizedBox(height: 6),
-          _buildResultsTable(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: _buildResultsTable(),
+          ),
         ],
 
         // ── Empty state ──────────────────────────────────────────
@@ -258,6 +261,8 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
   Widget _buildRecommendation(Map<String, dynamic> rec) {
     final symbol = rec['symbol'] ?? '';
     final grade = rec['grade'] ?? 'F';
+    final sei = (rec['sei_score'] ?? 0).toDouble();
+    final safety = (rec['safety_multiplier'] ?? 1).toDouble();
     final evi = (rec['evi_score'] ?? 0).toDouble();
     final atr = (rec['atr_pct'] ?? 0).toDouble();
     final speed = (rec['avg_speed'] ?? 0).toDouble();
@@ -334,9 +339,9 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'EVI=${evi.toStringAsFixed(3)}  ATR%=${atr.toStringAsFixed(2)}  '
-                  'Speed=${speed.toStringAsFixed(3)}  Freq=${freq.toStringAsFixed(2)}  '
-                  'CHOP=${chop.toStringAsFixed(1)}  Vol=\$${vol.toStringAsFixed(1)}M',
+                  'SEVI=${sei.toStringAsFixed(3)}  EVI=${evi.toStringAsFixed(3)}  Safety=${safety.toStringAsFixed(2)}  '
+                  'ATR%=${atr.toStringAsFixed(2)}  Speed=${speed.toStringAsFixed(3)}  '
+                  'Freq=${freq.toStringAsFixed(2)}  CHOP=${chop.toStringAsFixed(1)}  Vol=\$${vol.toStringAsFixed(1)}M',
                   style: TextStyle(
                     fontSize: 9,
                     fontFamily: 'monospace',
@@ -372,8 +377,9 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Table header
+          // Table header (fixed)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
@@ -383,90 +389,102 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
             child: Row(
               children: [
                 _headerCell('#', 24),
-                _headerCell('Symbol', 80),
-                _headerCell('Grade', 40),
-                _headerCell('EVI', 50),
-                _headerCell('ATR%', 45),
-                _headerCell('Speed', 45),
-                _headerCell('Freq', 38),
-                _headerCell('CHOP', 38),
-                _headerCell('Vol(M\$)', 50),
-                _headerCell('Mgn', 36),
+                _headerCell('Symbol', 75),
+                _headerCell('Grade', 35),
+                _headerCell('SEVI', 42),
+                _headerCell('Safety', 42),
+                _headerCell('EVI', 40),
+                _headerCell('ATR%', 38),
+                _headerCell('Speed', 40),
+                _headerCell('Freq', 35),
+                _headerCell('CHOP', 35),
+                _headerCell('Vol(M\$)', 45),
+                _headerCell('Mgn', 30),
                 const Spacer(),
               ],
             ),
           ),
-          // Table rows
-          ...List.generate(_results.length, (i) {
-            final r = _results[i];
-            final grade = r['grade'] ?? 'F';
-            final margin = r['margin_eligible'] == true;
-            final vol = ((r['volume_24h_usdt'] ?? 0).toDouble() / 1e6);
+          // Scrollable table body
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _results.length,
+              itemExtent: 26,  // fixed row height for performance
+              itemBuilder: (context, i) {
+                final r = _results[i];
+                final grade = r['grade'] ?? 'F';
+                final margin = r['margin_eligible'] == true;
+                final vol = ((r['volume_24h_usdt'] ?? 0).toDouble() / 1e6);
 
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: i.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.015),
-                border: Border(
-                  bottom: BorderSide(color: Colors.white.withValues(alpha: 0.03)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  _dataCell('${i + 1}', 24, Colors.white30),
-                  _dataCell('${r['symbol']}', 80, Colors.white70, bold: true),
-                  SizedBox(
-                    width: 40,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: _gradeColor(grade).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(3),
-                          border: Border.all(color: _gradeColor(grade).withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          grade,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            color: _gradeColor(grade),
-                            fontFamily: 'monospace',
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: i.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.015),
+                    border: Border(
+                      bottom: BorderSide(color: Colors.white.withValues(alpha: 0.03)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _dataCell('${i + 1}', 24, Colors.white30),
+                      _dataCell('${r['symbol']}', 75, Colors.white70, bold: true),
+                      SizedBox(
+                        width: 35,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: _gradeColor(grade).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(3),
+                              border: Border.all(color: _gradeColor(grade).withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              grade,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: _gradeColor(grade),
+                                fontFamily: 'monospace',
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  _dataCell((r['evi_score'] ?? 0).toDouble().toStringAsFixed(3), 50, Colors.amberAccent.withValues(alpha: 0.8)),
-                  _dataCell((r['atr_pct'] ?? 0).toDouble().toStringAsFixed(2), 45, Colors.cyanAccent.withValues(alpha: 0.7)),
-                  _dataCell((r['avg_speed'] ?? 0).toDouble().toStringAsFixed(3), 45, Colors.orangeAccent.withValues(alpha: 0.7)),
-                  _dataCell((r['freq_extreme'] ?? 0).toDouble().toStringAsFixed(2), 38, Colors.purpleAccent.withValues(alpha: 0.7)),
-                  _dataCell((r['choppiness'] ?? 0).toDouble().toStringAsFixed(1), 38, Colors.white54),
-                  _dataCell(vol.toStringAsFixed(1), 50, Colors.white38),
-                  SizedBox(
-                    width: 36,
-                    child: Center(
-                      child: Icon(
-                        margin ? Icons.check_circle : Icons.cancel,
-                        size: 12,
-                        color: margin ? Colors.greenAccent : Colors.redAccent.withValues(alpha: 0.4),
+                      _dataCell((r['sei_score'] ?? 0).toDouble().toStringAsFixed(3), 42, Colors.amberAccent.withValues(alpha: 0.9)),
+                      _dataCell((r['safety_multiplier'] ?? 1).toDouble().toStringAsFixed(2), 42, Colors.lightGreenAccent.withValues(alpha: 0.8)),
+                      _dataCell((r['evi_score'] ?? 0).toDouble().toStringAsFixed(3), 40, Colors.amberAccent.withValues(alpha: 0.5)),
+                      _dataCell((r['atr_pct'] ?? 0).toDouble().toStringAsFixed(2), 38, Colors.cyanAccent.withValues(alpha: 0.7)),
+                      _dataCell((r['avg_speed'] ?? 0).toDouble().toStringAsFixed(3), 40, Colors.orangeAccent.withValues(alpha: 0.7)),
+                      _dataCell((r['freq_extreme'] ?? 0).toDouble().toStringAsFixed(2), 35, Colors.purpleAccent.withValues(alpha: 0.7)),
+                      _dataCell((r['choppiness'] ?? 0).toDouble().toStringAsFixed(1), 35, Colors.white54),
+                      _dataCell(vol.toStringAsFixed(1), 45, Colors.white38),
+                      SizedBox(
+                        width: 30,
+                        child: Center(
+                          child: Icon(
+                            margin ? Icons.check_circle : Icons.cancel,
+                            size: 12,
+                            color: margin ? Colors.greenAccent : Colors.redAccent.withValues(alpha: 0.4),
+                          ),
+                        ),
                       ),
-                    ),
+                      const Spacer(),
+                      if (widget.onSymbolSelected != null)
+                        InkWell(
+                          onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.all(3),
+                            child: Icon(Icons.arrow_forward, size: 12, color: widget.accentColor.withValues(alpha: 0.6)),
+                          ),
+                        ),
+                    ],
                   ),
-                  const Spacer(),
-                  if (widget.onSymbolSelected != null)
-                    InkWell(
-                      onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: Icon(Icons.arrow_forward, size: 12, color: widget.accentColor.withValues(alpha: 0.6)),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          }),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

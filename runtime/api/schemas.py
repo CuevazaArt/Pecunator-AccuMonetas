@@ -145,6 +145,7 @@ class HubBotCreateBody(BaseModel):
     quote_order_qty: str = Field(default="8")
     profit_factor: str = Field(default="0.05")
     margin_drop_factor: str = Field(default="0.004")
+    margin_rise_factor: Optional[str] = Field(default=None)
     qty_decimals: int = Field(default=8, ge=0, le=18)
     price_decimals: int = Field(default=4, ge=0, le=18)
     note: str = Field(default="", max_length=20)
@@ -162,6 +163,7 @@ class HubBotUpdateBody(BaseModel):
     quote_order_qty: Optional[str] = None
     profit_factor: Optional[str] = None
     margin_drop_factor: Optional[str] = None
+    margin_rise_factor: Optional[str] = None
     qty_decimals: Optional[int] = Field(default=None, ge=0, le=18)
     price_decimals: Optional[int] = Field(default=None, ge=0, le=18)
     note: Optional[str] = Field(default=None, max_length=20)
@@ -185,6 +187,7 @@ class HubBotOut(BaseModel):
     quote_order_qty: str
     profit_factor: str
     margin_drop_factor: str
+    margin_rise_factor: Optional[str] = None
     qty_decimals: int
     price_decimals: int
     note: str

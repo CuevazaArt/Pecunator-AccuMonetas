@@ -83,6 +83,23 @@ CREATE INDEX IF NOT EXISTS idx_botdec_ts
     ON bot_decisions(ts_utc DESC);
 CREATE INDEX IF NOT EXISTS idx_botdec_bot
     ON bot_decisions(bot_id, ts_utc DESC);
+
+-- Prospector scans
+CREATE TABLE IF NOT EXISTS prospector_scans (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts_utc          TEXT    NOT NULL,
+    symbol          TEXT    NOT NULL,
+    evi_score       REAL    NOT NULL,
+    grade           TEXT    NOT NULL,
+    adx             REAL    NOT NULL,
+    choppiness      REAL    NOT NULL,
+    avg_speed       REAL    NOT NULL,
+    freq_extreme    REAL    NOT NULL,
+    kurtosis        REAL    NOT NULL,
+    margin_eligible INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_prospector_ts
+    ON prospector_scans(ts_utc DESC);
 """
 
 
@@ -351,6 +368,45 @@ class TelemetryVault:
             return [dict(r) for r in rows]
         finally:
             conn.close()
+
+    # ── Prospector Scans ────────────────────────────────────────────
+
+    def log_prospector_scan(
+        self,
+        symbol: str,
+        evi_score: float,
+        grade: str,
+        adx: float,
+        choppiness: float,
+        avg_speed: float,
+        freq_extreme: float,
+        kurtosis: float,
+        margin_eligible: bool,
+    ) -> None:
+        """Log a prospector scan result."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            conn = open_db(self._path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO prospector_scans
+                        (ts_utc, symbol, evi_score, grade, adx, choppiness,
+                         avg_speed, freq_extreme, kurtosis, margin_eligible)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        now, symbol, float(evi_score), grade, float(adx),
+                        float(choppiness), float(avg_speed), float(freq_extreme),
+                        float(kurtosis), 1 if margin_eligible else 0
+                    ),
+                )
+                conn.commit()
+            except Exception as exc:
+                zoo = get_exception_zoo()
+                zoo.register(exc, module="telemetry_vault", context="log_prospector_scan")
+            finally:
+                conn.close()
 
     # ── Purge ───────────────────────────────────────────────────────
 
