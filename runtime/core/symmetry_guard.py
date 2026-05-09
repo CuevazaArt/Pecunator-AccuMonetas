@@ -89,25 +89,51 @@ class SymmetryGuard:
         self._hub_paused: bool = False
         self._pause_reason: str = ""
 
-    # ── Order failure tracking ────────────────────────────────────
+    # Error codes that indicate temporary liquidity issues (not system bugs)
+    _RECOVERABLE_CODES = {"-3045", "-3041", "-3042"}
 
     def record_order_success(self, bot_key: str) -> None:
         """Reset failure counter on successful order."""
         with self._lock:
             self._failure_counts[bot_key] = 0
+            # Auto-recovery: if the bot that caused the pause is now succeeding,
+            # clear the pause (liquidity restored or symbol changed)
+            if self._hub_paused and bot_key in self._pause_reason:
+                _LOG.info("SymmetryGuard: auto-clearing pause — %s recovered", bot_key)
+                self._hub_paused = False
+                self._pause_reason = ""
 
     def record_order_failure(self, bot_key: str, error: str) -> None:
-        """Increment failure counter; pause hub if threshold exceeded."""
+        """Increment failure counter; pause hub if threshold exceeded.
+
+        For recoverable liquidity errors (-3045), the hub is marked as
+        DEGRADED instead of fully PAUSED — Dorothy continues solo while
+        Elphaba retries each cycle.
+        """
         with self._lock:
             count = self._failure_counts.get(bot_key, 0) + 1
             self._failure_counts[bot_key] = count
+
+            # Detect if this is a recoverable liquidity error
+            is_recoverable = any(code in error for code in self._RECOVERABLE_CODES)
+
             if count >= self.MAX_FAILURE_STREAK:
-                self._hub_paused = True
-                self._pause_reason = (
-                    f"Hub paused: {bot_key} hit {count} consecutive order failures. "
-                    f"Last error: {error[:200]}"
-                )
-                _LOG.critical(self._pause_reason)
+                if is_recoverable:
+                    # Degraded mode: log it but DON'T pause the hub
+                    _LOG.warning(
+                        "SymmetryGuard: %s hit %d consecutive RECOVERABLE failures "
+                        "(liquidity). Hub continues in DEGRADED mode. Error: %s",
+                        bot_key, count, error[:200],
+                    )
+                    # Don't set _hub_paused — let Dorothy keep operating
+                else:
+                    # Hard failure: pause the entire hub
+                    self._hub_paused = True
+                    self._pause_reason = (
+                        f"Hub paused: {bot_key} hit {count} consecutive order failures. "
+                        f"Last error: {error[:200]}"
+                    )
+                    _LOG.critical(self._pause_reason)
 
     def is_hub_paused(self) -> bool:
         return self._hub_paused
@@ -116,11 +142,12 @@ class SymmetryGuard:
         return self._pause_reason
 
     def reset_pause(self) -> None:
-        """Manual reset after operator inspects the situation."""
+        """Manual or automatic reset of pause state."""
         with self._lock:
             self._hub_paused = False
             self._pause_reason = ""
             self._failure_counts.clear()
+            _LOG.info("SymmetryGuard: pause state reset")
 
     # ── Cached preflight ──────────────────────────────────────────
 

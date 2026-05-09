@@ -55,7 +55,7 @@ class KpiCard extends StatelessWidget {
 
 
 /// Reusable bot action button row (Start/Stop/RunOnce/Delete).
-/// Used by Dorothy, Masha, and Thusnelda hub pages.
+/// Used by Dorothy, Elphaba, and Thusnelda hub pages.
 class BotActionRow extends StatelessWidget {
   final bool isRunning;
   final bool isLoading;

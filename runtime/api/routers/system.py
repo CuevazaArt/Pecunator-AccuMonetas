@@ -25,8 +25,7 @@ async def health() -> dict[str, Any]:
     """Standard health check — safe to poll frequently, weight 0."""
     ctx = deps.get_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
+    elphaba = deps.get_elphaba()
     # Core system state
     fuse_tripped = False
     weight_zone = "UNKNOWN"
@@ -51,8 +50,7 @@ async def health() -> dict[str, Any]:
         _LOG.debug("health: bot_coordinator unavailable: %s", exc)
     hub_stats = {
         "dorothy": bot.hub_stats(),
-        "masha": masha.hub_stats(),
-        "thusnelda": thusnelda.hub_stats(),
+        "elphaba": elphaba.hub_stats(),
     }
     total_running = sum(
         v.get("hub_bots_running", 0) for v in hub_stats.values()
@@ -74,8 +72,7 @@ async def health() -> dict[str, Any]:
 async def health_deep() -> dict[str, Any]:
     ctx = deps.get_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
+    elphaba = deps.get_elphaba()
     gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
     return {
         "status": "ok",
@@ -83,8 +80,7 @@ async def health_deep() -> dict[str, Any]:
         "gateway_last_error": ctx.state.last_error,
         "hubs": {
             "dorothy": bot.hub_stats(),
-            "masha": masha.hub_stats(),
-            "thusnelda": thusnelda.hub_stats(),
+            "elphaba": elphaba.hub_stats(),
         },
         "data_dir": str(ctx.config.data_dir),
     }
@@ -215,6 +211,29 @@ async def order_ledger_stats() -> dict[str, Any]:
     """Return order ledger summary statistics."""
     from runtime.core.order_ledger import get_order_ledger
     return get_order_ledger().stats()
+
+
+# ── Symmetry Guard ──────────────────────────────────────────────
+
+@router.get("/api/v1/symmetry-guard/status")
+async def symmetry_guard_status() -> dict[str, Any]:
+    from runtime.core.symmetry_guard import get_symmetry_guard
+    guard = get_symmetry_guard()
+    health = guard.get_cached_health()
+    return {
+        "hub_paused": guard.is_hub_paused(),
+        "pause_reason": guard.get_pause_reason(),
+        "failure_counts": dict(guard._failure_counts),
+        "last_health": health.as_json() if health else None,
+    }
+
+
+@router.post("/api/v1/symmetry-guard/reset")
+async def symmetry_guard_reset() -> dict[str, Any]:
+    from runtime.core.symmetry_guard import get_symmetry_guard
+    guard = get_symmetry_guard()
+    guard.reset_pause()
+    return {"ok": True, "hub_paused": guard.is_hub_paused()}
 
 
 # ── Regime Filter — removed in v2.0, will be rebuilt ──────────────

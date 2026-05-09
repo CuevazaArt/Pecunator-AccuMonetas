@@ -192,3 +192,28 @@ def rest_weight_estimate_report() -> dict[str, Any]:
             },
         ],
     }
+
+
+async def _sync_binance_time(
+    ctx: AppContext,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+) -> dict[str, Any]:
+    bot = deps.get_bot()
+    if ctx.gateway:
+        payload = await ctx.gateway.sync_time()
+        ctx.state.binance_server_time_ms = int(payload.get("server_time_ms", 0) or 0)
+        ctx.state.binance_local_time_ms_at_sync = int(
+            payload.get("local_time_ms", 0) or 0
+        )
+        ctx.state.binance_offset_ms = int(payload.get("offset_ms", 0) or 0)
+        ctx.state.binance_time_synced_at_utc = datetime.now(
+            timezone.utc
+        ).isoformat()
+        if bot.runner.running:
+            try:
+                await bot.runner.sync_time()
+            except Exception:
+                pass
+        return payload
+

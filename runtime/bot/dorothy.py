@@ -539,6 +539,20 @@ class DorothyRunner(BaseStrategyRunner):
         sell_price = _q(buy_price * (Decimal("1") + c.profit_factor), c.price_decimals)
         sell_qty = _q(qty, c.qty_decimals)
 
+        # T0.4: Record OPEN RUNG in local hub state
+        _hub_rung_id = 0
+        try:
+            from runtime.core.hub_state import get_hub_state
+            _hub_rung_id = get_hub_state().open_rung(
+                bot_id=getattr(self, '_bot_id', 'dorothy'),
+                symbol=symbol,
+                buy_order_id=str(buy.get("orderId", "")),
+                buy_price=str(buy_price),
+                qty=str(qty)
+            )
+        except Exception as e:
+            self._emit("ERROR", f"hub_state:open_rung_failed:{e}")
+
         # T0.3: Record SELL LIMIT in ledger
         _sell_ledger_id = None
         try:
@@ -583,6 +597,15 @@ class DorothyRunner(BaseStrategyRunner):
                 )
             except Exception:
                 pass
+                
+            # Mark rung as ORPHANED in local state
+            if _hub_rung_id > 0:
+                try:
+                    from runtime.core.hub_state import get_hub_state
+                    get_hub_state().close_rung(_hub_rung_id, status="ORPHANED")
+                except Exception:
+                    pass
+
             report["decision"] = "TP_FAILED_ORPHAN"
             report["execution"] = "LIVE"
             report["buy_order_id"] = buy.get("orderId")
@@ -603,6 +626,18 @@ class DorothyRunner(BaseStrategyRunner):
                 )
             except Exception as e:
                 self._emit("ERROR", f"order_ledger:update_failed:{e}")
+
+        # T0.4: Link SELL LIMIT to local hub rung
+        if _hub_rung_id > 0:
+            try:
+                from runtime.core.hub_state import get_hub_state
+                get_hub_state().link_sell_to_rung(
+                    rung_id=_hub_rung_id,
+                    sell_order_id=str(sell.get("orderId", "")),
+                    sell_price=str(sell_price)
+                )
+            except Exception as e:
+                self._emit("ERROR", f"hub_state:link_sell_failed:{e}")
 
         self._emit(
             "INFO",

@@ -32,7 +32,7 @@ async def ops_protocol_close(
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
     # Import the heavy helper lazily to avoid circular deps
-    from runtime.api.app import _execute_close_protocol
+    from runtime.api.ops_protocol import _execute_close_protocol
     summary = await _execute_close_protocol(ctx, base_asset=base_asset)
     rec = get_ops_audit_log(ctx.config.data_dir).record(
         op_name="close_protocol",
@@ -48,7 +48,7 @@ async def ops_red_button(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api.app import _execute_red_button
+    from runtime.api.ops_protocol import _execute_red_button
     summary = await _execute_red_button(ctx, base_asset=base_asset)
     rec = get_ops_audit_log(ctx.config.data_dir).record(
         op_name="red_button",
@@ -64,7 +64,7 @@ async def ops_cleanup_limit_orders(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api.app import _execute_order_cleanup
+    from runtime.api.ops_protocol import _execute_order_cleanup
     summary = await _execute_order_cleanup(ctx, base_asset=base_asset, mode="limit")
     rec = get_ops_audit_log(ctx.config.data_dir).record(
         op_name="cancel_limit_orders_cleanup",
@@ -80,7 +80,7 @@ async def ops_cleanup_stop_orders(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api.app import _execute_order_cleanup
+    from runtime.api.ops_protocol import _execute_order_cleanup
     summary = await _execute_order_cleanup(ctx, base_asset=base_asset, mode="stop")
     rec = get_ops_audit_log(ctx.config.data_dir).record(
         op_name="cancel_stop_orders_cleanup",
@@ -96,7 +96,7 @@ async def ops_cleanup_all_orders(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api.app import _execute_order_cleanup
+    from runtime.api.ops_protocol import _execute_order_cleanup
     summary = await _execute_order_cleanup(ctx, base_asset=base_asset, mode="all")
     rec = get_ops_audit_log(ctx.config.data_dir).record(
         op_name="cancel_all_orders_cleanup",

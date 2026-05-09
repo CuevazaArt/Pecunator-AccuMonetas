@@ -33,8 +33,7 @@ async def health() -> dict[str, Any]:
     """Standard health check — safe to poll frequently, weight 0."""
     ctx = deps.get_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
+    elphaba = deps.get_elphaba()
     # Core system state
     fuse_tripped = False
     weight_zone = "UNKNOWN"
@@ -59,8 +58,7 @@ async def health() -> dict[str, Any]:
         pass
     hub_stats = {
         "dorothy": bot.hub_stats(),
-        "masha": masha.hub_stats(),
-        "thusnelda": thusnelda.hub_stats(),
+        "elphaba": elphaba.hub_stats(),
     }
     total_running = sum(
         v.get("hub_bots_running", 0) for v in hub_stats.values()
@@ -87,8 +85,7 @@ async def health() -> dict[str, Any]:
 async def health_deep() -> dict[str, Any]:
     ctx = deps.get_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
+    elphaba = deps.get_elphaba()
     gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
     return {
         "status": "ok",
@@ -96,8 +93,7 @@ async def health_deep() -> dict[str, Any]:
         "gateway_last_error": ctx.state.last_error,
         "hubs": {
             "dorothy": bot.hub_stats(),
-            "masha": masha.hub_stats(),
-            "thusnelda": thusnelda.hub_stats(),
+            "elphaba": elphaba.hub_stats(),
         },
         "data_dir": str(ctx.config.data_dir),
     }

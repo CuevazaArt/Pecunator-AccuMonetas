@@ -34,10 +34,8 @@ class _SystemStatusBarState extends State<SystemStatusBar> {
   // Bot counts
   int _dorothyRunning = 0;
   int _dorothyTotal = 0;
-  int _mashaRunning = 0;
-  int _mashaTotal = 0;
-  int _thusneldaRunning = 0;
-  int _thusneldaTotal = 0;
+  int _elphabaRunning = 0;
+  int _elphabaTotal = 0;
 
   // Activity session
   String _session = '—';
@@ -97,14 +95,11 @@ class _SystemStatusBarState extends State<SystemStatusBar> {
         // Bot counts from health deep
         final hubs = health['hubs'] as Map<String, dynamic>? ?? {};
         final dHub = hubs['dorothy'] as Map<String, dynamic>? ?? {};
-        final mHub = hubs['masha'] as Map<String, dynamic>? ?? {};
-        final tHub = hubs['thusnelda'] as Map<String, dynamic>? ?? {};
+        final mHub = hubs['elphaba'] as Map<String, dynamic>? ?? {};
         _dorothyRunning = (dHub['hub_bots_running'] as int?) ?? 0;
         _dorothyTotal = (dHub['hub_bots_total'] as int?) ?? 0;
-        _mashaRunning = (mHub['hub_bots_running'] as int?) ?? 0;
-        _mashaTotal = (mHub['hub_bots_total'] as int?) ?? 0;
-        _thusneldaRunning = (tHub['hub_bots_running'] as int?) ?? 0;
-        _thusneldaTotal = (tHub['hub_bots_total'] as int?) ?? 0;
+        _elphabaRunning = (mHub['hub_bots_running'] as int?) ?? 0;
+        _elphabaTotal = (mHub['hub_bots_total'] as int?) ?? 0;
       });
     } catch (_) {}
   }
@@ -211,9 +206,7 @@ class _SystemStatusBarState extends State<SystemStatusBar> {
           const SizedBox(width: 4),
           _dot(_botColor(_dorothyRunning, _dorothyTotal), 'D:$_dorothyRunning/$_dorothyTotal', 'Dorothy: $_dorothyRunning/$_dorothyTotal running'),
           const SizedBox(width: 4),
-          _dot(_botColor(_mashaRunning, _mashaTotal), 'M:$_mashaRunning/$_mashaTotal', 'Masha: $_mashaRunning/$_mashaTotal running'),
-          const SizedBox(width: 4),
-          _dot(_botColor(_thusneldaRunning, _thusneldaTotal), 'T:$_thusneldaRunning/$_thusneldaTotal', 'Thusnelda: $_thusneldaRunning/$_thusneldaTotal running'),
+          _dot(_botColor(_elphabaRunning, _elphabaTotal), 'E:$_elphabaRunning/$_elphabaTotal', 'Elphaba: $_elphabaRunning/$_elphabaTotal running'),
         ],
       ),
     );

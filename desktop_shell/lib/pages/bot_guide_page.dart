@@ -6,7 +6,7 @@ class BotGuidePage extends StatelessWidget {
 
   static const Map<String, String> _titles = {
     'Dorothy': 'Manual operativo Dorothy7.0',
-    'Masha': 'Manual operativo Masha2.0',
+    'Elphaba': 'Manual operativo Elphaba2.0',
     'Thusnelda': 'Manual operativo Thusnelda1.0',
   };
 
@@ -14,7 +14,7 @@ class BotGuidePage extends StatelessWidget {
     'Dorothy':
         'Bot de ciclo perpetuo para un simbolo. Toma referencia de orden SELL ancla '
             'y compra cuando el mercado cae bajo el umbral configurado.',
-    'Masha':
+    'Elphaba':
         'Bot DCA multi-timeframe. Evalua señal tecnica para comprar, recalcula precio '
             'promedio y consolida salida con una SELL LIMIT.',
     'Thusnelda':
@@ -31,7 +31,7 @@ class BotGuidePage extends StatelessWidget {
       'Control de riesgo: maxDd bloquea nuevas compras; stopLoss permite salida defensiva.',
       'Observabilidad: usar logs crudos Binance para validar filtros, cantidades y decisiones.',
     ],
-    'Masha': [
+    'Elphaba': [
       'Flujo principal: estrategia DCA con señal técnica multi-timeframe (W + H).',
       'Compra: requiere condiciones de señal y disponibilidad mínima de quote.',
       'Salida: mantiene una SELL LIMIT consolidada recalculada con cada compra.',
@@ -58,7 +58,7 @@ class BotGuidePage extends StatelessWidget {
       'maxDd/stopLoss: contención de pérdidas acumuladas y por posición.',
       'metricsEvery: costo/beneficio entre detalle histórico y carga.',
     ],
-    'Masha': [
+    'Elphaba': [
       'base/quote/symbol: coherencia obligatoria para evitar errores de mercado.',
       'min quote + buy qty: controlan cuándo y cuánto compra.',
       'TF/periods/mm/margins: sensibilidad de señal técnica.',
@@ -82,7 +82,7 @@ class BotGuidePage extends StatelessWidget {
       'Errores de filtro: qDec/pDec ahora son auto-resueltos; verificar que gateway esté activo.',
       'Mucho peso REST: subir loop o revisar monitor de peso por acciones.',
     ],
-    'Masha': [
+    'Elphaba': [
       'No dispara señal: revisar timeframe, periods y márgenes W/H.',
       'No coloca salida: verificar profit, gateway activo (decimales auto-resueltos).',
       'DCA agresivo: ajustar buy qty y maxDd para menor exposición.',

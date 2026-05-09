@@ -84,7 +84,7 @@ class _VmoDashboardState extends State<VmoDashboard> with SingleTickerProviderSt
     switch (bot.toLowerCase()) {
       case 'dorothy':
         return Colors.greenAccent;
-      case 'masha':
+      case 'elphaba':
         return Colors.blueAccent;
       case 'thusnelda':
         return Colors.purpleAccent;

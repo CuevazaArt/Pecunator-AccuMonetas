@@ -23,19 +23,24 @@ def _get_client() -> Client:
     Margin eligibility check requires auth but is optional and has a fallback.
     """
     ctx = deps.get_ctx()
-    if ctx.gateway and ctx.gateway.client:
-        return ctx.gateway.client
+    gw = ctx.gateway
+    if gw and hasattr(gw, '_client') and gw._client is not None:
+        return gw._client
     # Public client — no auth needed for market data endpoints
     return Client("", "", requests_params={"timeout": 15})
 
 
 @router.get("/scan")
-async def scan_symbols(top_n: int = 15, min_volume: float = 500_000.0) -> dict[str, Any]:
+async def scan_symbols(
+    top_n: int = 15,
+    min_volume: float = 500_000.0,
+    margin_only: bool = True,
+) -> dict[str, Any]:
     """Run full prospecting scan across all Binance USDT pairs.
 
     Returns the top N symbols ranked by EVI (Electric Volatility Index).
-    Works without gateway — public market data endpoints are sufficient.
-    Margin eligibility will be unknown without authenticated gateway.
+    When margin_only=True (default), filters to only margin-eligible pairs
+    suitable for symmetric hub operation (Dorothy + Elphaba).
     """
     try:
         from runtime.modules.prospector import get_prospector
@@ -47,7 +52,7 @@ async def scan_symbols(top_n: int = 15, min_volume: float = 500_000.0) -> dict[s
             results = await asyncio.wait_for(
                 prospector.scan(
                     client,
-                    top_n=top_n,
+                    top_n=max(top_n, 50) if margin_only else top_n,
                     min_volume=min_volume,
                     _to_thread=lambda fn: asyncio.to_thread(fn),
                 ),
@@ -56,13 +61,20 @@ async def scan_symbols(top_n: int = 15, min_volume: float = 500_000.0) -> dict[s
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Prospector scan timed out after 120s")
 
+        if margin_only:
+            results = [r for r in results if r.margin_eligible][:top_n]
+
+        rec = prospector.get_recommendation()
+        if margin_only and rec and not rec.margin_eligible:
+            # Override recommendation with best margin-eligible result
+            rec = results[0] if results else None
+
         return {
             "status": "ok",
             "results": [r.as_json() for r in results],
             "total_scanned": len(results),
-            "recommendation": prospector.get_recommendation().as_json()
-            if prospector.get_recommendation()
-            else None,
+            "margin_filter": margin_only,
+            "recommendation": rec.as_json() if rec else None,
         }
     except HTTPException:
         raise

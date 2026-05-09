@@ -34,8 +34,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
   bool _gatewayRunning = false;
   bool _fuseTripped = false;
   int _dorothyRunning = 0, _dorothyTotal = 0;
-  int _mashaRunning = 0, _mashaTotal = 0;
-  int _thusneldaRunning = 0, _thusneldaTotal = 0;
+  int _elphabaRunning = 0, _elphabaTotal = 0;
 
   @override
   void initState() {
@@ -76,18 +75,14 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
 
       // Parse hub stats
       final hubs = health['hubs'] as Map? ?? {};
-      int dr = 0, dt = 0, mr = 0, mt = 0, tr = 0, tt = 0;
+      int dr = 0, dt = 0, mr = 0, mt = 0;
       if (hubs['dorothy'] is Map) {
         dr = (hubs['dorothy']['hub_bots_running'] ?? 0) as int;
         dt = (hubs['dorothy']['hub_bots_total'] ?? 0) as int;
       }
-      if (hubs['masha'] is Map) {
-        mr = (hubs['masha']['hub_bots_running'] ?? 0) as int;
-        mt = (hubs['masha']['hub_bots_total'] ?? 0) as int;
-      }
-      if (hubs['thusnelda'] is Map) {
-        tr = (hubs['thusnelda']['hub_bots_running'] ?? 0) as int;
-        tt = (hubs['thusnelda']['hub_bots_total'] ?? 0) as int;
+      if (hubs['elphaba'] is Map) {
+        mr = (hubs['elphaba']['hub_bots_running'] ?? 0) as int;
+        mt = (hubs['elphaba']['hub_bots_total'] ?? 0) as int;
       }
 
       if (!mounted) return;
@@ -97,8 +92,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
         _health = health;
         _budgetStatus = budget;
         _dorothyRunning = dr; _dorothyTotal = dt;
-        _mashaRunning = mr; _mashaTotal = mt;
-        _thusneldaRunning = tr; _thusneldaTotal = tt;
+        _elphabaRunning = mr; _elphabaTotal = mt;
       });
     } catch (_) {}
 
@@ -176,8 +170,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
           _svcLight('Gateway', _gatewayRunning),
           _svcLight('API Fuse', !_fuseTripped, tripped: _fuseTripped),
           _svcLight('Dorothy', _dorothyRunning > 0, detail: '$_dorothyRunning/$_dorothyTotal'),
-          _svcLight('Masha', _mashaRunning > 0, detail: '$_mashaRunning/$_mashaTotal'),
-          _svcLight('Thusnelda', _thusneldaRunning > 0, detail: '$_thusneldaRunning/$_thusneldaTotal'),
+          _svcLight('Elphaba', _elphabaRunning > 0, detail: '$_elphabaRunning/$_elphabaTotal'),
           _svcLight('Budget', (_budgetStatus['remaining_pct'] ?? 100) > 10),
         ],
       ),
@@ -222,9 +215,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
         const SizedBox(width: 4),
         _equityCard('Dorothy', '$_dorothyRunning active', Colors.greenAccent, '$_dorothyTotal total'),
         const SizedBox(width: 4),
-        _equityCard('Masha', '$_mashaRunning active', const Color(0xFF448AFF), '$_mashaTotal total'),
-        const SizedBox(width: 4),
-        _equityCard('Thusnelda', '$_thusneldaRunning active', const Color(0xFFFFD600), '$_thusneldaTotal total'),
+        _equityCard('Elphaba', '$_elphabaRunning active', const Color(0xFF00E676), '$_elphabaTotal total'),
       ],
     );
   }
@@ -404,7 +395,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
         children: [
           Row(
             children: [
-              const Text('SPOT BALANCES', style: TextStyle(fontSize: 9, color: Colors.white38, fontWeight: FontWeight.w800, letterSpacing: 1)),
+              const Text('CONSOLIDATED BALANCES', style: TextStyle(fontSize: 9, color: Colors.white38, fontWeight: FontWeight.w800, letterSpacing: 1)),
               const Spacer(),
               Text('${filtered.length} assets', style: const TextStyle(fontSize: 9, color: Colors.white24)),
             ],

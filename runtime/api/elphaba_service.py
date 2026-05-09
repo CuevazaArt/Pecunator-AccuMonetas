@@ -59,14 +59,16 @@ class ElphabaService(BaseHubService):
             "quote_order_qty": str(cfg.quote_order_qty),
             "profit_factor": str(cfg.profit_factor),
             "margin_rise_factor": str(cfg.margin_rise_factor),
+            "margin_drop_factor": "0",
             "qty_decimals": cfg.qty_decimals,
             "price_decimals": cfg.price_decimals,
             "note": cfg.note,
             "max_drawdown_pct": str(cfg.max_drawdown_pct),
+            "stop_loss_pct": "0.0",
             "metrics_interval_cycles": cfg.metrics_interval_cycles,
             "max_rungs_per_symbol": cfg.max_rungs_per_symbol,
             "margin_type": cfg.margin_type,
-            # Elphaba is always live (no simulated mode for margin shorts)
+            "simulated": False,
             "trading_enabled": cfg.trading_enabled,
         }
 

@@ -241,8 +241,10 @@ class BaseStrategyRunner:
         if dd > self._max_drawdown_seen:
             self._max_drawdown_seen = dd
         # Access max_drawdown_pct from config (all bots have it)
+        # L0 Doctrine: max_drawdown_pct=0 means DISABLED (symmetric hub mode —
+        # drawdown on one side is profit on the other, blocking breaks the hedge)
         max_dd = getattr(getattr(self, 'config', None), 'max_drawdown_pct', Decimal("0.20"))
-        blocked = dd > max_dd
+        blocked = max_dd > 0 and dd > max_dd
         return dd, blocked
 
     def _record_return(self, prev_equity: Optional[Decimal], equity: Decimal) -> None:
@@ -389,6 +391,22 @@ class BaseStrategyRunner:
                 self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
                 self._error_streak = 0
                 self._emit("INFO", self._loop_log_summary(rep), {"report": rep})
+                
+                # Record decision in Hub State
+                try:
+                    from runtime.core.hub_state import get_hub_state
+                    get_hub_state().log_decision(
+                        bot_id=self._bot_key(),
+                        symbol=rep.get("symbol", getattr(getattr(self, 'config', None), 'symbol', "UNKNOWN")),
+                        decision=rep.get("decision", "UNKNOWN"),
+                        market_price=rep.get("market_price"),
+                        equity_usdt=rep.get("equity_usdt"),
+                        drawdown_pct=rep.get("drawdown_pct"),
+                        active_rungs=rep.get("active_rungs")
+                    )
+                except Exception:
+                    pass
+
                 # Report cycle to coordinator for phase tracking
                 try:
                     from runtime.core.bot_coordinator import get_bot_coordinator

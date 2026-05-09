@@ -204,48 +204,48 @@ class EngineApi {
   Future<Map<String, dynamic>> hubLogs(String botId, {int limit = 120}) =>
       _client.get('/api/v1/hub/bots/$botId/logs?limit=$limit');
 
-  Future<Map<String, dynamic>> mashaBots() => _client.get('/api/v1/masha/bots');
+  Future<Map<String, dynamic>> elphabaBots() => _client.get('/api/v1/elphaba/bots');
 
-  Future<Map<String, dynamic>> mashaCreateBot(Map<String, dynamic> body) =>
-      _client.post('/api/v1/masha/bots', body: body);
+  Future<Map<String, dynamic>> elphabaCreateBot(Map<String, dynamic> body) =>
+      _client.post('/api/v1/elphaba/bots', body: body);
 
-  Future<Map<String, dynamic>> mashaUpdateBot(
+  Future<Map<String, dynamic>> elphabaUpdateBot(
     String botId,
     Map<String, dynamic> body,
-  ) => _client.patch('/api/v1/masha/bots/$botId', body: body);
+  ) => _client.patch('/api/v1/elphaba/bots/$botId', body: body);
 
-  Future<Map<String, dynamic>> mashaDeleteBot(String botId) =>
-      _client.delete('/api/v1/masha/bots/$botId');
+  Future<Map<String, dynamic>> elphabaDeleteBot(String botId) =>
+      _client.delete('/api/v1/elphaba/bots/$botId');
 
-  Future<Map<String, dynamic>> mashaStartBot(
+  Future<Map<String, dynamic>> elphabaStartBot(
     String botId, {
     String? apiKey,
     String? apiSecret,
   }) => _client.post(
-    '/api/v1/masha/bots/$botId/start',
+    '/api/v1/elphaba/bots/$botId/start',
     body: {
       if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
       if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
     },
   );
 
-  Future<Map<String, dynamic>> mashaStopBot(String botId) =>
-      _client.post('/api/v1/masha/bots/$botId/stop');
+  Future<Map<String, dynamic>> elphabaStopBot(String botId) =>
+      _client.post('/api/v1/elphaba/bots/$botId/stop');
 
-  Future<Map<String, dynamic>> mashaRunOnce(
+  Future<Map<String, dynamic>> elphabaRunOnce(
     String botId, {
     String? apiKey,
     String? apiSecret,
   }) => _client.post(
-    '/api/v1/masha/bots/$botId/run_once',
+    '/api/v1/elphaba/bots/$botId/run_once',
     body: {
       if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
       if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
     },
   );
 
-  Future<Map<String, dynamic>> mashaLogs(String botId, {int limit = 120}) =>
-      _client.get('/api/v1/masha/bots/$botId/logs?limit=$limit');
+  Future<Map<String, dynamic>> elphabaLogs(String botId, {int limit = 120}) =>
+      _client.get('/api/v1/elphaba/bots/$botId/logs?limit=$limit');
 
   Future<Map<String, dynamic>> thusneldaBots() =>
       _client.get('/api/v1/thusnelda/bots');

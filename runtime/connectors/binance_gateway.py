@@ -184,12 +184,42 @@ class BinanceGateway:
         raw_bal = data.get("balances", [])
         if not isinstance(raw_bal, list):
             raw_bal = []
-        self.state.balances_total_assets_in_response = len(raw_bal)
+            
+        consolidated = {}
+        for b in raw_bal:
+            ast = b.get("asset")
+            if ast:
+                consolidated[ast] = {
+                    "free": float(b.get("free", 0) or 0),
+                    "locked": float(b.get("locked", 0) or 0)
+                }
+
+        # ── Fetch Isolated Margin Balances to reflect real equity ──
+        try:
+            iso_acc = await self._to_thread(lambda: self._client.get_isolated_margin_account())
+            for pair in iso_acc.get("assets", []):
+                for ast_key in ["baseAsset", "quoteAsset"]:
+                    ast_data = pair.get(ast_key, {})
+                    ast = ast_data.get("asset")
+                    if ast:
+                        free = float(ast_data.get("free", 0) or 0)
+                        locked = float(ast_data.get("locked", 0) or 0)
+                        if free > 0 or locked > 0:
+                            if ast in consolidated:
+                                consolidated[ast]["free"] += free
+                                consolidated[ast]["locked"] += locked
+                            else:
+                                consolidated[ast] = {"free": free, "locked": locked}
+        except Exception as e:
+            _LOG.warning("Failed to fetch isolated margin balances: %s", e)
+
+        self.state.balances_total_assets_in_response = len(consolidated)
         self.state.balances = [
-            b
-            for b in raw_bal
-            if float(b.get("free", 0) or 0) > 0 or float(b.get("locked", 0) or 0) > 0
+            {"asset": k, "free": f"{v['free']:.8f}", "locked": f"{v['locked']:.8f}"}
+            for k, v in consolidated.items()
+            if v["free"] > 0 or v["locked"] > 0
         ]
+        
         self.bus.publish("account.balances", self.state.balances)
         self.state.last_error = None
         self._capture_rest_weight_from_client(action="fetch_account:get_account")

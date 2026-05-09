@@ -132,7 +132,7 @@ async def terminal_execute(
     body: TerminalExecBody,
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> Any:
-    from runtime.api.app import _execute_terminal_command
+    from runtime.api.terminal import _execute_terminal_command
     output = await _execute_terminal_command(ctx, body.command)
     return TerminalExecOut(ok=True, command=body.command, output=output)
 
@@ -142,7 +142,7 @@ async def time_sync(
     body: TimeSyncBody = TimeSyncBody(),
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> Any:
-    from runtime.api.app import _sync_binance_time
+    from runtime.api._helpers import _sync_binance_time
     payload = await _sync_binance_time(ctx, body.api_key, body.api_secret)
     return TimeSyncOut(ok=True, **payload)
 
@@ -154,7 +154,7 @@ async def account_wallets(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api.app import _fetch_wallet_buckets
+    from runtime.api._helpers import _fetch_wallet_buckets
     return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
 
 
