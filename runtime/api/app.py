@@ -13,6 +13,7 @@ from runtime.api.routers import dorothy as _dorothy_router
 from runtime.api.routers import gateway as _gateway_router
 from runtime.api.routers import prospector as _prospector_router
 from runtime.api.routers import elphaba as _elphaba_router
+from runtime.api.routers import symmetric as _symmetric_router
 
 from runtime.core.settings import api_bind_host_for_cors_regex
 
@@ -39,5 +40,6 @@ def create_app() -> FastAPI:
     app.include_router(_gateway_router.router)
     app.include_router(_prospector_router.router)
     app.include_router(_elphaba_router.router)
+    app.include_router(_symmetric_router.router)
 
     return app

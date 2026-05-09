@@ -140,8 +140,18 @@ class SymmetryGuard:
                         self.MAX_RECOVERY_ATTEMPTS,
                         int(self.RECOVERY_COOLDOWN_SEC), error[:200],
                     )
+                    try:
+                        from runtime.core.alert_dispatcher import get_alert_dispatcher
+                        get_alert_dispatcher().warning("HUB_PAUSE_RECOVERABLE", f"{bot_key}: {error[:200]}")
+                    except Exception:
+                        pass
                 else:
                     _LOG.critical(self._pause_reason)
+                    try:
+                        from runtime.core.alert_dispatcher import get_alert_dispatcher
+                        get_alert_dispatcher().critical("HUB_PAUSED", self._pause_reason)
+                    except Exception:
+                        pass
 
     def tick(self) -> dict[str, Any]:
         """Watchdog tick — call this periodically (e.g., every bot cycle).

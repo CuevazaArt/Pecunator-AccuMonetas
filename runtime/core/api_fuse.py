@@ -123,6 +123,11 @@ class ApiFuse:
                     self._next_escalated_cooldown(),
                     self._trip_reason,
                 )
+                try:
+                    from runtime.core.alert_dispatcher import get_alert_dispatcher
+                    get_alert_dispatcher().info("FUSE_RESET", f"Auto-reset after {elapsed:.0f}s (trip #{self._trip_count})")
+                except Exception:
+                    pass
                 return False
             return True
 
@@ -241,6 +246,14 @@ class ApiFuse:
             self.base_cooldown_sec,
             self.max_cooldown_sec,
         )
+        try:
+            from runtime.core.alert_dispatcher import get_alert_dispatcher
+            get_alert_dispatcher().critical(
+                "FUSE_TRIPPED",
+                f"Trip #{self._trip_count} (streak={self._consecutive_streak}): {reason}. Blocked {self._current_cooldown}s.",
+            )
+        except Exception:
+            pass
 
 
 # ── Singleton ───────────────────────────────────────────────────────

@@ -14,11 +14,32 @@ def _configure_logging() -> None:
         "PECUNATOR_LOG_FMT",
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+    datefmt = os.environ.get("PECUNATOR_LOG_DATEFMT", "%Y-%m-%d %H:%M:%S")
+
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    # M1: Log rotation — 5MB × 3 backups = 15MB ceiling
+    try:
+        from logging.handlers import RotatingFileHandler
+        log_path = os.path.join(os.path.dirname(__file__), "..", "backend.log")
+        log_path = os.path.abspath(log_path)
+        rh = RotatingFileHandler(
+            log_path,
+            maxBytes=5 * 1024 * 1024,  # 5 MB
+            backupCount=3,
+            encoding="utf-8",
+        )
+        rh.setLevel(level)
+        rh.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+        handlers.append(rh)
+    except Exception:
+        pass  # File handler optional — stdout always works
+
     logging.basicConfig(
         level=level,
         format=fmt,
-        datefmt=os.environ.get("PECUNATOR_LOG_DATEFMT", "%Y-%m-%d %H:%M:%S"),
-        handlers=[logging.StreamHandler(sys.stdout)],
+        datefmt=datefmt,
+        handlers=handlers,
         force=True,
     )
 
