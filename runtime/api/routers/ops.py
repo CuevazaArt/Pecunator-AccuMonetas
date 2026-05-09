@@ -23,8 +23,6 @@ async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[s
         "cancel_stop_orders_cleanup": audit.last("cancel_stop_orders_cleanup"),
         "cancel_all_orders_cleanup": audit.last("cancel_all_orders_cleanup"),
         "hub_stats": deps.get_bot().hub_stats(),
-        "masha_hub_stats": deps.get_masha().hub_stats(),
-        "thusnelda_hub_stats": deps.get_thusnelda().hub_stats(),
     }
 
 

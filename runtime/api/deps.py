@@ -5,18 +5,12 @@ from __future__ import annotations
 from typing import Optional
 
 from runtime.api.bot_service import BotService
-from runtime.api.earn_service import EarnService
 from runtime.api.elphaba_service import ElphabaService
-from runtime.api.masha_service import MashaService
-from runtime.api.thusnelda_service import ThusneldaService
 from runtime.app import AppContext, build_context
 
 _ctx: Optional[AppContext] = None
 _bot: BotService = BotService()
 _elphaba: ElphabaService = ElphabaService()
-_masha: MashaService = MashaService()
-_thusnelda: ThusneldaService = ThusneldaService()
-_earn: EarnService = EarnService()
 
 
 def init_context() -> AppContext:
@@ -25,9 +19,6 @@ def init_context() -> AppContext:
         _ctx = build_context()
         _bot.attach_data_dir(_ctx.config.data_dir)
         _elphaba.attach_data_dir(_ctx.config.data_dir)
-        _masha.attach_data_dir(_ctx.config.data_dir)
-        _thusnelda.attach_data_dir(_ctx.config.data_dir)
-        _earn.attach_data_dir(_ctx.config.data_dir)
     return _ctx
 
 
@@ -47,14 +38,3 @@ def get_bot() -> BotService:
 
 def get_elphaba() -> ElphabaService:
     return _elphaba
-
-
-def get_masha() -> MashaService:
-    return _masha
-
-
-def get_thusnelda() -> ThusneldaService:
-    return _thusnelda
-
-def get_earn() -> EarnService:
-    return _earn

@@ -29,18 +29,12 @@ from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_b
 from runtime.core.ops_audit_log import get_ops_audit_log
 from runtime.core.security_util import sanitize_log_message
 from runtime.api.routers import system as _system_router
-from runtime.api.routers import masha as _masha_router
-from runtime.api.routers import thusnelda as _thusnelda_router
 from runtime.api.routers import vault as _vault_router
 from runtime.api.routers import ops as _ops_router
 from runtime.api.routers import dorothy as _dorothy_router
 from runtime.api.routers import gateway as _gateway_router
-# sandbox router removed in v2.0 simplification
-from runtime.api.routers import vision as _vision_router
-from runtime.api.routers import trend as _trend_router
 from runtime.api.routers import prospector as _prospector_router
 from runtime.api.routers import elphaba as _elphaba_router
-# market_events router removed in v2.0 simplification
 
 from runtime.core.settings import (
     account_poll_interval_sec,
@@ -70,32 +64,18 @@ async def _lifespan(app: FastAPI):
     deps.init_context()
     ctx = deps.get_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
-    # earn service removed in v2.0 simplification
+    elphaba = deps.get_elphaba()
     credential_resolver = lambda: _resolve_pair(ctx)  # noqa: E731
     bot.start_immortality(credential_resolver, interval_sec=5.0)
-    masha.start_immortality(credential_resolver, interval_sec=5.0)
-    thusnelda.start_immortality(credential_resolver, interval_sec=5.0)
-    elphaba = deps.get_elphaba()
     elphaba.start_immortality(credential_resolver, interval_sec=5.0)
-    
-    # Earn background sync removed in v2.0 simplification
     await _autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
     bot = deps.get_bot()
-    masha = deps.get_masha()
-    thusnelda = deps.get_thusnelda()
-    # earn service removed in v2.0 simplification
-    await bot.stop_immortality()
-    await masha.stop_immortality()
-    await thusnelda.stop_immortality()
     elphaba = deps.get_elphaba()
+    await bot.stop_immortality()
     await elphaba.stop_immortality()
     await bot.stop_all()
-    await masha.stop_all()
-    await thusnelda.stop_all()
     await elphaba.stop_all()
     if ctx and ctx.gateway:
         try:
@@ -155,29 +135,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── Routers (extracted from monolith) ────────────────────────────
+    # ── Routers ──────────────────────────────────────────────────────
     app.include_router(_system_router.router)
-    app.include_router(_masha_router.router)
-    app.include_router(_thusnelda_router.router)
     app.include_router(_vault_router.router)
     app.include_router(_ops_router.router)
     app.include_router(_dorothy_router.router)
     app.include_router(_gateway_router.router)
-    # sandbox and market_events routers removed in v2.0 simplification
-    app.include_router(_vision_router.router)
-    app.include_router(_trend_router.router)
     app.include_router(_prospector_router.router)
     app.include_router(_elphaba_router.router)
-
-    # ── All routes have been extracted to routers/ ─────────────────
-    # dorothy.py  — health, presets, config, hub CRUD
-    # gateway.py  — gateway lifecycle, bot start/stop, terminal, wallets
-    # vault.py    — credential management
-    # ops.py      — close protocol, red button, order cleanup
-    # sandbox.py  — curated snapshots, REST query, earn
-    # system.py   — usage, weight monitor
-    # masha.py    — Masha hub
-    # thusnelda.py — Thusnelda hub
 
     return app
 

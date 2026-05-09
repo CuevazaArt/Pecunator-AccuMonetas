@@ -1,15 +1,11 @@
-"""Bot strategy modules."""
+"""Bot strategy modules — Dorothy + Elphaba symmetric hub."""
 
 from runtime.modules.bots.dorothy import DorothyConfig, DorothyRunner
-from runtime.modules.bots.masha import MashaConfig, MashaRunner
-from runtime.modules.bots.thusnelda import ThusneldaConfig, ThusneldaRunner
+from runtime.modules.bots.elphaba import ElphabaConfig, ElphabaRunner
 
 __all__ = [
     "DorothyConfig",
     "DorothyRunner",
-    "MashaConfig",
-    "MashaRunner",
-    "ThusneldaConfig",
-    "ThusneldaRunner",
+    "ElphabaConfig",
+    "ElphabaRunner",
 ]
-

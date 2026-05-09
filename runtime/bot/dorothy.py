@@ -1,9 +1,9 @@
 """ExampleJV-inspired rule set — LIVE mode only (simulated mode removed).
 
-Dorothy activation is governed by the dual-gate TrendSignal system:
-  Gate 1 (Trend, 2h):  HA MA(1,open) > MA(2,open) on 1h → BULLISH
-  Gate 2 (Entry, 5min): price < regular 1h candle open → CLEAR
-  Dorothy buys ONLY when BULLISH + CLEAR.
+Dorothy activation is governed by the EVI (Electric Volatility Index) gate:
+  EVI = NATR × AvgSpeed × FreqExtreme × (Choppiness/50)
+  Gate: EVI must be ≥ evi_min_threshold (default 0.02 = Grade D).
+  Symbols below threshold are considered dead markets for DCA.
 """
 
 from __future__ import annotations
@@ -45,6 +45,10 @@ class DorothyConfig:
     # T0.4: Force-liquidate worst position when drawdown exceeds this.
     # 0 = disabled (only blocks buys). Example: 0.40 = liquidate at 40% DD.
     drawdown_liquidate_pct: Decimal = Decimal("0")
+    # EVI gate: minimum Electric Volatility Index to allow new buys.
+    # Symbols with EVI < threshold are considered "dead markets" for DCA.
+    # Grade scale: S≥0.50, A≥0.20, B≥0.10, C≥0.05, D≥0.02, F<0.02
+    evi_min_threshold: Decimal = Decimal("0.02")  # Default: Grade D minimum
     # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
     # Use trading_enabled as the sole on/off switch.
     simulated: bool = False
@@ -67,6 +71,7 @@ class DorothyConfig:
         self.metrics_interval_cycles = max(1, min(int(self.metrics_interval_cycles), 10_000))
         self.max_rungs_per_symbol = max(1, min(int(self.max_rungs_per_symbol), 100))
         self.drawdown_liquidate_pct = max(_dec(self.drawdown_liquidate_pct), Decimal("0"))
+        self.evi_min_threshold = max(_dec(self.evi_min_threshold), Decimal("0"))
 
     def as_json(self) -> dict[str, Any]:
         d = asdict(self)
@@ -75,6 +80,7 @@ class DorothyConfig:
         d["margin_drop_factor"] = str(self.margin_drop_factor)
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
+        d["evi_min_threshold"] = str(self.evi_min_threshold)
         d["mode"] = "SIMULATED" if self.simulated else "LIVE"
         return d
 
@@ -301,91 +307,57 @@ class DorothyRunner(BaseStrategyRunner):
                 }
                 self._maybe_emit_metrics()
                 return stop_report
-        # ── DUAL-GATE: Trend Signal Check ───────────────────────────
-        # Gate 1: HA MA crossover (trend direction, refreshes every 2h)
-        # Gate 2: price < regular 1h candle open (anti-peak, every 5min)
+        # ── EVI GATE: Electric Volatility Index check ──────────────
+        # Replaces legacy dual-gate TrendSignal with inline EVI computation.
+        # Gate 1 (EVI): Symbol must have minimum volatility profile for DCA
+        # Gate 2 (Anti-peak): price < 1h candle open → avoid buying at tops
         try:
-            from runtime.modules.trend_signal import get_trend_signal_service
-            _trend_svc = get_trend_signal_service()
+            from runtime.modules.prospector import compute_oscillation_score
 
-            # Refresh trend (Gate 1) if needed (every 2h)
-            if _trend_svc.needs_trend_refresh(symbol):
-                try:
-                    klines_1h = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=10)
-                    )
-                    _trend_svc.update_trend(symbol, klines_1h)
-                except Exception as kl_err:
-                    self._emit("WARNING", f"dorothy:trend_refresh_failed: {kl_err}")
+            # Fetch 1h klines for EVI computation (cached per cycle)
+            _evi_cache_key = f"_evi_{symbol}"
+            _cached = getattr(self, _evi_cache_key, None)
+            _cache_age = time.time() - getattr(self, f"{_evi_cache_key}_ts", 0)
+            if _cached is None or _cache_age > 3600:  # refresh every hour
+                klines_1h = await self._to_thread(
+                    lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=50)
+                )
+                _evi_data = compute_oscillation_score(klines_1h) if klines_1h and len(klines_1h) >= 20 else None
+                setattr(self, _evi_cache_key, _evi_data)
+                setattr(self, f"{_evi_cache_key}_ts", time.time())
+            else:
+                _evi_data = _cached
 
-            # Refresh entry gate (Gate 2) — current price vs regular 1h candle open
-            if _trend_svc.needs_entry_refresh(symbol):
-                try:
-                    # Fetch current 1h candle (last = active candle)
-                    kline_now = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=1)
-                    )
-                    candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
-                    _trend_svc.update_entry_gate(
-                        symbol, float(market_price), candle_open_1h
-                    )
-                except Exception as eg_err:
-                    self._emit("WARNING", f"dorothy:entry_gate_refresh_failed: {eg_err}")
+            if _evi_data:
+                evi_score = _evi_data.get("evi_score", 0)
+                evi_threshold = float(c.evi_min_threshold)
+                candle_open_1h = _evi_data.get("current_price", 0)  # last close ≈ current
 
-            # Read combined decision
-            _full = _trend_svc.get_full_state(symbol)
-            trend_ok = _full.get("trend") == "BULLISH"
-            entry_ok = _full.get("entry_gate") == "CLEAR"
-            gates_open = _full.get("should_run", False)
-
-            self._emit("INFO", "dorothy:trend_gate", {
-                "symbol": symbol,
-                "trend": _full.get("trend"),
-                "ma1": _full.get("ma1"),
-                "ma2": _full.get("ma2"),
-                "entry_gate": _full.get("entry_gate"),
-                "price": _full.get("current_price"),
-                "candle_open": _full.get("candle_open_1h"),
-                "should_run": gates_open,
-            })
-
-            if not trend_ok:
-                return {
-                    "preset_id": c.preset_id, "symbol": symbol,
-                    "simulated": c.simulated, "trading_enabled": c.trading_enabled,
-                    "decision": "WAIT_TREND_BEARISH",
-                    "trend": _full.get("trend"),
-                    "ma1": _full.get("ma1"), "ma2": _full.get("ma2"),
+                self._emit("INFO", "dorothy:evi_gate", {
+                    "symbol": symbol,
+                    "evi_score": round(evi_score, 4),
+                    "evi_threshold": evi_threshold,
+                    "atr_pct": round(_evi_data.get("atr_pct", 0), 4),
+                    "choppiness": round(_evi_data.get("choppiness", 0), 2),
+                    "adx": round(_evi_data.get("adx", 0), 2),
                     "market_price": str(market_price),
-                    "loop_interval_sec": c.loop_interval_sec,
-                }
+                    "gate": "OPEN" if evi_score >= evi_threshold else "BLOCKED",
+                })
 
-            if not entry_ok:
-                return {
-                    "preset_id": c.preset_id, "symbol": symbol,
-                    "simulated": c.simulated, "trading_enabled": c.trading_enabled,
-                    "decision": "WAIT_ENTRY_BLOCKED",
-                    "trend": _full.get("trend"),
-                    "entry_gate": _full.get("entry_gate"),
-                    "current_price": _full.get("current_price"),
-                    "candle_open_1h": _full.get("candle_open_1h"),
-                    "market_price": str(market_price),
-                    "loop_interval_sec": c.loop_interval_sec,
-                }
+                if evi_score < evi_threshold:
+                    return {
+                        "preset_id": c.preset_id, "symbol": symbol,
+                        "simulated": c.simulated, "trading_enabled": c.trading_enabled,
+                        "decision": "WAIT_EVI_LOW",
+                        "evi_score": round(evi_score, 4),
+                        "evi_threshold": evi_threshold,
+                        "market_price": str(market_price),
+                        "loop_interval_sec": c.loop_interval_sec,
+                    }
 
-        except ImportError:
-            self._emit("WARNING", "dorothy:trend_signal_not_available")
-        except Exception as ts_err:
-            # Fail-closed: if trend service errors, don't buy
-            self._emit("ERROR", f"dorothy:trend_service_error: {ts_err}")
-            return {
-                "preset_id": c.preset_id, "symbol": symbol,
-                "simulated": c.simulated, "trading_enabled": c.trading_enabled,
-                "decision": "WAIT_TREND_ERROR",
-                "error": str(ts_err),
-                "market_price": str(market_price),
-                "loop_interval_sec": c.loop_interval_sec,
-            }
+        except Exception as evi_err:
+            # Fail-open: if EVI computation fails, allow trading (conservative)
+            self._emit("WARNING", f"dorothy:evi_gate_error: {evi_err}")
 
         # ── DCA entry logic (only reached when both gates are open) ──
         should_buy = False

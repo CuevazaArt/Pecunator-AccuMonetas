@@ -47,15 +47,21 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
       final snap = await widget.api.gatewaySnapshot();
       final usedRaw = snap['used_weight_1m'];
       int? used;
-      if (usedRaw is int) used = usedRaw;
-      else if (usedRaw is num) used = usedRaw.toInt();
-      else used = int.tryParse('$usedRaw');
+      if (usedRaw is int) {
+        used = usedRaw;
+      } else if (usedRaw is num)
+        used = usedRaw.toInt();
+      else
+        used = int.tryParse('$usedRaw');
 
       final limitRaw = snap['weight_limit_1m'];
       int limit = 6000;
-      if (limitRaw is int) limit = limitRaw;
-      else if (limitRaw is num) limit = limitRaw.toInt();
-      else limit = int.tryParse('$limitRaw') ?? 6000;
+      if (limitRaw is int) {
+        limit = limitRaw;
+      } else if (limitRaw is num)
+        limit = limitRaw.toInt();
+      else
+        limit = int.tryParse('$limitRaw') ?? 6000;
 
       bool fuse = false;
       try {
@@ -85,7 +91,9 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
 
   @override
   Widget build(BuildContext context) {
-    final pct = _data.isEmpty ? 0.0 : (_data.last.value / _weightLimit).clamp(0.0, 1.0);
+    final pct = _data.isEmpty
+        ? 0.0
+        : (_data.last.value / _weightLimit).clamp(0.0, 1.0);
     final color = _colorForPct(pct);
     final pctStr = (pct * 100).toStringAsFixed(1);
     final lastVal = _data.isEmpty ? '--' : _data.last.value.toString();
@@ -106,9 +114,31 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('W', style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900)),
-                Text('$pctStr%', style: TextStyle(fontSize: 10, color: color, fontFamily: 'monospace', fontWeight: FontWeight.w800)),
-                Text('$lastVal/$_weightLimit', style: const TextStyle(fontSize: 7, color: Colors.white38, fontFamily: 'monospace')),
+                Text(
+                  'W',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '$pctStr%',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$lastVal/$_weightLimit',
+                  style: const TextStyle(
+                    fontSize: 7,
+                    color: Colors.white38,
+                    fontFamily: 'monospace',
+                  ),
+                ),
               ],
             ),
           ),
@@ -149,6 +179,7 @@ class MiniEquityChart extends StatefulWidget {
   final Duration syncInterval;
   final Duration timeWindow;
   final double height;
+
   /// If provided, fetches specific subaccount equity endpoint.
   /// null = global equity from gateway snapshot.
   final String? subaccountId;
@@ -203,7 +234,8 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       setState(() {
         _data.add(_Sample(now, equity.round()));
         _data.removeWhere((s) => s.time.isBefore(cutoff));
-        if (_startEquity == 0 && _data.isNotEmpty) _startEquity = _data.first.value.toDouble();
+        if (_startEquity == 0 && _data.isNotEmpty)
+          _startEquity = _data.first.value.toDouble();
       });
     } catch (_) {}
   }
@@ -213,7 +245,9 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
     final lastVal = _data.isEmpty ? 0.0 : _data.last.value.toDouble();
     final delta = _startEquity > 0 ? lastVal - _startEquity : 0.0;
     final deltaPct = _startEquity > 0 ? (delta / _startEquity * 100) : 0.0;
-    final deltaColor = delta >= 0 ? const Color(0xFF00E676) : const Color(0xFFFF1744);
+    final deltaColor = delta >= 0
+        ? const Color(0xFF00E676)
+        : const Color(0xFFFF1744);
     final deltaSign = delta >= 0 ? '+' : '';
 
     return Container(
@@ -231,11 +265,32 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.label, style: TextStyle(fontSize: 8, color: widget.color, fontWeight: FontWeight.w900)),
-                Text('\$${lastVal.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 10, color: widget.color, fontFamily: 'monospace', fontWeight: FontWeight.w800)),
-                Text('$deltaSign${deltaPct.toStringAsFixed(2)}%',
-                    style: TextStyle(fontSize: 8, color: deltaColor, fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 8,
+                    color: widget.color,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '\$${lastVal.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: widget.color,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$deltaSign${deltaPct.toStringAsFixed(2)}%',
+                  style: TextStyle(
+                    fontSize: 8,
+                    color: deltaColor,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -278,13 +333,24 @@ class StatusLights extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _light('GW', gatewayRunning, gatewayRunning ? Colors.greenAccent : Colors.grey),
+        _light(
+          'GW',
+          gatewayRunning,
+          gatewayRunning ? Colors.greenAccent : Colors.grey,
+        ),
         const SizedBox(width: 4),
-        _light('FUSE', !fuseTripped, fuseTripped ? Colors.redAccent : Colors.cyanAccent),
+        _light(
+          'FUSE',
+          !fuseTripped,
+          fuseTripped ? Colors.redAccent : Colors.cyanAccent,
+        ),
         const SizedBox(width: 4),
-        _light(hubName ?? 'BOTS', botsRunning > 0,
-            botsRunning > 0 ? Colors.greenAccent : Colors.orangeAccent,
-            detail: '$botsRunning/$botsTotal'),
+        _light(
+          hubName ?? 'BOTS',
+          botsRunning > 0,
+          botsRunning > 0 ? Colors.greenAccent : Colors.orangeAccent,
+          detail: '$botsRunning/$botsTotal',
+        ),
       ],
     );
   }
@@ -301,18 +367,40 @@ class StatusLights extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: on ? color : color.withValues(alpha: 0.3),
-              boxShadow: on ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : null,
+              boxShadow: on
+                  ? [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.5),
+                        blurRadius: 4,
+                      ),
+                    ]
+                  : null,
             ),
           ),
           const SizedBox(width: 3),
-          Text(label, style: TextStyle(fontSize: 8, color: color, fontWeight: FontWeight.w800)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 8,
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           if (detail != null) ...[
             const SizedBox(width: 3),
-            Text(detail, style: TextStyle(fontSize: 8, color: color.withValues(alpha: 0.7), fontFamily: 'monospace')),
+            Text(
+              detail,
+              style: TextStyle(
+                fontSize: 8,
+                color: color.withValues(alpha: 0.7),
+                fontFamily: 'monospace',
+              ),
+            ),
           ],
         ],
       ),
@@ -334,14 +422,22 @@ class _SparklinePainter extends CustomPainter {
   final Color color;
   final bool fuseTripped;
 
-  _SparklinePainter({required this.data, this.maxY, required this.color, required this.fuseTripped});
+  _SparklinePainter({
+    required this.data,
+    this.maxY,
+    required this.color,
+    required this.fuseTripped,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
 
-    final effectiveMaxY = maxY ?? data.map((d) => d.value).reduce(math.max).toDouble() * 1.1;
-    final effectiveMinY = maxY != null ? 0.0 : data.map((d) => d.value).reduce(math.min).toDouble() * 0.95;
+    final effectiveMaxY =
+        maxY ?? data.map((d) => d.value).reduce(math.max).toDouble() * 1.1;
+    final effectiveMinY = maxY != null
+        ? 0.0
+        : data.map((d) => d.value).reduce(math.min).toDouble() * 0.95;
     final rangeY = effectiveMaxY - effectiveMinY;
     if (rangeY <= 0) return;
 
@@ -354,8 +450,13 @@ class _SparklinePainter extends CustomPainter {
     final fillPath = Path();
 
     for (int i = 0; i < data.length; i++) {
-      final x = (data[i].time.difference(firstTime).inMilliseconds / rangeX) * size.width;
-      final y = size.height - ((data[i].value - effectiveMinY) / rangeY) * size.height * 0.85 - size.height * 0.05;
+      final x =
+          (data[i].time.difference(firstTime).inMilliseconds / rangeX) *
+          size.width;
+      final y =
+          size.height -
+          ((data[i].value - effectiveMinY) / rangeY) * size.height * 0.85 -
+          size.height * 0.05;
       if (i == 0) {
         path.moveTo(x, y);
         fillPath.moveTo(x, size.height);
@@ -389,25 +490,43 @@ class _SparklinePainter extends CustomPainter {
     if (data.isNotEmpty) {
       final last = data.last;
       final lx = size.width;
-      final ly = size.height - ((last.value - effectiveMinY) / rangeY) * size.height * 0.85 - size.height * 0.05;
+      final ly =
+          size.height -
+          ((last.value - effectiveMinY) / rangeY) * size.height * 0.85 -
+          size.height * 0.05;
       canvas.drawCircle(Offset(lx, ly), 2.5, Paint()..color = color);
-      canvas.drawCircle(Offset(lx, ly), 4, Paint()..color = color.withValues(alpha: 0.3));
+      canvas.drawCircle(
+        Offset(lx, ly),
+        4,
+        Paint()..color = color.withValues(alpha: 0.3),
+      );
     }
 
     // Threshold lines for weight charts (with 100% reference)
     if (maxY != null) {
       // 100% ceiling — the critical reference
-      final fullY = size.height - (1.0 * size.height * 0.85) - size.height * 0.05;
+      final fullY =
+          size.height - (1.0 * size.height * 0.85) - size.height * 0.05;
       final ceilPaint = Paint()
         ..color = const Color(0x66FF1744)
         ..strokeWidth = 1.0;
       canvas.drawLine(Offset(0, fullY), Offset(size.width, fullY), ceilPaint);
       // "100%" label
       final tp100 = TextPainter(
-        text: const TextSpan(text: '100%', style: TextStyle(fontSize: 7, color: Color(0x88FF1744), fontFamily: 'monospace')),
+        text: const TextSpan(
+          text: '100%',
+          style: TextStyle(
+            fontSize: 7,
+            color: Color(0x88FF1744),
+            fontFamily: 'monospace',
+          ),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp100.paint(canvas, Offset(size.width - tp100.width - 1, fullY - tp100.height - 1));
+      tp100.paint(
+        canvas,
+        Offset(size.width - tp100.width - 1, fullY - tp100.height - 1),
+      );
 
       // Threshold guide lines: 40%, 60%, 80%
       final thresholds = [
@@ -423,7 +542,14 @@ class _SparklinePainter extends CustomPainter {
         canvas.drawLine(Offset(0, ty), Offset(size.width, ty), tp);
         // Small label on right edge
         final tpLabel = TextPainter(
-          text: TextSpan(text: label, style: TextStyle(fontSize: 6, color: tColor.withAlpha(180), fontFamily: 'monospace')),
+          text: TextSpan(
+            text: label,
+            style: TextStyle(
+              fontSize: 6,
+              color: tColor.withAlpha(180),
+              fontFamily: 'monospace',
+            ),
+          ),
           textDirection: TextDirection.ltr,
         )..layout();
         tpLabel.paint(canvas, Offset(size.width - tpLabel.width - 1, ty + 1));
@@ -443,11 +569,7 @@ class WeightOscillator extends StatefulWidget {
   final EngineApi api;
   final double height;
 
-  const WeightOscillator({
-    super.key,
-    required this.api,
-    this.height = 52,
-  });
+  const WeightOscillator({super.key, required this.api, this.height = 52});
 
   @override
   State<WeightOscillator> createState() => _WeightOscillatorState();
@@ -488,15 +610,23 @@ class _WeightOscillatorState extends State<WeightOscillator> {
       final snap = await widget.api.gatewaySnapshot();
       final usedRaw = snap['used_weight_1m'];
       int? used;
-      if (usedRaw is int) { used = usedRaw; }
-      else if (usedRaw is num) { used = usedRaw.toInt(); }
-      else { used = int.tryParse('$usedRaw'); }
+      if (usedRaw is int) {
+        used = usedRaw;
+      } else if (usedRaw is num) {
+        used = usedRaw.toInt();
+      } else {
+        used = int.tryParse('$usedRaw');
+      }
 
       final limitRaw = snap['weight_limit_1m'];
       int limit = 6000;
-      if (limitRaw is int) { limit = limitRaw; }
-      else if (limitRaw is num) { limit = limitRaw.toInt(); }
-      else { limit = int.tryParse('$limitRaw') ?? 6000; }
+      if (limitRaw is int) {
+        limit = limitRaw;
+      } else if (limitRaw is num) {
+        limit = limitRaw.toInt();
+      } else {
+        limit = int.tryParse('$limitRaw') ?? 6000;
+      }
 
       bool fuse = false;
       try {
@@ -508,7 +638,9 @@ class _WeightOscillatorState extends State<WeightOscillator> {
       final now = DateTime.now();
       final cutoff = now.subtract(Duration(minutes: _windowMin));
       setState(() {
-        if (used != null) { _data.add(_Sample(now, used)); }
+        if (used != null) {
+          _data.add(_Sample(now, used));
+        }
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         _weightLimit = limit > 0 ? limit : 6000;
         _fuseTripped = fuse;
@@ -526,7 +658,9 @@ class _WeightOscillatorState extends State<WeightOscillator> {
 
   @override
   Widget build(BuildContext context) {
-    final pct = _data.isEmpty ? 0.0 : (_data.last.value / _weightLimit).clamp(0.0, 1.0);
+    final pct = _data.isEmpty
+        ? 0.0
+        : (_data.last.value / _weightLimit).clamp(0.0, 1.0);
     final color = _colorForPct(pct);
     final pctStr = (pct * 100).toStringAsFixed(1);
 
@@ -546,7 +680,15 @@ class _WeightOscillatorState extends State<WeightOscillator> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('$pctStr%', style: TextStyle(fontSize: 9, color: color, fontFamily: 'monospace', fontWeight: FontWeight.w800)),
+                Text(
+                  '$pctStr%',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: color,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 // Sync selector
                 GestureDetector(
                   onTap: () {
@@ -556,17 +698,32 @@ class _WeightOscillatorState extends State<WeightOscillator> {
                       _startTimer();
                     });
                   },
-                  child: Text('${_syncMs}ms', style: const TextStyle(fontSize: 7, color: Colors.white30, fontFamily: 'monospace')),
+                  child: Text(
+                    '${_syncMs}ms',
+                    style: const TextStyle(
+                      fontSize: 7,
+                      color: Colors.white30,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                 ),
                 // Window selector
                 GestureDetector(
                   onTap: () {
                     final idx = _windowOptions.indexOf(_windowMin);
                     setState(() {
-                      _windowMin = _windowOptions[(idx + 1) % _windowOptions.length];
+                      _windowMin =
+                          _windowOptions[(idx + 1) % _windowOptions.length];
                     });
                   },
-                  child: Text('${_windowMin}m', style: const TextStyle(fontSize: 7, color: Colors.white30, fontFamily: 'monospace')),
+                  child: Text(
+                    '${_windowMin}m',
+                    style: const TextStyle(
+                      fontSize: 7,
+                      color: Colors.white30,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -588,4 +745,3 @@ class _WeightOscillatorState extends State<WeightOscillator> {
     );
   }
 }
-

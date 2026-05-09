@@ -322,6 +322,9 @@ class DorothyProspector:
     BATCH_DELAY_SEC = 0.6   # delay between batches (avoids frequency limit)
     # Max symbols to analyze (after volume filter)
     ANALYSIS_POOL_SIZE = 30
+    # Per-call timeout (seconds) to prevent hanging on unresponsive API
+    API_CALL_TIMEOUT = 30
+    MARGIN_CALL_TIMEOUT = 10  # shorter — most likely to fail without creds
 
     def __init__(self) -> None:
         self._last_scan: Optional[list[SymbolProfile]] = None
@@ -352,10 +355,12 @@ class DorothyProspector:
             top_n: Number of top results to return
             min_volume: Override minimum 24h volume filter
         """
-        async def _run(fn: Any) -> Any:
+        async def _run(fn: Any, timeout: float = self.API_CALL_TIMEOUT) -> Any:
             if _to_thread:
-                return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+                coro = _to_thread(fn)
+            else:
+                coro = asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.wait_for(coro, timeout=timeout)
 
         min_vol = min_volume or self.MIN_VOLUME_USDT
 
@@ -385,10 +390,15 @@ class DorothyProspector:
         # Weight: ~10
         margin_symbols: set[str] = set()
         try:
-            iso_pairs = await _run(lambda: client.get_all_isolated_margin_symbols())
+            iso_pairs = await _run(
+                lambda: client.get_all_isolated_margin_symbols(),
+                timeout=self.MARGIN_CALL_TIMEOUT,
+            )
             for p in (iso_pairs if isinstance(iso_pairs, list) else []):
                 if p.get("isMarginTrade") and p.get("quote") == "USDT":
                     margin_symbols.add(p.get("symbol", ""))
+        except asyncio.TimeoutError:
+            _LOG.warning("Prospector: margin symbols fetch timed out after %ds — continuing without margin data", self.MARGIN_CALL_TIMEOUT)
         except Exception as e:
             _LOG.warning("Prospector: margin symbols fetch failed: %s", e)
 
