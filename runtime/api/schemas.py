@@ -192,7 +192,7 @@ class HubBotOut(BaseModel):
     price_decimals: int
     note: str
     max_drawdown_pct: str
-    stop_loss_pct: str
+    stop_loss_pct: str = "0"
     metrics_interval_cycles: int
     last_cycle_ts: Optional[str]
     last_error: Optional[str]

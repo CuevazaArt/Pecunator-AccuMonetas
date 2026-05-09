@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "account_id": "dorothy",
+      "email": "dorothybot_virtual@j7tmq9bmnoemail.com",
+      "role": "bot",
+      "bot_type": "dorothy",
+      "description": "DCA long bot — buys dips, sells on profit target",
+      "symbols": [
+        "TONUSDT"
+      ],
+      "max_equity_usdt": "500",
+      "enabled": true,
+      "api_key_label": "DOROTHY_API"
+    },
+    {
+      "account_id": "elphaba",
+      "email": "mashabot_virtual@js13xxewnoemail.com",
+      "role": "bot",
+      "bot_type": "elphaba",
+      "description": "DCA short bot — symmetric counterpart to Dorothy",
+      "symbols": [
+        "TONUSDT"
+      ],
+      "max_equity_usdt": "500",
+      "enabled": true,
+      "api_key_label": "ELPHABA_API"
+    },
+    {
+      "account_id": "bluechip",
+      "email": "etfbluechipexpert_virtual@vfu3gqt4noemail.com",
+      "role": "strategy",
+      "bot_type": "",
+      "description": "ETF/BlueChip passive strategy — Earn, staking, long-term holds",
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT",
+        "SOLUSDT"
+      ],
+      "max_equity_usdt": "0",
+      "enabled": false,
+      "api_key_label": "BLUECHIP_API"
+    },
+    {
+      "account_id": "reserve",
+      "email": "arq.valenteochoa@gmail.com",
+      "role": "personal",
+      "bot_type": "",
+      "description": "Personal/Reserve account — emergency capital, manual operations",
+      "symbols": [],
+      "max_equity_usdt": "0",
+      "enabled": false,
+      "api_key_label": "RESERVE_API"
+    }
+  ]
+}
