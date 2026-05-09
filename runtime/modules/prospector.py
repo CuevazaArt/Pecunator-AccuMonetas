@@ -500,24 +500,12 @@ class DorothyProspector:
                     min_not = float(f.get("minNotional", "5"))
                 elif f.get("filterType") == "MIN_NOTIONAL":
                     min_not = float(f.get("minNotional", "5"))
-            sym_filters[sym] = {"min_notional": min_not}
+            sym_filters[sym] = {
+                "min_notional": min_not,
+                "margin_eligible": s.get("isMarginTradingAllowed", False)
+            }
 
-        # ── Step 2: Get margin-eligible symbols ───────────────────
-        # Weight: ~10
-        margin_symbols: set[str] = set()
-        try:
-            iso_pairs = await _run(
-                lambda: client.get_all_isolated_margin_symbols(),
-                timeout=self.MARGIN_CALL_TIMEOUT,
-            )
-            for p in (iso_pairs if isinstance(iso_pairs, list) else []):
-                if p.get("isMarginTrade") and p.get("quote") == "USDT":
-                    margin_symbols.add(p.get("symbol", ""))
-        except asyncio.TimeoutError:
-            _LOG.warning("Prospector: margin symbols fetch timed out after %ds — continuing without margin data", self.MARGIN_CALL_TIMEOUT)
-        except Exception as e:
-            _LOG.warning("Prospector: margin symbols fetch failed: %s", e)
-
+        # ── Step 2: Removed (Margin fetched from exchangeInfo) ────
         await asyncio.sleep(0.3)
 
         # ── Step 3: Filter candidates ─────────────────────────────
@@ -541,7 +529,7 @@ class DorothyProspector:
                 symbol=sym,
                 volume_24h_usdt=vol,
                 min_notional=flt["min_notional"],
-                margin_eligible=sym in margin_symbols,
+                margin_eligible=flt["margin_eligible"],
                 current_price=float(t.get("lastPrice", "0")),
             )
             candidates.append(p)

@@ -21,9 +21,8 @@ os.chdir(ROOT)
 HEALTH_URL = "http://127.0.0.1:8000/api/v1/health"
 CHECK_INTERVAL_SEC = 30
 MAX_FAILURES = 3
-PYTHON_EXE = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
+PYTHON_EXE = sys.executable
 LAUNCH_SCRIPT = os.path.join(ROOT, "launch.py")
-
 
 def check_health() -> bool:
     """Returns True if the backend is healthy."""

@@ -77,8 +77,8 @@ def main() -> None:
         host=host,
         port=port,
         log_level=os.environ.get("UVICORN_LOG_LEVEL", "info").lower(),
+        log_config=None,  # Do not override our custom logging (rotation, noise silencing)
     )
-
 
 if __name__ == "__main__":
     main()
