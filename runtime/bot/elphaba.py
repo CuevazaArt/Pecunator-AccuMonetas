@@ -192,15 +192,24 @@ class ElphabaRunner(BaseStrategyRunner):
         if not c.trading_enabled:
             raise RuntimeError("LIVE mode requires trading_enabled=true (explicit switch).")
 
-        # ── SymmetryGuard: check if hub is paused due to failures ──
+        # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:
             from runtime.core.symmetry_guard import get_symmetry_guard
             _guard = get_symmetry_guard()
+            _tick = _guard.tick()
+            if _tick.get("action") == "AUTO_RETRY":
+                self._emit("INFO", "elphaba:GUARD_AUTO_RETRY", _tick)
+            elif _tick.get("needs_rotation"):
+                self._emit("CRITICAL", "elphaba:NEEDS_ROTATION", {
+                    "action": "Symbol rotation required — exhausted recovery attempts",
+                    "tick": _tick,
+                })
+                return {"decision": "NEEDS_ROTATION", "reason": "Recovery exhausted, awaiting symbol rotation"}
             if _guard.is_hub_paused():
                 reason = _guard.get_pause_reason()
-                self._emit("CRITICAL", "elphaba:HUB_PAUSED", {
+                self._emit("WARNING", "elphaba:HUB_PAUSED", {
                     "reason": reason,
-                    "action": "Resolve failures then call symmetry_guard.reset_pause()",
+                    "tick": _tick,
                 })
                 return {"decision": "HUB_PAUSED", "reason": reason}
         except Exception:

@@ -88,9 +88,16 @@ class SymmetryGuard:
         self._failure_counts: dict[str, int] = {}  # bot_key -> consecutive failures
         self._hub_paused: bool = False
         self._pause_reason: str = ""
+        self._pause_ts: float = 0.0  # When the pause started
+        self._recovery_attempts: int = 0
+        self._needs_symbol_rotation: bool = False  # Flag for auto-rotation
 
     # Error codes that indicate temporary liquidity issues (not system bugs)
     _RECOVERABLE_CODES = {"-3045", "-3041", "-3042"}
+    # Cooldown before auto-retry after a recoverable pause (seconds)
+    RECOVERY_COOLDOWN_SEC = 300.0  # 5 minutes
+    # Max auto-recovery attempts before triggering symbol rotation
+    MAX_RECOVERY_ATTEMPTS = 3
 
     def record_order_success(self, bot_key: str) -> None:
         """Reset failure counter on successful order."""
@@ -102,41 +109,115 @@ class SymmetryGuard:
                 _LOG.info("SymmetryGuard: auto-clearing pause — %s recovered", bot_key)
                 self._hub_paused = False
                 self._pause_reason = ""
+                self._recovery_attempts = 0
+                self._needs_symbol_rotation = False
 
     def record_order_failure(self, bot_key: str, error: str) -> None:
         """Increment failure counter; pause hub if threshold exceeded.
 
-        For recoverable liquidity errors (-3045), the hub is marked as
-        DEGRADED instead of fully PAUSED — Dorothy continues solo while
-        Elphaba retries each cycle.
+        L0 Doctrine: ALWAYS pause both bots on failure streak.
+        One side must NEVER operate without its symmetric counterpart.
+        For recoverable errors, the watchdog will auto-retry after cooldown.
         """
         with self._lock:
             count = self._failure_counts.get(bot_key, 0) + 1
             self._failure_counts[bot_key] = count
 
-            # Detect if this is a recoverable liquidity error
             is_recoverable = any(code in error for code in self._RECOVERABLE_CODES)
 
             if count >= self.MAX_FAILURE_STREAK:
+                self._hub_paused = True
+                self._pause_ts = time.time()
+                self._pause_reason = (
+                    f"Hub paused: {bot_key} hit {count} consecutive order failures. "
+                    f"Last error: {error[:200]}"
+                )
                 if is_recoverable:
-                    # Degraded mode: log it but DON'T pause the hub
                     _LOG.warning(
-                        "SymmetryGuard: %s hit %d consecutive RECOVERABLE failures "
-                        "(liquidity). Hub continues in DEGRADED mode. Error: %s",
-                        bot_key, count, error[:200],
+                        "SymmetryGuard: RECOVERABLE pause — %s (attempt %d/%d). "
+                        "Auto-retry in %ds. Error: %s",
+                        bot_key, self._recovery_attempts + 1,
+                        self.MAX_RECOVERY_ATTEMPTS,
+                        int(self.RECOVERY_COOLDOWN_SEC), error[:200],
                     )
-                    # Don't set _hub_paused — let Dorothy keep operating
                 else:
-                    # Hard failure: pause the entire hub
-                    self._hub_paused = True
-                    self._pause_reason = (
-                        f"Hub paused: {bot_key} hit {count} consecutive order failures. "
-                        f"Last error: {error[:200]}"
-                    )
                     _LOG.critical(self._pause_reason)
+
+    def tick(self) -> dict[str, Any]:
+        """Watchdog tick — call this periodically (e.g., every bot cycle).
+
+        Handles auto-recovery for recoverable pauses:
+        1. If paused with recoverable error and cooldown elapsed → auto-reset
+        2. If max recovery attempts exhausted → flag for symbol rotation
+        3. Returns status dict for logging/telemetry
+
+        Returns:
+            {"action": "NONE|AUTO_RETRY|NEEDS_ROTATION", ...}
+        """
+        with self._lock:
+            if not self._hub_paused:
+                return {"action": "NONE", "hub_paused": False}
+
+            elapsed = time.time() - self._pause_ts
+            is_recoverable = any(
+                code in self._pause_reason for code in self._RECOVERABLE_CODES
+            )
+
+            if not is_recoverable:
+                return {
+                    "action": "HARD_PAUSE",
+                    "hub_paused": True,
+                    "reason": self._pause_reason,
+                    "needs_rotation": self._needs_symbol_rotation,
+                }
+
+            # Recoverable: check if cooldown elapsed
+            if elapsed < self.RECOVERY_COOLDOWN_SEC:
+                return {
+                    "action": "COOLING_DOWN",
+                    "hub_paused": True,
+                    "remaining_sec": round(self.RECOVERY_COOLDOWN_SEC - elapsed),
+                    "attempt": self._recovery_attempts,
+                }
+
+            # Cooldown elapsed — attempt recovery
+            self._recovery_attempts += 1
+
+            if self._recovery_attempts > self.MAX_RECOVERY_ATTEMPTS:
+                self._needs_symbol_rotation = True
+                _LOG.critical(
+                    "SymmetryGuard: exhausted %d recovery attempts. "
+                    "SYMBOL ROTATION REQUIRED.",
+                    self.MAX_RECOVERY_ATTEMPTS,
+                )
+                return {
+                    "action": "NEEDS_ROTATION",
+                    "hub_paused": True,
+                    "attempts_exhausted": True,
+                    "needs_rotation": True,
+                }
+
+            # Auto-reset for retry
+            _LOG.info(
+                "SymmetryGuard: auto-retry %d/%d — clearing pause for re-attempt",
+                self._recovery_attempts, self.MAX_RECOVERY_ATTEMPTS,
+            )
+            self._hub_paused = False
+            self._pause_reason = ""
+            self._failure_counts.clear()
+            return {
+                "action": "AUTO_RETRY",
+                "hub_paused": False,
+                "attempt": self._recovery_attempts,
+                "max_attempts": self.MAX_RECOVERY_ATTEMPTS,
+            }
 
     def is_hub_paused(self) -> bool:
         return self._hub_paused
+
+    def needs_symbol_rotation(self) -> bool:
+        """True when auto-recovery is exhausted and a new symbol is needed."""
+        return self._needs_symbol_rotation
 
     def get_pause_reason(self) -> str:
         return self._pause_reason

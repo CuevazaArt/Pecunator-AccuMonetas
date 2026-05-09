@@ -223,7 +223,10 @@ async def symmetry_guard_status() -> dict[str, Any]:
     return {
         "hub_paused": guard.is_hub_paused(),
         "pause_reason": guard.get_pause_reason(),
+        "needs_symbol_rotation": guard.needs_symbol_rotation(),
+        "recovery_attempts": guard._recovery_attempts,
         "failure_counts": dict(guard._failure_counts),
+        "watchdog_tick": guard.tick(),
         "last_health": health.as_json() if health else None,
     }
 
