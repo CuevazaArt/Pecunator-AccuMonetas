@@ -243,23 +243,23 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
           ),
           const SizedBox(height: 8),
 
-          // ── Section 2: Bot Placement Console ────────────────────
+          // ── Section 2: Bot Placement Console (de-emphasized) ──────
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: widget.hubColor.withValues(alpha: 0.05),
+              color: Colors.white.withValues(alpha: 0.02),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: widget.hubColor.withValues(alpha: 0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(widget.hubIcon, size: 14, color: widget.hubColor),
+                    Icon(Icons.add_circle_outline, size: 12, color: Colors.white24),
                     const SizedBox(width: 4),
-                    Text('Deploy ${widget.hubName}',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: widget.hubColor)),
+                    Text('Nueva instancia',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white30, letterSpacing: 0.3)),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -274,34 +274,35 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                         child: TextField(
                           controller: _formCtrl[field.key],
                           keyboardType: field.inputType,
-                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white54),
                           decoration: InputDecoration(
                             labelText: field.label,
                             hintText: field.hint,
-                            labelStyle: TextStyle(fontSize: 9, color: widget.hubColor.withValues(alpha: 0.7)),
-                            hintStyle: const TextStyle(fontSize: 9, color: Colors.white24),
+                            labelStyle: TextStyle(fontSize: 9, color: Colors.white24),
+                            hintStyle: const TextStyle(fontSize: 9, color: Colors.white12),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             isDense: true,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: widget.hubColor.withValues(alpha: 0.2)),
+                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: widget.hubColor),
+                              borderSide: BorderSide(color: Colors.white30),
                             ),
                           ),
                         ),
                       ),
                     SizedBox(
                       height: 32,
-                      child: FilledButton.icon(
+                      child: OutlinedButton.icon(
                         onPressed: _loading ? null : _createBot,
                         icon: const Icon(Icons.add, size: 14),
                         label: const Text('Deploy', style: TextStyle(fontSize: 10)),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: widget.hubColor,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white38,
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                         ),
                       ),
