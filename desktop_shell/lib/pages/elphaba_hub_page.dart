@@ -44,15 +44,12 @@ class ElphabaHubPage extends StatelessWidget {
         return [];
       },
       formFields: const [
-        BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-nil', defaultValue: 'NIL-ANTI'),
-        BotFormField(key: 'symbol', label: 'Symbol', hint: 'NILUSDT', defaultValue: 'NILUSDT'),
+        BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba'),
+        BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: 'TONUSDT'),
         BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60', inputType: TextInputType.number),
         BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6', inputType: TextInputType.number),
         BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03', inputType: TextInputType.number),
-        BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.02', defaultValue: '0.02', inputType: TextInputType.number),
-        BotFormField(key: 'qty_decimals', label: 'Qty Dec', hint: '1', defaultValue: '1', inputType: TextInputType.number),
-        BotFormField(key: 'price_decimals', label: 'Price Dec', hint: '5', defaultValue: '5', inputType: TextInputType.number),
-        BotFormField(key: 'max_drawdown_pct', label: 'Max DD %', hint: '0.15', defaultValue: '0.15', inputType: TextInputType.number),
+        BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03', inputType: TextInputType.number),
         BotFormField(key: 'note', label: 'Nota', hint: 'descripción'),
       ],
     );
