@@ -195,7 +195,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

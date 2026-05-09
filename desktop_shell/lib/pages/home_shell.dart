@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
-import '../widgets/compact_weight_gauge.dart';
-import '../widgets/system_status_bar.dart';
 import '../widgets/credential_manager_dialog.dart';
 import 'unified_hub_page.dart';
 
@@ -244,17 +242,6 @@ class _PecunatorShellState extends State<PecunatorShell> {
           // ── Main unified page ──────────────────────────
           Expanded(
             child: UnifiedHubPage(key: _hubKey, engineBase: _engineBase),
-          ),
-          // ── Persistent footer ──────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                Expanded(child: CompactWeightGauge(api: _api)),
-                const SizedBox(width: 8),
-                SystemStatusBar(api: _api),
-              ],
-            ),
           ),
         ],
       ),
