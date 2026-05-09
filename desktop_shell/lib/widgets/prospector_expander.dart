@@ -136,20 +136,22 @@ class _ProspectorExpanderState extends State<ProspectorExpander> {
                 height: 24,
                 child: TextField(
                   controller: _manualCtrl,
-                  style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                  style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Colors.amberAccent, fontWeight: FontWeight.bold),
                   textCapitalization: TextCapitalization.characters,
                   decoration: InputDecoration(
                     hintText: 'SYMBOL...',
-                    hintStyle: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.15)),
+                    hintStyle: TextStyle(fontSize: 9, color: Colors.amberAccent.withValues(alpha: 0.4)),
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    filled: true,
+                    fillColor: Colors.amberAccent.withValues(alpha: 0.1),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                      borderSide: const BorderSide(color: Colors.amberAccent),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.15)),
+                      borderSide: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.6)),
                     ),
                   ),
                   onSubmitted: (_) => _submitManual(),

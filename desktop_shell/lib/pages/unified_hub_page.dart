@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../services/preferences.dart';
 import '../widgets/mini_charts.dart';
 import '../widgets/hub_status_explainer.dart';
 import '../widgets/bot_instances_paired.dart';
@@ -42,11 +44,12 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
   List<Map<String, dynamic>> _elphabaBots = [];
 
   String? _stagedSymbol;
-  final Map<String, Map<String, dynamic>> _savedPresets = {};
+  Map<String, Map<String, dynamic>> _savedPresets = {};
 
   @override
   void initState() {
     super.initState();
+    _loadPresets();
     _api = EngineApi(widget.engineBase);
     _poll();
     _timer = Timer.periodic(const Duration(seconds: 8), (_) => _poll());
@@ -101,6 +104,14 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
     } catch (_) {}
   }
 
+  void _loadPresets() {
+    try {
+      final jsonStr = AppPreferences.savedPresetsJson;
+      final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      _savedPresets = decoded.map((key, value) => MapEntry(key, Map<String, dynamic>.from(value)));
+    } catch (_) {}
+  }
+
   void _handleSymbolSelected(String symbol) {
     setState(() => _stagedSymbol = symbol);
   }
@@ -116,6 +127,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         _savedPresets[config['symbol']] = config;
         _stagedSymbol = null;
       });
+      AppPreferences.setSavedPresetsJson(jsonEncode(_savedPresets));
       forcePoll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

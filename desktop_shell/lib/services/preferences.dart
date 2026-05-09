@@ -101,6 +101,11 @@ class AppPreferences {
   static Future<void> setApiSecret(String value) =>
       _prefs.setString(_PrefsKeys.apiSecret, value);
 
+  // Staged Symbol Presets Persistence
+  static String get savedPresetsJson => _prefs.getString('app.savedPresets') ?? '{}';
+  static Future<void> setSavedPresetsJson(String json) =>
+      _prefs.setString('app.savedPresets', json);
+
   // Clear all
   static Future<void> clearAll() => _prefs.clear();
 }
