@@ -53,7 +53,7 @@ class PecunatorApp extends StatelessWidget {
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: ThemeMode.dark,
-      home: const HomeShell(),
+      home: const PecunatorShell(),
     );
   }
 }
