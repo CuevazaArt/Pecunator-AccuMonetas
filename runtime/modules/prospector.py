@@ -184,6 +184,8 @@ def _compute_choppiness(highs: list[float], lows: list[float], closes: list[floa
     return max(0.0, min(100.0, chop))
 
 
+import traceback  # added for detailed error logging
+
 def _compute_speed_and_frequency(
     closes: list[float],
     sigma_threshold: float = 0.8,
@@ -459,7 +461,9 @@ class DorothyProspector:
                 profile.current_price = scores["current_price"]
 
             except Exception as e:
-                profile.error = str(e)[:100]
+                # Log full traceback for debugging
+                _LOG.error('Prospector analysis error for %s: %s', profile.symbol, traceback.format_exc())
+                profile.error = str(e)[:200]
 
         # Sequential batched processing
         for batch_start in range(0, len(analyze_pool), self.BATCH_SIZE):
