@@ -34,37 +34,29 @@ class SubAccountEntry:
     api_key_label: str = ""            # Label in encrypted vault (NOT the key itself)
 
 
-# Default registry — the 5 sub-accounts
+# Default registry — active sub-accounts
+# NOTE: As of v2.5, all accounts share the master API key.
+# True sub-account isolation requires creating separate Binance sub-accounts.
 _DEFAULT_REGISTRY: list[SubAccountEntry] = [
     SubAccountEntry(
         account_id="dorothy",
         email="dorothybot_virtual@j7tmq9bmnoemail.com",
         role="bot",
         bot_type="dorothy",
-        description="Trend-following scalper — rides momentum breakouts",
-        symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        description="DCA long bot — buys dips, sells on profit target",
+        symbols=["TONUSDT"],
         max_equity_usdt="500",
         api_key_label="DOROTHY_API",
     ),
     SubAccountEntry(
-        account_id="masha",
+        account_id="elphaba",
         email="mashabot_virtual@js13xxewnoemail.com",
         role="bot",
-        bot_type="masha",
-        description="DCA range bot — accumulates in sideways markets",
-        symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+        bot_type="elphaba",
+        description="DCA short bot — symmetric counterpart to Dorothy",
+        symbols=["TONUSDT"],
         max_equity_usdt="500",
-        api_key_label="MASHA_API",
-    ),
-    SubAccountEntry(
-        account_id="thusnelda",
-        email="xrpacum_virtual@6nfrqwurnoemail.com",
-        role="bot",
-        bot_type="thusnelda",
-        description="L0 volatile basket — buys dip, harvests on sector rally (6%+ target)",
-        symbols=["PEPEUSDT", "SUIUSDT", "NEARUSDT", "INJUSDT", "FETUSDT"],
-        max_equity_usdt="200",
-        api_key_label="THUSNELDA_API",
+        api_key_label="ELPHABA_API",
     ),
     SubAccountEntry(
         account_id="bluechip",
@@ -73,8 +65,9 @@ _DEFAULT_REGISTRY: list[SubAccountEntry] = [
         bot_type="",
         description="ETF/BlueChip passive strategy — Earn, staking, long-term holds",
         symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"],
-        max_equity_usdt="0",  # No trading limit, managed manually
+        max_equity_usdt="0",
         api_key_label="BLUECHIP_API",
+        enabled=False,
     ),
     SubAccountEntry(
         account_id="reserve",
@@ -85,6 +78,7 @@ _DEFAULT_REGISTRY: list[SubAccountEntry] = [
         symbols=[],
         max_equity_usdt="0",
         api_key_label="RESERVE_API",
+        enabled=False,
     ),
 ]
 
