@@ -254,27 +254,21 @@ class _HomeShellState extends State<HomeShell> {
 
   // ── Credential Manager Dialog ──────────────────────────────────
 
-  void _openCredentialManager() {
-    List<Map<String, dynamic>> subaccounts = [];
-    // Load subaccounts on dialog open
-    _api.subaccountsList().then((resp) {
-      subaccounts = (resp['accounts'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    }).catchError((_) {});
+  /// Known sub-account registry (defined in .env, no backend endpoint).
+  static const _subAccountRegistry = [
+    {'account_id': 'dorothy', 'role': 'bot', 'description': 'DCA long hub', 'env_key': 'DOROTHY_API_KEY', 'enabled': true},
+    {'account_id': 'elphaba', 'role': 'bot', 'description': 'Short/hedge hub (shared key with Dorothy)', 'env_key': 'DOROTHY_API_KEY', 'enabled': true},
+    {'account_id': 'masha', 'role': 'bot', 'description': 'Hunter fleet', 'env_key': 'MASHA_API_KEY', 'enabled': false},
+    {'account_id': 'bluechip', 'role': 'reserve', 'description': 'Blue-chip DCA reserve', 'env_key': 'BLUECHIP_API_KEY', 'enabled': false},
+    {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'env_key': 'RESERVE_API_KEY', 'enabled': false},
+    {'account_id': 'thusnelda', 'role': 'isolated', 'description': 'Isolated margin sub-account', 'env_key': 'THUSNELDA_API_KEY', 'enabled': false},
+  ];
 
+  void _openCredentialManager() {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          // Reload subaccounts if empty
-          if (subaccounts.isEmpty) {
-            _api.subaccountsList().then((resp) {
-              if (ctx.mounted) {
-                setDialogState(() {
-                  subaccounts = (resp['accounts'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                });
-              }
-            }).catchError((_) {});
-          }
           return AlertDialog(
             title: Row(
               children: [
@@ -399,38 +393,30 @@ class _HomeShellState extends State<HomeShell> {
                     // ── Section: Sub-Account Registry ──
                     const Text('SUB-CUENTAS (Registry)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1, color: Colors.white38)),
                     const SizedBox(height: 4),
-                    if (subaccounts.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Text('Cargando sub-cuentas...', style: TextStyle(color: Colors.white24, fontSize: 10)),
-                      )
-                    else
-                      ...(subaccounts.map((sa) {
-                        final hasKey = sa['credential_available'] == true;
+                    ...(_subAccountRegistry.map((sa) {
                         final enabled = sa['enabled'] == true;
-                  
-                        final role = sa['role'] ?? '';
-                        final desc = sa['description'] ?? '';
-                        final keyLabel = sa['api_key_label'] ?? '';
+                        final role = '${sa['role'] ?? ''}';
+                        final desc = '${sa['description'] ?? ''}';
+                        final envKey = '${sa['env_key'] ?? ''}';
                         return Container(
                           margin: const EdgeInsets.symmetric(vertical: 2),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                           decoration: BoxDecoration(
                             color: enabled ? Colors.white.withValues(alpha: 0.04) : Colors.white.withValues(alpha: 0.01),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: hasKey ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1)),
+                            border: Border.all(color: enabled ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1)),
                           ),
                           child: Row(
                             children: [
                               // Credential status indicator
                               Tooltip(
-                                message: hasKey ? 'API key detectada en .env' : 'Sin API key en .env',
+                                message: enabled ? 'Cuenta activa · ${sa['env_key']}' : 'Cuenta inactiva',
                                 child: Container(
                                   width: 8, height: 8,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: hasKey ? Colors.greenAccent : Colors.grey.withValues(alpha: 0.3),
-                                    boxShadow: hasKey ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.4), blurRadius: 4)] : null,
+                                    color: enabled ? Colors.greenAccent : Colors.grey.withValues(alpha: 0.3),
+                                    boxShadow: enabled ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.4), blurRadius: 4)] : null,
                                   ),
                                 ),
                               ),
@@ -467,7 +453,7 @@ class _HomeShellState extends State<HomeShell> {
                                 ),
                               ),
                               // Key label
-                              Text(keyLabel, style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.white24)),
+                              Text(envKey, style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.white24)),
                             ],
                           ),
                         );

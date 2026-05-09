@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../widgets/bot_hub_template.dart';
+import '../widgets/bot_instances_paired.dart';
 import '../widgets/hub_status_explainer.dart';
 import '../widgets/mini_charts.dart';
 import '../widgets/prospector_panel.dart';
@@ -26,6 +27,8 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
   Timer? _statusTimer;
   Map<String, dynamic> _dorothyReport = {};
   Map<String, dynamic> _elphabaReport = {};
+  List<Map<String, dynamic>> _dorothyBots = [];
+  List<Map<String, dynamic>> _elphabaBots = [];
   bool _fuseTripped = false;
   bool _budgetBlocked = false;
 
@@ -71,6 +74,8 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
       setState(() {
         _dorothyReport = dorReport;
         _elphabaReport = elpReport;
+        _dorothyBots = dorBots.whereType<Map<String, dynamic>>().toList();
+        _elphabaBots = elpBots.whereType<Map<String, dynamic>>().toList();
         _fuseTripped = fuse;
         _budgetBlocked = budget;
       });
@@ -157,6 +162,15 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
             elphabaReport: _elphabaReport,
             fuseTripped: _fuseTripped,
             budgetBlocked: _budgetBlocked,
+          ),
+        ),
+        const SizedBox(height: 4),
+        // ── Paired Instances List ─────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: BotInstancesPairedList(
+            dorothyBots: _dorothyBots,
+            elphabaBots: _elphabaBots,
           ),
         ),
         const SizedBox(height: 4),
