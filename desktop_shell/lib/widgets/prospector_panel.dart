@@ -167,7 +167,7 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Escanea todos los pares USDT y los rankea por intensidad oscilativa (ATR% × (100−ADX)).',
+                'Escanea pares USDT y rankea por Electric Volatility Index (EVI = NATR × Speed × Freq × CHOP).',
                 style: TextStyle(
                   fontSize: 9,
                   color: Colors.white.withValues(alpha: 0.35),
@@ -252,9 +252,10 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
   Widget _buildRecommendation(Map<String, dynamic> rec) {
     final symbol = rec['symbol'] ?? '';
     final grade = rec['grade'] ?? 'F';
-    final score = (rec['oscillation_score'] ?? 0).toDouble();
+    final evi = (rec['evi_score'] ?? 0).toDouble();
     final atr = (rec['atr_pct'] ?? 0).toDouble();
-    final adx = (rec['adx'] ?? 0).toDouble();
+    final speed = (rec['avg_speed'] ?? 0).toDouble();
+    final freq = (rec['freq_extreme'] ?? 0).toDouble();
     final chop = (rec['choppiness'] ?? 0).toDouble();
     final margin = rec['margin_eligible'] == true;
     final vol = ((rec['volume_24h_usdt'] ?? 0).toDouble() / 1e6);
@@ -327,9 +328,9 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Score=${score.toStringAsFixed(2)}  ATR%=${atr.toStringAsFixed(2)}  '
-                  'ADX=${adx.toStringAsFixed(1)}  CHOP=${chop.toStringAsFixed(1)}  '
-                  'Vol=\$${vol.toStringAsFixed(1)}M',
+                  'EVI=${evi.toStringAsFixed(3)}  ATR%=${atr.toStringAsFixed(2)}  '
+                  'Speed=${speed.toStringAsFixed(3)}  Freq=${freq.toStringAsFixed(2)}  '
+                  'CHOP=${chop.toStringAsFixed(1)}  Vol=\$${vol.toStringAsFixed(1)}M',
                   style: TextStyle(
                     fontSize: 9,
                     fontFamily: 'monospace',
@@ -378,12 +379,13 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                 _headerCell('#', 24),
                 _headerCell('Symbol', 80),
                 _headerCell('Grade', 40),
-                _headerCell('Score', 50),
-                _headerCell('ATR%', 50),
-                _headerCell('ADX', 40),
-                _headerCell('CHOP', 42),
-                _headerCell('Vol(M\$)', 55),
-                _headerCell('Margin', 46),
+                _headerCell('EVI', 50),
+                _headerCell('ATR%', 45),
+                _headerCell('Speed', 45),
+                _headerCell('Freq', 38),
+                _headerCell('CHOP', 38),
+                _headerCell('Vol(M\$)', 50),
+                _headerCell('Mgn', 36),
                 const Spacer(),
               ],
             ),
@@ -429,13 +431,14 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                       ),
                     ),
                   ),
-                  _dataCell((r['oscillation_score'] ?? 0).toDouble().toStringAsFixed(2), 50, Colors.white60),
-                  _dataCell((r['atr_pct'] ?? 0).toDouble().toStringAsFixed(2), 50, Colors.cyanAccent.withValues(alpha: 0.7)),
-                  _dataCell((r['adx'] ?? 0).toDouble().toStringAsFixed(1), 40, Colors.white54),
-                  _dataCell((r['choppiness'] ?? 0).toDouble().toStringAsFixed(1), 42, Colors.white54),
-                  _dataCell(vol.toStringAsFixed(1), 55, Colors.white38),
+                  _dataCell((r['evi_score'] ?? 0).toDouble().toStringAsFixed(3), 50, Colors.amberAccent.withValues(alpha: 0.8)),
+                  _dataCell((r['atr_pct'] ?? 0).toDouble().toStringAsFixed(2), 45, Colors.cyanAccent.withValues(alpha: 0.7)),
+                  _dataCell((r['avg_speed'] ?? 0).toDouble().toStringAsFixed(3), 45, Colors.orangeAccent.withValues(alpha: 0.7)),
+                  _dataCell((r['freq_extreme'] ?? 0).toDouble().toStringAsFixed(2), 38, Colors.purpleAccent.withValues(alpha: 0.7)),
+                  _dataCell((r['choppiness'] ?? 0).toDouble().toStringAsFixed(1), 38, Colors.white54),
+                  _dataCell(vol.toStringAsFixed(1), 50, Colors.white38),
                   SizedBox(
-                    width: 46,
+                    width: 36,
                     child: Center(
                       child: Icon(
                         margin ? Icons.check_circle : Icons.cancel,

@@ -1,17 +1,19 @@
 """DorothyProspector — Symbol scanner for the Dorothy ⇄ Elphaba hub.
 
-Scans all Binance USDT pairs, computes an Oscillation Score for each,
-and ranks them by suitability for the symmetric DCA strategy.
+Scans all Binance USDT pairs, computes an Electric Volatility Index (EVI)
+for each and ranks them by suitability for the symmetric DCA strategy.
 
 The ideal symbol for Dorothy+Elphaba:
-  - High ATR% (large relative swings → profit opportunities)
-  - Low ADX (choppy/ranging → frequent reversals = more DCA entries)
+  - High ATR% (NATR: large relative swings → profit opportunities)
+  - High speed (mean |1-candle return|: fast traversal of range)
+  - High frequency of extreme events (spikes > 1.5σ → more DCA entries)
+  - Low ADX / high Choppiness (range-bound → frequent reversals)
   - Adequate volume (liquidity for clean fills)
   - Isolated Margin support (required for Elphaba shorts)
   - MIN_NOTIONAL ≤ 6 USDT (fits our quoteOrderQty)
 
-Oscillation Score = ATR_pct × (100 − ADX) / 100
-Higher score = more "electric" = better for DCA hub.
+EVI = NATR × AvgSpeed × FreqExtreme × (Choppiness/50)
+Higher EVI = more "electric" = better for DCA hub.
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import math
+import statistics
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
@@ -36,11 +40,16 @@ class SymbolProfile:
     margin_eligible: bool = False
     volume_24h_usdt: float = 0.0
     min_notional: float = 5.0
-    # Scores
-    atr_pct: float = 0.0          # ATR / price × 100
+    # Scores (legacy)
+    atr_pct: float = 0.0          # ATR / price × 100 (NATR)
     adx: float = 0.0              # Average Directional Index (0-100)
     choppiness: float = 0.0       # Choppiness Index (0-100)
-    oscillation_score: float = 0.0  # Composite: ATR% × (100-ADX)/100
+    oscillation_score: float = 0.0  # Legacy: ATR% × (100-ADX)/100
+    # EVI components
+    avg_speed: float = 0.0        # Mean |1-candle return| (speed dimension)
+    freq_extreme: float = 0.0     # Fraction of candles with |ret| > 1.5σ
+    kurtosis: float = 0.0         # Excess kurtosis of returns (tail thickness)
+    evi_score: float = 0.0        # EVI = NATR × AvgSpeed × FreqExtreme × (CHOP/50)
     # Metadata
     current_price: float = 0.0
     avg_spread_pct: float = 0.0
@@ -50,8 +59,12 @@ class SymbolProfile:
     def as_json(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
+            "evi_score": round(self.evi_score, 4),
             "oscillation_score": round(self.oscillation_score, 4),
             "atr_pct": round(self.atr_pct, 4),
+            "avg_speed": round(self.avg_speed, 4),
+            "freq_extreme": round(self.freq_extreme, 4),
+            "kurtosis": round(self.kurtosis, 2),
             "adx": round(self.adx, 2),
             "choppiness": round(self.choppiness, 2),
             "volume_24h_usdt": round(self.volume_24h_usdt, 2),
@@ -63,19 +76,19 @@ class SymbolProfile:
 
     @property
     def grade(self) -> str:
-        """Human-readable grade based on oscillation score."""
-        s = self.oscillation_score
-        if s >= 3.0:
-            return "S"   # Exceptional
-        elif s >= 2.0:
+        """Human-readable grade based on EVI score."""
+        s = self.evi_score
+        if s >= 0.50:
+            return "S"   # Exceptional electric
+        elif s >= 0.20:
             return "A"   # Excellent
-        elif s >= 1.5:
+        elif s >= 0.10:
             return "B"   # Good
-        elif s >= 1.0:
+        elif s >= 0.05:
             return "C"   # Acceptable
-        elif s >= 0.5:
+        elif s >= 0.02:
             return "D"   # Marginal
-        return "F"       # Unsuitable
+        return "F"       # Dead market
 
 
 # ── Math ───────────────────────────────────────────────────────────
@@ -171,21 +184,80 @@ def _compute_choppiness(highs: list[float], lows: list[float], closes: list[floa
     return max(0.0, min(100.0, chop))
 
 
+def _compute_speed_and_frequency(
+    closes: list[float],
+    sigma_threshold: float = 0.8,
+) -> tuple[float, float, float]:
+    """Compute speed (avg |1-candle return|), extreme frequency, and kurtosis.
+
+    Args:
+        closes: Close prices series
+        sigma_threshold: Multiplier of σ to define 'extreme' (default 1.5)
+
+    Returns:
+        (avg_speed_pct, freq_extreme, excess_kurtosis)
+    """
+    if len(closes) < 5:
+        return 0.0, 0.0, 0.0
+
+    # Compute 1-candle percentage returns
+    returns = []
+    for i in range(1, len(closes)):
+        if closes[i - 1] > 0:
+            returns.append((closes[i] - closes[i - 1]) / closes[i - 1] * 100)
+
+    if len(returns) < 4:
+        return 0.0, 0.0, 0.0
+
+    abs_returns = [abs(r) for r in returns]
+    avg_speed = sum(abs_returns) / len(abs_returns)
+
+    # Frequency of significant moves: candles where |return| > median |return|
+    # This captures clustering: fat-tailed distributions have more extreme moves
+    # above the median than normal distributions (50% for uniform, higher for
+    # leptokurtic). For perfectly regular oscillations freq ≈ 0.5 (healthy).
+    sorted_abs = sorted(abs_returns)
+    median_abs = sorted_abs[len(sorted_abs) // 2]
+    if median_abs > 0:
+        # Count candles with |return| > 1.5 × median
+        threshold = sigma_threshold * median_abs
+        extreme_count = sum(1 for r in abs_returns if r > threshold)
+        freq_extreme = extreme_count / len(abs_returns)
+    else:
+        freq_extreme = 0.0
+
+    # Excess kurtosis (normal distribution = 0)
+    mean_r = sum(returns) / len(returns)
+    var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+    if var > 0:
+        m4 = sum((r - mean_r) ** 4 for r in returns) / len(returns)
+        kurtosis = (m4 / (var ** 2)) - 3.0  # excess kurtosis
+    else:
+        kurtosis = 0.0
+
+    return avg_speed, freq_extreme, kurtosis
+
+
 def compute_oscillation_score(
     klines: list[list],
     period: int = 14,
 ) -> dict[str, float]:
-    """Compute the full oscillation profile from raw Binance klines.
+    """Compute the full EVI profile from raw Binance klines.
 
     Args:
         klines: Raw Binance klines [[open_time, O, H, L, C, vol, ...], ...]
         period: Lookback period for ATR/ADX/CHOP (default 14)
 
     Returns:
-        Dict with atr_pct, adx, choppiness, oscillation_score
+        Dict with all EVI components + legacy oscillation_score
     """
+    zero = {
+        "atr_pct": 0, "adx": 50, "choppiness": 50,
+        "oscillation_score": 0, "avg_speed": 0,
+        "freq_extreme": 0, "kurtosis": 0, "evi_score": 0,
+    }
     if len(klines) < period + 2:
-        return {"atr_pct": 0, "adx": 50, "choppiness": 50, "oscillation_score": 0}
+        return zero
 
     highs = [float(k[2]) for k in klines]
     lows = [float(k[3]) for k in klines]
@@ -196,19 +268,38 @@ def compute_oscillation_score(
         current_price = 1.0
 
     atr = _compute_atr(highs, lows, closes, period)
-    atr_pct = (atr / current_price) * 100
+    atr_pct = (atr / current_price) * 100  # NATR
 
     adx = _compute_adx(highs, lows, closes, period)
     chop = _compute_choppiness(highs, lows, closes, period)
 
-    # Composite: high ATR% + low directional = high oscillation
+    # New: speed + frequency + kurtosis
+    avg_speed, freq_extreme, kurtosis = _compute_speed_and_frequency(closes)
+
+    # Legacy score (backward compat)
     oscillation_score = atr_pct * (100 - adx) / 100
+
+    # ── EVI — Electric Volatility Index ──────────────────────────
+    # EVI = NATR × AvgSpeed × FreqExtreme × (Choppiness / 50)
+    #
+    # - NATR: how much it moves relative to price
+    # - AvgSpeed: how fast it traverses that range per candle
+    # - FreqExtreme: how often it spikes (0-1, typically 0.05-0.30)
+    # - CHOP/50: bonus for range-bound (>1 = choppy, <1 = trending)
+    #
+    # This is dimensionally: %·%·fraction·ratio = a pure composite.
+    chop_factor = chop / 50.0 if chop > 0 else 0.0
+    evi_score = atr_pct * avg_speed * freq_extreme * chop_factor
 
     return {
         "atr_pct": atr_pct,
         "adx": adx,
         "choppiness": chop,
         "oscillation_score": oscillation_score,
+        "avg_speed": avg_speed,
+        "freq_extreme": freq_extreme,
+        "kurtosis": kurtosis,
+        "evi_score": evi_score,
         "current_price": current_price,
     }
 
@@ -361,6 +452,10 @@ class DorothyProspector:
                 profile.adx = scores["adx"]
                 profile.choppiness = scores["choppiness"]
                 profile.oscillation_score = scores["oscillation_score"]
+                profile.avg_speed = scores["avg_speed"]
+                profile.freq_extreme = scores["freq_extreme"]
+                profile.kurtosis = scores["kurtosis"]
+                profile.evi_score = scores["evi_score"]
                 profile.current_price = scores["current_price"]
 
             except Exception as e:
@@ -375,18 +470,18 @@ class DorothyProspector:
             if batch_start + self.BATCH_SIZE < len(analyze_pool):
                 await asyncio.sleep(self.BATCH_DELAY_SEC)
 
-        # ── Step 5: Rank by oscillation score ─────────────────────
-        scored = [p for p in analyze_pool if p.oscillation_score > 0]
-        scored.sort(key=lambda p: p.oscillation_score, reverse=True)
+        # ── Step 5: Rank by EVI (primary) ──────────────────────────
+        scored = [p for p in analyze_pool if p.evi_score > 0]
+        scored.sort(key=lambda p: p.evi_score, reverse=True)
 
         result = scored[:top_n]
         self._last_scan = result
         self._last_scan_ts = time.time()
 
         _LOG.info(
-            "Prospector: scan complete. Top symbol: %s (score=%.4f, grade=%s)",
+            "Prospector: scan complete. Top symbol: %s (EVI=%.4f, grade=%s)",
             result[0].symbol if result else "NONE",
-            result[0].oscillation_score if result else 0,
+            result[0].evi_score if result else 0,
             result[0].grade if result else "F",
         )
 
@@ -419,22 +514,21 @@ class DorothyProspector:
             return "No scan results available. Run scan() first."
 
         lines = [
-            "╔══════════════════════════════════════════════════════════════════════╗",
-            "║             DOROTHY PROSPECTOR — Symbol Ranking                     ║",
-            "╠══════════════════════════════════════════════════════════════════════╣",
-            "║ #  │ Symbol      │ Score │ ATR%  │ ADX  │ CHOP │ Vol(M$) │ Margin  ║",
-            "╠════╪═════════════╪═══════╪═══════╪══════╪══════╪═════════╪═════════╣",
+            "╔════════════════════════════════════════════════════════════════════════════╗",
+            "║          DOROTHY PROSPECTOR — Electric Volatility Index (EVI)             ║",
+            "╠════════════════════════════════════════════════════════════════════════════╣",
+            "║ #  │ Symbol      │  EVI  │ ATR%  │ Speed │ Freq │ CHOP │ Vol(M$)│ Margin ║",
+            "╠════╪═════════════╪═══════╪═══════╪═══════╪══════╪══════╪════════╪════════╣",
         ]
         for i, p in enumerate(data, 1):
-            margin_str = "  ✅  " if p.margin_eligible else "  ❌  "
-            grade_str = f"[{p.grade}]"
+            margin_str = "  ✅ " if p.margin_eligible else "  ❌ "
             lines.append(
-                f"║ {i:>2} │ {p.symbol:<11} │ {p.oscillation_score:>5.2f} │ "
-                f"{p.atr_pct:>5.2f} │ {p.adx:>4.1f} │ {p.choppiness:>4.1f} │ "
-                f"{p.volume_24h_usdt / 1e6:>6.1f} │{margin_str}║"
+                f"║ {i:>2} │ {p.symbol:<11} │ {p.evi_score:>5.3f} │ "
+                f"{p.atr_pct:>5.2f} │ {p.avg_speed:>5.3f} │ {p.freq_extreme:>4.2f} │ "
+                f"{p.choppiness:>4.1f} │ {p.volume_24h_usdt / 1e6:>5.1f}  │{margin_str}║"
             )
         lines.append(
-            "╚══════════════════════════════════════════════════════════════════════╝"
+            "╚════════════════════════════════════════════════════════════════════════════╝"
         )
 
         # Recommendation
@@ -442,8 +536,10 @@ class DorothyProspector:
         if rec:
             lines.append("")
             lines.append(f"🎯 RECOMENDACIÓN: {rec.symbol} (Grade {rec.grade})")
-            lines.append(f"   Score={rec.oscillation_score:.4f}  ATR%={rec.atr_pct:.2f}  "
-                         f"ADX={rec.adx:.1f}  CHOP={rec.choppiness:.1f}")
+            lines.append(f"   EVI={rec.evi_score:.4f}  ATR%={rec.atr_pct:.2f}  "
+                         f"Speed={rec.avg_speed:.3f}  Freq={rec.freq_extreme:.2f}")
+            lines.append(f"   ADX={rec.adx:.1f}  CHOP={rec.choppiness:.1f}  "
+                         f"Kurt={rec.kurtosis:.1f}")
             lines.append(f"   Volume=${rec.volume_24h_usdt / 1e6:.1f}M  "
                          f"Margin={'SÍ' if rec.margin_eligible else 'NO'}")
 
