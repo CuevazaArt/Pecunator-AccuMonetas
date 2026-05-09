@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../widgets/bot_hub_template.dart';
+import '../widgets/hub_status_explainer.dart';
+import '../widgets/mini_charts.dart';
 import '../widgets/prospector_panel.dart';
 
 /// Unified Symmetric Hub page — Dorothy + Elphaba side-by-side.
@@ -20,6 +23,59 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
   EngineApi get _api => EngineApi(widget.engineBase);
 
   String? _injectedSymbol;
+  Timer? _statusTimer;
+  Map<String, dynamic> _dorothyReport = {};
+  Map<String, dynamic> _elphabaReport = {};
+  bool _fuseTripped = false;
+  bool _budgetBlocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+    _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refreshStatus());
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final dorothy = await _api.hubBots();
+      final elphaba = await _api.elphabaBots();
+      final dorBots = (dorothy['bots'] as List?) ?? [];
+      final elpBots = (elphaba['bots'] as List?) ?? [];
+      // Find running bots' last_report
+      Map<String, dynamic> dorReport = {};
+      Map<String, dynamic> elpReport = {};
+      for (final b in dorBots) {
+        if (b is Map && b['running'] == true && (b['last_report'] as Map?)?.isNotEmpty == true) {
+          dorReport = Map<String, dynamic>.from(b['last_report'] as Map);
+          break;
+        }
+      }
+      for (final b in elpBots) {
+        if (b is Map && b['running'] == true && (b['last_report'] as Map?)?.isNotEmpty == true) {
+          elpReport = Map<String, dynamic>.from(b['last_report'] as Map);
+          break;
+        }
+      }
+      bool fuse = false;
+      try { final fs = await _api.apiFuseStatus(); fuse = fs['tripped'] == true; } catch (_) {}
+      bool budget = false;
+      try { final bs = await _api.budgetGuardStatus(); budget = bs['blocked'] == true; } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _dorothyReport = dorReport;
+        _elphabaReport = elpReport;
+        _fuseTripped = fuse;
+        _budgetBlocked = budget;
+      });
+    } catch (_) {}
+  }
 
   void _onSymbolSelected(String symbol) {
     setState(() => _injectedSymbol = symbol);
@@ -42,6 +98,65 @@ class _SymmetricHubPageState extends State<SymmetricHubPage> {
           child: _ProspectorExpander(
             api: _api,
             onSymbolSelected: _onSymbolSelected,
+          ),
+        ),
+        const SizedBox(height: 4),
+        // ── Shared Telemetry (1 juego, compartido) ────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: MiniWeightChart(api: _api, height: 48),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                flex: 3,
+                child: WeightOscillator(api: _api, height: 48),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: MiniEquityChart(
+                  api: _api,
+                  label: 'Dorothy',
+                  color: Colors.greenAccent,
+                  height: 48,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                flex: 3,
+                child: MiniEquityChart(
+                  api: _api,
+                  label: 'Elphaba',
+                  color: const Color(0xFF00E676),
+                  height: 48,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                flex: 3,
+                child: MiniEquityChart(
+                  api: _api,
+                  label: 'Global',
+                  color: const Color(0xFF448AFF),
+                  height: 48,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        // ── Hub Status Explainer ──────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: HubStatusExplainer(
+            dorothyReport: _dorothyReport,
+            elphabaReport: _elphabaReport,
+            fuseTripped: _fuseTripped,
+            budgetBlocked: _budgetBlocked,
           ),
         ),
         const SizedBox(height: 4),

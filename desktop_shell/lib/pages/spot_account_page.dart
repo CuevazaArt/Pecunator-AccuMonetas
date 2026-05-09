@@ -23,7 +23,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
   late final EngineApi _api;
   Timer? _timer;
   Map<String, dynamic> _wallets = {};
-  Map<String, dynamic> _health = {};
+
   Map<String, dynamic> _budgetStatus = {};
   Map<String, dynamic> _ledgerStats = {};
   List<dynamic> _ledgerRecent = [];
@@ -128,7 +128,7 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
       setState(() {
         _gatewayRunning = snap['gateway_running'] == true;
         _fuseTripped = fuse;
-        _health = health;
+        // _health = health; // removed unused variable
         _budgetStatus = budget;
         _ledgerStats = ledgerStats;
         _ledgerRecent = ledgerRecent;
@@ -564,8 +564,8 @@ class _AccountDashboardPageState extends State<AccountDashboardPage> {
         SizedBox(width: 55, child: Text('${s['market_price']}', style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.white70))),
         SizedBox(width: 40, child: Text(evi != null ? (evi as num).toStringAsFixed(3) : '—', style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.w700, color: eviColor))),
         SizedBox(width: 40, child: Text(s['atr_pct'] != null ? '${(s['atr_pct'] as num).toStringAsFixed(2)}%' : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
-        SizedBox(width: 35, child: Text(s['adx'] != null ? '${(s['adx'] as num).toStringAsFixed(1)}' : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
-        SizedBox(width: 35, child: Text(s['choppiness'] != null ? '${(s['choppiness'] as num).toStringAsFixed(0)}' : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
+        SizedBox(width: 35, child: Text(s['adx'] != null ? (s['adx'] as num).toStringAsFixed(1) : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
+        SizedBox(width: 35, child: Text(s['choppiness'] != null ? (s['choppiness'] as num).toStringAsFixed(0) : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
         SizedBox(width: 40, child: Text(s['active_rungs'] != null ? '${s['active_rungs']}/${s['max_rungs'] ?? '?'}' : '—', style: const TextStyle(fontSize: 8, fontFamily: 'monospace'))),
         Expanded(child: Text(decision, style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.w700, color: decColor), overflow: TextOverflow.ellipsis)),
       ]),

@@ -179,7 +179,7 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
           color: _bgColor(pct),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: color.withOpacity(0.4),
+            color: color.withValues(alpha: 0.4),
             width: 1,
           ),
         ),
@@ -232,7 +232,7 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
                 Text(
                   '$usedStr/$_weightLimit',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 10,
                     fontFamily: 'monospace',
                   ),
@@ -412,15 +412,15 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: valueColor.withOpacity(0.1),
+        color: valueColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: valueColor.withOpacity(0.3)),
+        border: Border.all(color: valueColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
           Text(label,
               style: TextStyle(
-                  fontSize: 8, color: Colors.white.withOpacity(0.5))),
+                  fontSize: 8, color: Colors.white.withValues(alpha: 0.5))),
           Text(value,
               style: TextStyle(
                   fontSize: 11,
@@ -441,9 +441,9 @@ class _CompactWeightGaugeState extends State<CompactWeightGauge>
           height: 6,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: active ? color : color.withOpacity(0.2),
+            color: active ? color : color.withValues(alpha: 0.2),
             boxShadow: active
-                ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 4)]
+                ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 4)]
                 : null,
           ),
         ),

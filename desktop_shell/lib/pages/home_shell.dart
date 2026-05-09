@@ -408,7 +408,7 @@ class _HomeShellState extends State<HomeShell> {
                       ...(subaccounts.map((sa) {
                         final hasKey = sa['credential_available'] == true;
                         final enabled = sa['enabled'] == true;
-                        final botType = sa['bot_type'] ?? '—';
+                  
                         final role = sa['role'] ?? '';
                         final desc = sa['description'] ?? '';
                         final keyLabel = sa['api_key_label'] ?? '';

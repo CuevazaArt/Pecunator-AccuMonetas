@@ -159,9 +159,9 @@ class _SystemStatusBarState extends State<SystemStatusBar> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: color.withOpacity(0.4), width: 0.5),
+          border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -171,7 +171,7 @@ class _SystemStatusBarState extends State<SystemStatusBar> {
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: color.withOpacity(0.6), blurRadius: 4)],
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 4)],
               ),
             ),
             const SizedBox(width: 4),

@@ -49,19 +49,21 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
       int? used;
       if (usedRaw is int) {
         used = usedRaw;
-      } else if (usedRaw is num)
+      } else if (usedRaw is num) {
         used = usedRaw.toInt();
-      else
+      } else {
         used = int.tryParse('$usedRaw');
+      }
 
       final limitRaw = snap['weight_limit_1m'];
       int limit = 6000;
       if (limitRaw is int) {
         limit = limitRaw;
-      } else if (limitRaw is num)
+      } else if (limitRaw is num) {
         limit = limitRaw.toInt();
-      else
+      } else {
         limit = int.tryParse('$limitRaw') ?? 6000;
+      }
 
       bool fuse = false;
       try {
@@ -234,8 +236,9 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       setState(() {
         _data.add(_Sample(now, equity.round()));
         _data.removeWhere((s) => s.time.isBefore(cutoff));
-        if (_startEquity == 0 && _data.isNotEmpty)
+        if (_startEquity == 0 && _data.isNotEmpty) {
           _startEquity = _data.first.value.toDouble();
+        }
       });
     } catch (_) {}
   }

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
-import 'mini_charts.dart';
+import 'mini_charts.dart'; // StatusLights widget
 
 /// Reusable template for any bot hub page.
 ///
@@ -204,46 +204,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
               ],
             ),
           ),
-          // ── Section 1: Telemetry Charts ─────────────────────────
-          // Pairs: [Weight auto-scaled + 100% ref] | [Hub Equity + Global Equity]
-          Row(
-            children: [
-              // Weight auto-scaled oscillator
-              Expanded(
-                flex: 3,
-                child: MiniWeightChart(api: widget.api, height: 52),
-              ),
-              const SizedBox(width: 4),
-              // Weight 100% reference oscillator (adjustable sync/window)
-              Expanded(
-                flex: 3,
-                child: WeightOscillator(api: widget.api, height: 52),
-              ),
-              const SizedBox(width: 8),
-              // Hub equity
-              Expanded(
-                flex: 3,
-                child: MiniEquityChart(
-                  api: widget.api,
-                  label: widget.hubName,
-                  color: widget.hubColor,
-                  height: 52,
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Global equity
-              Expanded(
-                flex: 3,
-                child: MiniEquityChart(
-                  api: widget.api,
-                  label: 'Global',
-                  color: const Color(0xFF448AFF),
-                  height: 52,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+          // (Telemetry charts removed — rendered once at SymmetricHubPage level)
 
           // ── Section 2: Bot Placement Console (de-emphasized) ──────
           Container(
