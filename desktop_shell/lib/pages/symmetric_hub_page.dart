@@ -344,6 +344,22 @@ class _ProspectorExpander extends StatefulWidget {
 
 class _ProspectorExpanderState extends State<_ProspectorExpander> {
   bool _expanded = false;
+  final _manualCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _manualCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submitManual() {
+    final raw = _manualCtrl.text.trim().toUpperCase();
+    if (raw.isEmpty) return;
+    // Append USDT if user forgot
+    final symbol = raw.endsWith('USDT') ? raw : '${raw}USDT';
+    widget.onSymbolSelected(symbol);
+    _manualCtrl.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -361,41 +377,92 @@ class _ProspectorExpanderState extends State<_ProspectorExpander> {
       ),
       child: Column(
         children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.radar, size: 14,
-                      color: _expanded ? Colors.greenAccent : Colors.white38),
-                  const SizedBox(width: 6),
-                  Text(
-                    'SYMBOL PROSPECTOR',
-                    style: TextStyle(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                // ── Prospector toggle ─────────────────────────
+                InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.radar, size: 14,
+                          color: _expanded ? Colors.greenAccent : Colors.white38),
+                      const SizedBox(width: 6),
+                      Text(
+                        'SYMBOL PROSPECTOR',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: _expanded ? Colors.greenAccent : Colors.white38,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        _expanded ? Icons.expand_less : Icons.expand_more,
+                        size: 16,
+                        color: Colors.white30,
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                // ── Manual symbol input ──────────────────────
+                SizedBox(
+                  width: 130,
+                  height: 24,
+                  child: TextField(
+                    controller: _manualCtrl,
+                    style: const TextStyle(
                       fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: _expanded ? Colors.greenAccent : Colors.white38,
+                      color: Colors.white,
+                      fontFamily: 'monospace',
+                    ),
+                    textInputAction: TextInputAction.go,
+                    onSubmitted: (_) => _submitManual(),
+                    decoration: InputDecoration(
+                      hintText: 'BTCUSDT',
+                      hintStyle: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white.withValues(alpha: 0.2),
+                        fontFamily: 'monospace',
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                        borderSide: const BorderSide(color: Colors.amberAccent, width: 1),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Selecciona símbolo para ambos lados del hub',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.white.withValues(alpha: 0.25),
+                ),
+                const SizedBox(width: 4),
+                SizedBox(
+                  height: 24,
+                  child: OutlinedButton(
+                    onPressed: _submitManual,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.5)),
+                      foregroundColor: Colors.amberAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
                     ),
+                    child: const Text('Go', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
                   ),
-                  const Spacer(),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: Colors.white30,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           if (_expanded)
