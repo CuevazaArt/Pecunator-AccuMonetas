@@ -30,8 +30,6 @@ class BotHubTemplate extends StatefulWidget {
   final Future<void> Function(String botId) deleteBot;
   /// Returns log entries for a bot
   final Future<List<String>> Function(String botId) fetchLogs;
-  /// Config form fields
-  final List<BotFormField> formFields;
 
   const BotHubTemplate({
     super.key,
@@ -46,29 +44,10 @@ class BotHubTemplate extends StatefulWidget {
     required this.stopBot,
     required this.deleteBot,
     required this.fetchLogs,
-    required this.formFields,
   });
 
   @override
   State<BotHubTemplate> createState() => _BotHubTemplateState();
-}
-
-class BotFormField {
-  final String key;
-  final String label;
-  final String hint;
-  final String defaultValue;
-  final TextInputType inputType;
-  final String tooltip;
-
-  const BotFormField({
-    required this.key,
-    required this.label,
-    this.hint = '',
-    this.defaultValue = '',
-    this.inputType = TextInputType.text,
-    this.tooltip = '',
-  });
 }
 
 class _BotHubTemplateState extends State<BotHubTemplate> {
@@ -78,15 +57,11 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   String? _error;
   bool _gatewayRunning = false;
   bool _fuseTripped = false;
-  final Map<String, TextEditingController> _formCtrl = {};
   String? _expandedBotId;
 
   @override
   void initState() {
     super.initState();
-    for (final f in widget.formFields) {
-      _formCtrl[f.key] = TextEditingController(text: f.defaultValue);
-    }
     _refresh();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshSilent());
   }
@@ -94,9 +69,6 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    for (final c in _formCtrl.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -147,23 +119,6 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
 
   int get _botsRunning => _bots.where((b) => b['running'] == true).length;
 
-  Future<void> _createBot() async {
-    final config = <String, dynamic>{};
-    for (final f in widget.formFields) {
-      config[f.key] = _formCtrl[f.key]?.text.trim() ?? f.defaultValue;
-    }
-    try {
-      await widget.createBot(config);
-      await _refresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -204,93 +159,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
               ],
             ),
           ),
-          // (Telemetry charts removed — rendered once at SymmetricHubPage level)
-
-          // ── Section 2: Bot Placement Console (de-emphasized) ──────
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.02),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.add_circle_outline, size: 12, color: Colors.white24),
-                    const SizedBox(width: 4),
-                    Text('Nueva instancia',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white30, letterSpacing: 0.3)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    for (final field in widget.formFields)
-                      Tooltip(
-                        message: field.tooltip.isNotEmpty ? field.tooltip : field.label,
-                        waitDuration: const Duration(milliseconds: 400),
-                        textStyle: const TextStyle(fontSize: 11, color: Colors.white),
-                        decoration: BoxDecoration(
-                          color: const Color(0xDD1A1A2E),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: SizedBox(
-                          width: field.key == 'note' ? 180 : 110,
-                          height: 32,
-                          child: TextField(
-                            controller: _formCtrl[field.key],
-                            keyboardType: field.inputType,
-                            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white54),
-                            decoration: InputDecoration(
-                              labelText: field.label,
-                              hintText: field.hint,
-                              labelStyle: TextStyle(fontSize: 9, color: Colors.white24),
-                              hintStyle: const TextStyle(fontSize: 9, color: Colors.white12),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                              isDense: true,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(color: Colors.white30),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    Tooltip(
-                      message: 'Crear nueva instancia del bot con estos parámetros',
-                      waitDuration: const Duration(milliseconds: 400),
-                      child: SizedBox(
-                        height: 32,
-                        child: OutlinedButton.icon(
-                          onPressed: _loading ? null : _createBot,
-                          icon: const Icon(Icons.add, size: 14),
-                          label: const Text('Deploy', style: TextStyle(fontSize: 10)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white38,
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-
+          
           // ── Section 3: Bot Queue ────────────────────────────────
           if (_loading && _bots.isEmpty)
             const Center(child: Padding(

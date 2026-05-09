@@ -6,6 +6,7 @@ import '../widgets/hub_status_explainer.dart';
 import '../widgets/bot_instances_paired.dart';
 import '../widgets/bot_hub_template.dart';
 import '../widgets/prospector_expander.dart';
+import '../widgets/staged_symbol_panel.dart';
 import '../widgets/account_system_drawer.dart';
 
 /// Unified hub page — single view for the entire Pecunator operating console.
@@ -28,7 +29,7 @@ class UnifiedHubPage extends StatefulWidget {
 class UnifiedHubPageState extends State<UnifiedHubPage> {
   late final EngineApi _api;
   Timer? _timer;
-  String? _injectedSymbol;
+
 
   // Dorothy + Elphaba reports for HubStatusExplainer
   Map<String, dynamic> _dorothyReport = {};
@@ -39,6 +40,9 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
   // Bot lists for paired instances
   List<Map<String, dynamic>> _dorothyBots = [];
   List<Map<String, dynamic>> _elphabaBots = [];
+
+  String? _stagedSymbol;
+  final Map<String, Map<String, dynamic>> _savedPresets = {};
 
   @override
   void initState() {
@@ -98,14 +102,33 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
   }
 
   void _handleSymbolSelected(String symbol) {
-    setState(() => _injectedSymbol = symbol);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Símbolo inyectado: $symbol → configurar en los hubs abajo'),
-        backgroundColor: Colors.greenAccent.withValues(alpha: 0.8),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    setState(() => _stagedSymbol = symbol);
+  }
+
+  Future<void> _handleStagedAccept(String hub, Map<String, dynamic> config) async {
+    try {
+      if (hub == 'dorothy') {
+        await _api.hubCreateBot(config);
+      } else {
+        await _api.elphabaCreateBot(config);
+      }
+      setState(() {
+        _savedPresets[config['symbol']] = config;
+        _stagedSymbol = null;
+      });
+      forcePoll();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Instancia desplegada en $hub con éxito'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   @override
@@ -115,7 +138,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         // ── 1. Prospector (collapsible) ────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 4),
             child: ProspectorExpander(
               api: _api,
               onSymbolSelected: _handleSymbolSelected,
@@ -123,10 +146,24 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
           ),
         ),
 
+        // ── 1.5 Staged Symbol Panel ────────────────────────────
+        if (_stagedSymbol != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 72),
+              child: StagedSymbolPanel(
+                symbol: _stagedSymbol!,
+                initialPreset: _savedPresets[_stagedSymbol!],
+                onAccept: _handleStagedAccept,
+                onCancel: () => setState(() => _stagedSymbol = null),
+              ),
+            ),
+          ),
+
         // ── 2. Telemetry row ───────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
             child: Row(
               children: [
                 Expanded(
@@ -168,7 +205,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         // ── 3. Hub status + Paired instances ───────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -198,7 +235,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 2, 24, 12),
+            padding: const EdgeInsets.fromLTRB(72, 2, 72, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -228,22 +265,6 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                       } catch (_) {}
                       return [];
                     },
-                    formFields: [
-                      const BotFormField(key: 'tag', label: 'Tag', hint: 'dorothy-ton', defaultValue: 'dorothy',
-                          tooltip: 'Identificador único de la instancia'),
-                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: _injectedSymbol ?? 'TONUSDT',
-                          tooltip: 'Par de trading (debe tener margen aislado)'),
-                      const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
-                          inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos (L0: 60s)'),
-                      const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
-                          inputType: TextInputType.number, tooltip: 'USDT por rung (L0: \$6)'),
-                      const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
-                          inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo'),
-                      const BotFormField(key: 'drop_factor', label: 'Drop %', hint: '0.02', defaultValue: '0.02',
-                          inputType: TextInputType.number, tooltip: 'Caída para abrir siguiente rung DCA'),
-                      const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
-                          tooltip: 'Nota libre para identificar la instancia'),
-                    ],
                   ),
                 ),
                 // ── Divider ─────────────────────────────────
@@ -278,22 +299,6 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                       } catch (_) {}
                       return [];
                     },
-                    formFields: [
-                      const BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba',
-                          tooltip: 'Identificador único de la instancia'),
-                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: _injectedSymbol ?? 'TONUSDT',
-                          tooltip: 'Par de trading (debe coincidir con Dorothy)'),
-                      const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
-                          inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos'),
-                      const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
-                          inputType: TextInputType.number, tooltip: 'USDT por operación short'),
-                      const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
-                          inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia'),
-                      const BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03',
-                          inputType: TextInputType.number, tooltip: 'Subida para abrir siguiente rung short'),
-                      const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
-                          tooltip: 'Nota libre para identificar la instancia'),
-                    ],
                   ),
                 ),
               ],
