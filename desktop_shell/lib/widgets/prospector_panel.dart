@@ -146,26 +146,36 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                   const Spacer(),
                   SizedBox(
                     height: 28,
-                    child: FilledButton.icon(
-                      onPressed: _scanning ? null : _runScan,
-                      icon: _scanning
-                          ? SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: widget.accentColor,
-                              ),
-                            )
-                          : const Icon(Icons.search, size: 14),
-                      label: Text(
-                        _scanning ? 'Scanning...' : 'Scan',
-                        style: const TextStyle(fontSize: 10),
+                    child: Tooltip(
+                      message: 'Escanear Binance \u2014 Evalúa ~200 pares USDT con SEVI-M\n(~45 API weight, ~8 segundos)',
+                      waitDuration: const Duration(milliseconds: 300),
+                      textStyle: const TextStyle(fontSize: 11, color: Colors.white),
+                      decoration: BoxDecoration(
+                        color: const Color(0xEE1A1A2E),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: widget.accentColor,
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: FilledButton.icon(
+                        onPressed: _scanning ? null : _runScan,
+                        icon: _scanning
+                            ? SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: widget.accentColor,
+                                ),
+                              )
+                            : const Icon(Icons.search, size: 14),
+                        label: Text(
+                          _scanning ? 'Scanning...' : 'Scan',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: widget.accentColor,
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
                       ),
                     ),
                   ),
@@ -352,16 +362,20 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
             ),
           ),
           if (widget.onSymbolSelected != null)
-            SizedBox(
-              height: 28,
-              child: OutlinedButton(
-                onPressed: () => widget.onSymbolSelected!(symbol),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: _gradeColor(grade)),
-                  foregroundColor: _gradeColor(grade),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+            Tooltip(
+              message: 'Usar $symbol \u2014 Inyecta este símbolo en Dorothy y Elphaba',
+              waitDuration: const Duration(milliseconds: 300),
+              child: SizedBox(
+                height: 28,
+                child: OutlinedButton(
+                  onPressed: () => widget.onSymbolSelected!(symbol),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: _gradeColor(grade)),
+                    foregroundColor: _gradeColor(grade),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const Text('Use', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
                 ),
-                child: const Text('Use', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
               ),
             ),
         ],
@@ -471,12 +485,16 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                       ),
                       const Spacer(),
                       if (widget.onSymbolSelected != null)
-                        InkWell(
-                          onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.all(3),
-                            child: Icon(Icons.arrow_forward, size: 12, color: widget.accentColor.withValues(alpha: 0.6)),
+                        Tooltip(
+                          message: 'Usar ${r['symbol']} en el hub',
+                          waitDuration: const Duration(milliseconds: 200),
+                          child: InkWell(
+                            onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Icon(Icons.arrow_forward, size: 12, color: widget.accentColor.withValues(alpha: 0.6)),
+                            ),
                           ),
                         ),
                     ],

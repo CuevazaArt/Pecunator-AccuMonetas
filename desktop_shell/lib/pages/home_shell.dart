@@ -152,18 +152,30 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {}
   }
 
+  static const _tooltipDecoration = BoxDecoration(
+    color: Color(0xEE1A1A2E),
+    borderRadius: BorderRadius.all(Radius.circular(8)),
+    border: Border.fromBorderSide(BorderSide(color: Colors.white24)),
+  );
+  static const _tooltipStyle = TextStyle(fontSize: 11, color: Colors.white);
+
   Widget _navBtn(IconData icon, String tooltip, int idx) {
     final active = _currentIndex == idx;
-    return IconButton(
-      onPressed: () => setState(() => _currentIndex = idx),
-      tooltip: tooltip,
-      icon: Icon(icon, size: 18,
-          color: active ? Theme.of(context).colorScheme.primary : null),
-      style: active
-          ? IconButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-            )
-          : null,
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 300),
+      textStyle: _tooltipStyle,
+      decoration: _tooltipDecoration,
+      child: IconButton(
+        onPressed: () => setState(() => _currentIndex = idx),
+        icon: Icon(icon, size: 18,
+            color: active ? Theme.of(context).colorScheme.primary : null),
+        style: active
+            ? IconButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+              )
+            : null,
+      ),
     );
   }
 
@@ -175,50 +187,71 @@ class _HomeShellState extends State<HomeShell> {
         automaticallyImplyLeading: false,
         actions: [
           // ── Page navigation ──
-          _navBtn(Icons.dashboard_rounded, 'Dashboard', 0),
+          _navBtn(Icons.dashboard_rounded, 'Dashboard — Vista spot, balances, actividad de mercado', 0),
           Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), color: Colors.white12),
-          _navBtn(Icons.sync_alt, 'Hub Simétrico', 1),
+          _navBtn(Icons.sync_alt, 'Hub Simétrico — Dorothy⇄Elphaba, SEVI-M, telemetría', 1),
           const SizedBox(width: 4),
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
           // Credential management
-          IconButton(
-            onPressed: _openCredentialManager,
-            tooltip: 'API keys',
-            icon: const Icon(Icons.key, size: 18),
+          Tooltip(
+            message: 'Credenciales — Administra API keys y sub-cuentas del vault',
+            waitDuration: const Duration(milliseconds: 300),
+            textStyle: _tooltipStyle,
+            decoration: _tooltipDecoration,
+            child: IconButton(
+              onPressed: _openCredentialManager,
+              icon: const Icon(Icons.key, size: 18),
+            ),
           ),
           // Gateway toggle
-          IconButton(
-            onPressed: _toggleGateway,
-            tooltip: _gatewayRunning
-                ? 'Gateway ON${_gatewayWsConnected ? " · WS" : ""}'
-                : 'Gateway OFF',
-            icon: Icon(
-              _gatewayRunning ? Icons.power_settings_new : Icons.power_off,
-              size: 18,
-              color: _gatewayRunning ? Colors.greenAccent : Colors.grey,
+          Tooltip(
+            message: _gatewayRunning
+                ? 'Gateway ON${_gatewayWsConnected ? " + WS" : " (sin WS)"}\nClick para APAGAR conexión Binance'
+                : 'Gateway OFF\nClick para INICIAR conexión REST+WS',
+            waitDuration: const Duration(milliseconds: 300),
+            textStyle: _tooltipStyle,
+            decoration: _tooltipDecoration,
+            child: IconButton(
+              onPressed: _toggleGateway,
+              icon: Icon(
+                _gatewayRunning ? Icons.power_settings_new : Icons.power_off,
+                size: 18,
+                color: _gatewayRunning ? Colors.greenAccent : Colors.grey,
+              ),
             ),
           ),
           // Clock + sync
-          GestureDetector(
-            onTap: _syncTimestamp,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.public, size: 13, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 3),
-                  Text(_clockText, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
-                ],
+          Tooltip(
+            message: 'Reloj Binance (UTC) — Click para re-sincronizar timestamp',
+            waitDuration: const Duration(milliseconds: 300),
+            textStyle: _tooltipStyle,
+            decoration: _tooltipDecoration,
+            child: GestureDetector(
+              onTap: _syncTimestamp,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.public, size: 13, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 3),
+                    Text(_clockText, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                  ],
+                ),
               ),
             ),
           ),
           // Refresh
-          IconButton(
-            onPressed: _loading ? null : _refresh,
-            tooltip: 'Refrescar',
-            icon: const Icon(Icons.refresh, size: 18),
+          Tooltip(
+            message: 'Refrescar — Actualiza gateway, credenciales y estado de servicios',
+            waitDuration: const Duration(milliseconds: 300),
+            textStyle: _tooltipStyle,
+            decoration: _tooltipDecoration,
+            child: IconButton(
+              onPressed: _loading ? null : _refresh,
+              icon: const Icon(Icons.refresh, size: 18),
+            ),
           ),
         ],
       ),
