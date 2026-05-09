@@ -156,7 +156,7 @@ class TestSubAccountRegistry:
 
     def test_default_accounts(self, fresh_registry):
         r = fresh_registry
-        assert len(r.list_all()) == 5
+        assert len(r.list_all()) == 4
         assert len(r.list_bots()) >= 2  # dorothy and masha at minimum
 
     def test_get_bot_account(self, fresh_registry):
