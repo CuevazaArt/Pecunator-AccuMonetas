@@ -27,6 +27,28 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 - ...
 ```
 
+## 2026-05-09 (v3.1.1)
+
+### Added
+- **M2: Atomic Symmetric Deploy**: Endpoint `/api/v1/hub/deploy-symmetric` for simultaneous creation/start of Dorothy+Elphaba pairs with automatic rollback on partial failure.
+- **M3: Alert Dispatcher**: Centralized alerting system in `runtime/core/alert_dispatcher.py`, writing to `alerts.log`.
+- **M4: Process Watchdog**: External `watchdog.py` monitor for auto-restart on engine crashes.
+- **M1.1: Log Rotation & Silence**: `RotatingFileHandler` (15MB cap) + suppression of `uvicorn.access` logs to reduce polling noise.
+
+### Changed
+- **M5: Legacy Test Quarantine**: `tests/legacy/` now uses `collect_ignore_glob` to skip broken imports without polluting the suite.
+- **Prospector Visibility**: Added batch progress and auto-staging decision logging at `INFO` level.
+
+### Fixed
+- **HubBotOut Validation**: Fixed `stop_loss_pct` validation error for Elphaba bots (made optional).
+- **Silent Guard Failures**: Replaced silent `except: pass` in `_base_runner.py` with explicit logging.
+
+### Operational impact
+- Reduced risk of asymmetric bot operation (one side live, one dead).
+- Guaranteed disk safety via log rotation.
+- Improved reliability via external watchdog.
+- Cleaner logs for real-time monitoring.
+
 ## 2026-04-29
 
 ### Added

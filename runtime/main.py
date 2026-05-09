@@ -43,6 +43,9 @@ def _configure_logging() -> None:
         force=True,
     )
 
+    # M1.1: Silence polling noise
+    if os.environ.get("PECUNATOR_ACCESS_LOGS") != "1":
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 def main() -> None:
     _configure_logging()

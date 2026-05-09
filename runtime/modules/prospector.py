@@ -607,6 +607,9 @@ class DorothyProspector:
         # Sequential batched processing
         for batch_start in range(0, len(analyze_pool), self.BATCH_SIZE):
             batch = analyze_pool[batch_start:batch_start + self.BATCH_SIZE]
+            batch_num = (batch_start // self.BATCH_SIZE) + 1
+            total_batches = (len(analyze_pool) + self.BATCH_SIZE - 1) // self.BATCH_SIZE
+            _LOG.info("Prospector: processing batch %d/%d (%d symbols)...", batch_num, total_batches, len(batch))
             # Run batch concurrently (small batch = safe)
             await asyncio.gather(*[_analyze_one(p) for p in batch])
             # Throttle between batches
@@ -678,8 +681,15 @@ class DorothyProspector:
                         credential_ref="env_key"  # Default vault reference
                     )
                     _LOG.info("Prospector Auto-Stage: Staged %s based on Grade %s", bot_id, rec.grade)
+                else:
+                    _LOG.info("Prospector: %s already active/staged, skipping auto-stage", rec.symbol)
             except Exception as auto_err:
                 _LOG.error("Prospector: Failed to auto-stage bot: %s", auto_err)
+        else:
+            if rec:
+                _LOG.info("Prospector: Recommendation %s (Grade %s) below auto-stage threshold (S/A)", rec.symbol, rec.grade)
+            else:
+                _LOG.info("Prospector: No recommendation available for auto-staging")
 
         return result
 
