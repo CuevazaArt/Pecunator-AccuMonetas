@@ -239,6 +239,33 @@ async def symmetry_guard_reset() -> dict[str, Any]:
     return {"ok": True, "hub_paused": guard.is_hub_paused()}
 
 
+# ── Sub-Account Registry ───────────────────────────────────────────
+
+@router.get("/api/v1/subaccounts/list")
+async def subaccounts_list() -> dict[str, Any]:
+    """List registered sub-accounts with credential availability status."""
+    import os
+    from runtime.core.subaccount_registry import get_subaccount_registry
+    registry = get_subaccount_registry()
+    accounts = []
+    for entry in registry.list_all():
+        prefix = entry.bot_type.upper() if entry.bot_type else entry.account_id.upper()
+        has_key = bool(os.environ.get(f"{prefix}_API_KEY", "").strip())
+        accounts.append({
+            "account_id": entry.account_id,
+            "email": entry.email,
+            "role": entry.role,
+            "bot_type": entry.bot_type or "—",
+            "description": entry.description,
+            "symbols": entry.symbols,
+            "max_equity_usdt": entry.max_equity_usdt,
+            "enabled": entry.enabled,
+            "api_key_label": entry.api_key_label,
+            "credential_available": has_key,
+        })
+    return {"accounts": accounts}
+
+
 # ── Regime Filter — removed in v2.0, will be rebuilt ──────────────
 
 

@@ -49,6 +49,9 @@ class EngineApi {
   Future<Map<String, dynamic>> deleteVaultCredential(String credentialId) =>
       _client.delete('/api/v1/vault/credentials/$credentialId');
 
+  Future<Map<String, dynamic>> subaccountsList() =>
+      _client.get('/api/v1/subaccounts/list');
+
   Future<Map<String, dynamic>> botConfig() => _client.get('/api/v1/bot/config');
 
   Future<Map<String, dynamic>> setBotConfig(Map<String, dynamic> body) =>

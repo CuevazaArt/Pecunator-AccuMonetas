@@ -255,132 +255,235 @@ class _HomeShellState extends State<HomeShell> {
   // ── Credential Manager Dialog ──────────────────────────────────
 
   void _openCredentialManager() {
+    List<Map<String, dynamic>> subaccounts = [];
+    // Load subaccounts on dialog open
+    _api.subaccountsList().then((resp) {
+      subaccounts = (resp['accounts'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    }).catchError((_) {});
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.key, size: 18),
-              const SizedBox(width: 8),
-              const Text('API Credentials'),
-              const Spacer(),
-              Text('Active: $_activeCredential',
-                  style: const TextStyle(fontSize: 10, color: Colors.white38)),
-            ],
-          ),
-          content: SizedBox(
-            width: 500,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        builder: (ctx, setDialogState) {
+          // Reload subaccounts if empty
+          if (subaccounts.isEmpty) {
+            _api.subaccountsList().then((resp) {
+              if (ctx.mounted) {
+                setDialogState(() {
+                  subaccounts = (resp['accounts'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                });
+              }
+            }).catchError((_) {});
+          }
+          return AlertDialog(
+            title: Row(
               children: [
-                // Add new credential
-                Row(
-                  children: [
-                    SizedBox(width: 80, child: TextField(
-                      controller: _credLabelCtrl,
-                      style: const TextStyle(fontSize: 11),
-                      decoration: const InputDecoration(
-                        labelText: 'Label', isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      ),
-                    )),
-                    const SizedBox(width: 4),
-                    Expanded(child: TextField(
-                      controller: _credKeyCtrl,
-                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                      decoration: const InputDecoration(
-                        labelText: 'API Key', isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      ),
-                    )),
-                    const SizedBox(width: 4),
-                    Expanded(child: TextField(
-                      controller: _credSecretCtrl,
-                      obscureText: true,
-                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                      decoration: const InputDecoration(
-                        labelText: 'Secret', isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      ),
-                    )),
-                    const SizedBox(width: 4),
-                    FilledButton(
-                      onPressed: () async {
-                        final key = _credKeyCtrl.text.trim();
-                        final secret = _credSecretCtrl.text.trim();
-                        if (key.isEmpty || secret.isEmpty) return;
-                        try {
-                          await _api.addVaultCredential(
-                            apiKey: key,
-                            apiSecret: secret,
-                            label: _credLabelCtrl.text.trim(),
-                          );
-                          _credKeyCtrl.clear();
-                          _credSecretCtrl.clear();
-                          _credLabelCtrl.clear();
-                          await _refresh();
-                          final vault = await _api.vaultCredentials();
-                          setDialogState(() {
-                            _vaultCredentials = (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                          });
-                        } catch (e) {
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
-                            );
-                          }
-                        }
-                      },
-                      child: const Text('Add', style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                // List existing
-                if (_vaultCredentials.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text('No credentials stored', style: TextStyle(color: Colors.white38)),
-                  )
-                else
-                  ...(_vaultCredentials.map((cred) {
-                    final id = '${cred['credential_id'] ?? ''}';
-                    final label = '${cred['label'] ?? 'unnamed'}';
-                    final last4 = '${cred['api_key_last4'] ?? ''}';
-                    final isActive = id == _activeCredentialId;
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        isActive ? Icons.check_circle : Icons.circle_outlined,
-                        color: isActive ? Colors.greenAccent : Colors.grey,
-                        size: 18,
-                      ),
-                      title: Text('$label · ...$last4',
-                          style: TextStyle(fontSize: 12, fontWeight: isActive ? FontWeight.w800 : FontWeight.normal)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                        onPressed: () async {
-                          await _api.deleteVaultCredential(id);
-                          await _refresh();
-                          final vault = await _api.vaultCredentials();
-                          setDialogState(() {
-                            _vaultCredentials = (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                          });
-                        },
-                      ),
-                    );
-                  })),
+                const Icon(Icons.key, size: 18),
+                const SizedBox(width: 8),
+                const Text('Credenciales & Sub-Cuentas'),
+                const Spacer(),
+                Text('Activa: $_activeCredential',
+                    style: const TextStyle(fontSize: 10, color: Colors.white38)),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cerrar'),
+            content: SizedBox(
+              width: 560,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Section: Vault Credentials ──
+                    const Text('VAULT (API Keys)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1, color: Colors.white38)),
+                    const SizedBox(height: 4),
+                    // Add new credential
+                    Row(
+                      children: [
+                        SizedBox(width: 80, child: TextField(
+                          controller: _credLabelCtrl,
+                          style: const TextStyle(fontSize: 11),
+                          decoration: const InputDecoration(
+                            labelText: 'Label', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          ),
+                        )),
+                        const SizedBox(width: 4),
+                        Expanded(child: TextField(
+                          controller: _credKeyCtrl,
+                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                          decoration: const InputDecoration(
+                            labelText: 'API Key', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          ),
+                        )),
+                        const SizedBox(width: 4),
+                        Expanded(child: TextField(
+                          controller: _credSecretCtrl,
+                          obscureText: true,
+                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                          decoration: const InputDecoration(
+                            labelText: 'Secret', isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          ),
+                        )),
+                        const SizedBox(width: 4),
+                        FilledButton(
+                          onPressed: () async {
+                            final key = _credKeyCtrl.text.trim();
+                            final secret = _credSecretCtrl.text.trim();
+                            if (key.isEmpty || secret.isEmpty) return;
+                            try {
+                              await _api.addVaultCredential(
+                                apiKey: key,
+                                apiSecret: secret,
+                                label: _credLabelCtrl.text.trim(),
+                              );
+                              _credKeyCtrl.clear();
+                              _credSecretCtrl.clear();
+                              _credLabelCtrl.clear();
+                              await _refresh();
+                              final vault = await _api.vaultCredentials();
+                              setDialogState(() {
+                                _vaultCredentials = (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                              });
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
+                                );
+                              }
+                            }
+                          },
+                          child: const Text('Add', style: TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // List existing vault credentials
+                    if (_vaultCredentials.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('Sin credenciales en vault', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                      )
+                    else
+                      ...(_vaultCredentials.map((cred) {
+                        final id = '${cred['credential_id'] ?? ''}';
+                        final label = '${cred['label'] ?? 'unnamed'}';
+                        final last4 = '${cred['api_key_last4'] ?? ''}';
+                        final isActive = id == _activeCredentialId;
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            isActive ? Icons.check_circle : Icons.circle_outlined,
+                            color: isActive ? Colors.greenAccent : Colors.grey,
+                            size: 18,
+                          ),
+                          title: Text('$label · ...$last4',
+                              style: TextStyle(fontSize: 12, fontWeight: isActive ? FontWeight.w800 : FontWeight.normal)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                            onPressed: () async {
+                              await _api.deleteVaultCredential(id);
+                              await _refresh();
+                              final vault = await _api.vaultCredentials();
+                              setDialogState(() {
+                                _vaultCredentials = (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                              });
+                            },
+                          ),
+                        );
+                      })),
+
+                    const Divider(height: 16),
+
+                    // ── Section: Sub-Account Registry ──
+                    const Text('SUB-CUENTAS (Registry)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1, color: Colors.white38)),
+                    const SizedBox(height: 4),
+                    if (subaccounts.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text('Cargando sub-cuentas...', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                      )
+                    else
+                      ...(subaccounts.map((sa) {
+                        final hasKey = sa['credential_available'] == true;
+                        final enabled = sa['enabled'] == true;
+                        final botType = sa['bot_type'] ?? '—';
+                        final role = sa['role'] ?? '';
+                        final desc = sa['description'] ?? '';
+                        final keyLabel = sa['api_key_label'] ?? '';
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: enabled ? Colors.white.withValues(alpha: 0.04) : Colors.white.withValues(alpha: 0.01),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: hasKey ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1)),
+                          ),
+                          child: Row(
+                            children: [
+                              // Credential status indicator
+                              Tooltip(
+                                message: hasKey ? 'API key detectada en .env' : 'Sin API key en .env',
+                                child: Container(
+                                  width: 8, height: 8,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: hasKey ? Colors.greenAccent : Colors.grey.withValues(alpha: 0.3),
+                                    boxShadow: hasKey ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.4), blurRadius: 4)] : null,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Account info
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
+                                      Text(
+                                        '${sa['account_id']}'.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 11, fontWeight: FontWeight.w700,
+                                          color: enabled ? Colors.white : Colors.white38,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: role == 'bot' ? const Color(0xFF00E676).withValues(alpha: 0.1) : Colors.blueAccent.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(3),
+                                        ),
+                                        child: Text(role, style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: role == 'bot' ? const Color(0xFF00E676) : Colors.blueAccent)),
+                                      ),
+                                      if (!enabled) ...[
+                                        const SizedBox(width: 4),
+                                        const Text('DISABLED', style: TextStyle(fontSize: 7, color: Colors.white24)),
+                                      ],
+                                    ]),
+                                    Text(desc, style: const TextStyle(fontSize: 9, color: Colors.white38)),
+                                  ],
+                                ),
+                              ),
+                              // Key label
+                              Text(keyLabel, style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.white24)),
+                            ],
+                          ),
+                        );
+                      })),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cerrar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
