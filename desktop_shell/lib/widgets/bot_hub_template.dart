@@ -59,6 +59,7 @@ class BotFormField {
   final String hint;
   final String defaultValue;
   final TextInputType inputType;
+  final String tooltip;
 
   const BotFormField({
     required this.key,
@@ -66,6 +67,7 @@ class BotFormField {
     this.hint = '',
     this.defaultValue = '',
     this.inputType = TextInputType.text,
+    this.tooltip = '',
   });
 }
 
@@ -268,42 +270,56 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                   runSpacing: 4,
                   children: [
                     for (final field in widget.formFields)
-                      SizedBox(
-                        width: field.key == 'note' ? 180 : 110,
-                        height: 32,
-                        child: TextField(
-                          controller: _formCtrl[field.key],
-                          keyboardType: field.inputType,
-                          style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white54),
-                          decoration: InputDecoration(
-                            labelText: field.label,
-                            hintText: field.hint,
-                            labelStyle: TextStyle(fontSize: 9, color: Colors.white24),
-                            hintStyle: const TextStyle(fontSize: 9, color: Colors.white12),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            isDense: true,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: Colors.white30),
+                      Tooltip(
+                        message: field.tooltip.isNotEmpty ? field.tooltip : field.label,
+                        waitDuration: const Duration(milliseconds: 400),
+                        textStyle: const TextStyle(fontSize: 11, color: Colors.white),
+                        decoration: BoxDecoration(
+                          color: const Color(0xDD1A1A2E),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: SizedBox(
+                          width: field.key == 'note' ? 180 : 110,
+                          height: 32,
+                          child: TextField(
+                            controller: _formCtrl[field.key],
+                            keyboardType: field.inputType,
+                            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white54),
+                            decoration: InputDecoration(
+                              labelText: field.label,
+                              hintText: field.hint,
+                              labelStyle: TextStyle(fontSize: 9, color: Colors.white24),
+                              hintStyle: const TextStyle(fontSize: 9, color: Colors.white12),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              isDense: true,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(color: Colors.white30),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    SizedBox(
-                      height: 32,
-                      child: OutlinedButton.icon(
-                        onPressed: _loading ? null : _createBot,
-                        icon: const Icon(Icons.add, size: 14),
-                        label: const Text('Deploy', style: TextStyle(fontSize: 10)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white38,
-                          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                    Tooltip(
+                      message: 'Crear nueva instancia del bot con estos parámetros',
+                      waitDuration: const Duration(milliseconds: 400),
+                      child: SizedBox(
+                        height: 32,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading ? null : _createBot,
+                          icon: const Icon(Icons.add, size: 14),
+                          label: const Text('Deploy', style: TextStyle(fontSize: 10)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white38,
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
                         ),
                       ),
                     ),
@@ -411,11 +427,11 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                   const SizedBox(width: 4),
                   // Controls
                   if (running)
-                    _miniBtn(Icons.stop, Colors.orangeAccent, () => widget.stopBot(botId).then((_) => _refresh()))
+                    Tooltip(message: 'Detener bot', child: _miniBtn(Icons.stop, Colors.orangeAccent, () => widget.stopBot(botId).then((_) => _refresh())))
                   else
-                    _miniBtn(Icons.play_arrow, Colors.greenAccent, () => widget.startBot(botId).then((_) => _refresh())),
-                  _miniBtn(Icons.delete_outline, Colors.redAccent, () => _confirmDelete(botId, symbol)),
-                  Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 14, color: Colors.white24),
+                    Tooltip(message: 'Iniciar bot', child: _miniBtn(Icons.play_arrow, Colors.greenAccent, () => widget.startBot(botId).then((_) => _refresh()))),
+                  Tooltip(message: 'Eliminar bot', child: _miniBtn(Icons.delete_outline, Colors.redAccent, () => _confirmDelete(botId, symbol))),
+                  Tooltip(message: 'Ver logs', child: Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 14, color: Colors.white24)),
                 ],
               ),
             ),

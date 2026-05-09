@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../widgets/compact_weight_gauge.dart';
 import '../widgets/system_status_bar.dart';
-import 'dorothy_page.dart';
-import 'elphaba_hub_page.dart';
 import 'spot_account_page.dart';
-import 'system_dashboard_page.dart';
+import 'symmetric_hub_page.dart';
 
 /// Home shell — main app scaffold with navigation, gateway lifecycle,
 /// credential management, and Binance clock.
@@ -177,12 +175,9 @@ class _HomeShellState extends State<HomeShell> {
         automaticallyImplyLeading: false,
         actions: [
           // ── Page navigation ──
-          _navBtn(Icons.home_rounded, 'Home', 0),
+          _navBtn(Icons.dashboard_rounded, 'Dashboard', 0),
           Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), color: Colors.white12),
-          _navBtn(Icons.trending_up, 'Dorothy', 1),
-          _navBtn(Icons.bolt, 'Elphaba', 2),
-          Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), color: Colors.white12),
-          _navBtn(Icons.settings_outlined, 'Sistema', 3),
+          _navBtn(Icons.sync_alt, 'Hub Simétrico', 1),
           const SizedBox(width: 4),
           Container(width: 1, height: 24, color: Colors.white24),
           const SizedBox(width: 4),
@@ -237,9 +232,7 @@ class _HomeShellState extends State<HomeShell> {
                   engineBase: _engineBase,
                   activeSymbols: const [],
                 ),
-                DorothyPage(engineBase: _engineBase),
-                ElphabaHubPage(engineBase: _engineBase),
-                SystemDashboardPage(api: _api),
+                SymmetricHubPage(engineBase: _engineBase),
               ],
             ),
           ),
