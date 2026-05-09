@@ -358,8 +358,8 @@ class BaseStrategyRunner:
                     except asyncio.TimeoutError:
                         pass
                     continue
-            except Exception:
-                pass
+            except Exception as _fuse_err:
+                self._log(f"{self.BOT_TYPE}:WARN fuse_check_failed: {_fuse_err}")
             # ── Governor permission gate ─────────────────────────
             try:
                 from runtime.core.weight_governor import get_weight_governor
@@ -381,8 +381,8 @@ class BaseStrategyRunner:
                         pass
                     if self._stop.is_set():
                         break
-            except Exception:
-                pass  # Governor unavailable — proceed normally
+            except Exception as _gov_err:
+                self._log(f"{self.BOT_TYPE}:WARN governor_unavailable: {_gov_err}")
             try:
                 rep = await self.run_once()
 
@@ -404,15 +404,15 @@ class BaseStrategyRunner:
                         drawdown_pct=rep.get("drawdown_pct"),
                         active_rungs=rep.get("active_rungs")
                     )
-                except Exception:
-                    pass
+                except Exception as _hs_err:
+                    self._log(f"{self.BOT_TYPE}:WARN hub_state_log_failed: {_hs_err}")
 
                 # Report cycle to coordinator for phase tracking
                 try:
                     from runtime.core.bot_coordinator import get_bot_coordinator
                     get_bot_coordinator().report_cycle(self._bot_key())
-                except Exception:
-                    pass
+                except Exception as _coord_err:
+                    self._log(f"{self.BOT_TYPE}:WARN coordinator_report_failed: {_coord_err}")
             except asyncio.CancelledError:
                 raise
             except Exception as e:

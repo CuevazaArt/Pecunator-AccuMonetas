@@ -10,6 +10,7 @@ runtime/data/vault_local.key
 runtime/data/credential_public.json
 runtime/data/active_credential_id.txt
 runtime/data/*.sqlite
+runtime/data/*.json
 runtime/data/documents/*
 !runtime/data/documents/.gitkeep
 .idea/
@@ -32,6 +33,7 @@ earn_rates_last.txt
 loan_rates_last.txt
 token_classification.txt
 scratch/
+scratch_*.py
 
 # === Root-level runtime databases (not source code) ===
 *.sqlite
