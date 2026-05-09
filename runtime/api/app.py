@@ -39,6 +39,7 @@ from runtime.api.routers import gateway as _gateway_router
 from runtime.api.routers import vision as _vision_router
 from runtime.api.routers import trend as _trend_router
 from runtime.api.routers import prospector as _prospector_router
+from runtime.api.routers import elphaba as _elphaba_router
 # market_events router removed in v2.0 simplification
 
 from runtime.core.settings import (
@@ -76,6 +77,8 @@ async def _lifespan(app: FastAPI):
     bot.start_immortality(credential_resolver, interval_sec=5.0)
     masha.start_immortality(credential_resolver, interval_sec=5.0)
     thusnelda.start_immortality(credential_resolver, interval_sec=5.0)
+    elphaba = deps.get_elphaba()
+    elphaba.start_immortality(credential_resolver, interval_sec=5.0)
     
     # Earn background sync removed in v2.0 simplification
     await _autostart_gateway_if_possible(ctx)
@@ -88,9 +91,12 @@ async def _lifespan(app: FastAPI):
     await bot.stop_immortality()
     await masha.stop_immortality()
     await thusnelda.stop_immortality()
+    elphaba = deps.get_elphaba()
+    await elphaba.stop_immortality()
     await bot.stop_all()
     await masha.stop_all()
     await thusnelda.stop_all()
+    await elphaba.stop_all()
     if ctx and ctx.gateway:
         try:
             await ctx.gateway.stop()
@@ -161,6 +167,7 @@ def create_app() -> FastAPI:
     app.include_router(_vision_router.router)
     app.include_router(_trend_router.router)
     app.include_router(_prospector_router.router)
+    app.include_router(_elphaba_router.router)
 
     # ── All routes have been extracted to routers/ ─────────────────
     # dorothy.py  — health, presets, config, hub CRUD

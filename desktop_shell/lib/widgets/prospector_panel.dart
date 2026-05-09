@@ -60,9 +60,12 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
       });
     } catch (e) {
       if (!mounted) return;
+      final msg = '$e';
       setState(() {
         _scanning = false;
-        _error = '$e';
+        _error = msg.contains('Gateway') || msg.contains('400')
+            ? '⚠ Gateway no conectado. Conecta tus credenciales primero.'
+            : msg;
       });
     }
   }
