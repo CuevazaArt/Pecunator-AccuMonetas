@@ -23,6 +23,7 @@ CHECK_INTERVAL_SEC = 30
 MAX_FAILURES = 3
 PYTHON_EXE = sys.executable
 LAUNCH_SCRIPT = os.path.join(ROOT, "launch.py")
+RESUME_SCRIPT = os.path.join(ROOT, "launch_resume.py")
 
 def check_health() -> bool:
     """Returns True if the backend is healthy."""
@@ -55,11 +56,12 @@ def kill_port_8000() -> None:
         print(f"   (port cleanup skipped: {e})")
 
 
-def launch_engine() -> subprocess.Popen:
+def launch_engine(is_resume: bool = False) -> subprocess.Popen:
     """Start the engine as a subprocess."""
-    print(f"\n🚀 Launching engine: {PYTHON_EXE} {LAUNCH_SCRIPT}")
+    script = RESUME_SCRIPT if is_resume else LAUNCH_SCRIPT
+    print(f"\n🚀 Launching engine: {PYTHON_EXE} {script}")
     proc = subprocess.Popen(
-        [PYTHON_EXE, LAUNCH_SCRIPT],
+        [PYTHON_EXE, script],
         cwd=ROOT,
         stdout=sys.stdout,
         stderr=sys.stderr,
@@ -82,7 +84,7 @@ def main() -> None:
 
     # Initial launch
     kill_port_8000()
-    proc = launch_engine()
+    proc = launch_engine(is_resume=False)
 
     try:
         while True:
@@ -115,7 +117,7 @@ def main() -> None:
                                 pass
                     kill_port_8000()
                     time.sleep(2)
-                    proc = launch_engine()
+                    proc = launch_engine(is_resume=True)
                     consecutive_failures = 0
     except KeyboardInterrupt:
         print("\n🛑 Watchdog stopped by operator")
