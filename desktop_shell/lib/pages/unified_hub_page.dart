@@ -116,22 +116,20 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
     setState(() => _stagedSymbol = symbol);
   }
 
-  Future<void> _handleStagedAccept(String hub, Map<String, dynamic> config) async {
+  Future<void> _handleStagedAcceptSymmetric(Map<String, dynamic> dConfig, Map<String, dynamic> eConfig) async {
     try {
-      if (hub == 'dorothy') {
-        await _api.hubCreateBot(config);
-      } else {
-        await _api.elphabaCreateBot(config);
-      }
+      await _api.hubCreateBot(dConfig);
+      await _api.elphabaCreateBot(eConfig);
       setState(() {
-        _savedPresets[config['symbol']] = config;
+        _savedPresets[dConfig['symbol']] = dConfig; // You can save Dorothy's as reference, or combined
+        _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig; // Save Elphaba separately if needed
         _stagedSymbol = null;
       });
       AppPreferences.setSavedPresetsJson(jsonEncode(_savedPresets));
       forcePoll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Instancia desplegada en $hub con éxito'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Símbolo desplegado simétricamente con éxito'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
@@ -165,8 +163,9 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
               padding: const EdgeInsets.symmetric(horizontal: 72),
               child: StagedSymbolPanel(
                 symbol: _stagedSymbol!,
-                initialPreset: _savedPresets[_stagedSymbol!],
-                onAccept: _handleStagedAccept,
+                initialPresetDorothy: _savedPresets[_stagedSymbol!],
+                initialPresetElphaba: _savedPresets[_stagedSymbol! + '_elphaba'],
+                onAcceptSymmetric: _handleStagedAcceptSymmetric,
                 onCancel: () => setState(() => _stagedSymbol = null),
               ),
             ),

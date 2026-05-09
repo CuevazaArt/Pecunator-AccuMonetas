@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'pages/home_shell.dart';
 
-void main() {
+import 'services/preferences.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppPreferences.init();
+
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     debugPrint('FlutterError caught: ${details.exceptionAsString()}');
