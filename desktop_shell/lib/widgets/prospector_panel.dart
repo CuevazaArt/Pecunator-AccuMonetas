@@ -61,11 +61,17 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
     } catch (e) {
       if (!mounted) return;
       final msg = '$e';
+      String displayError;
+      if (msg.contains('Gateway') || msg.contains('gateway') || msg.contains('400')) {
+        displayError = '⚠ Gateway no conectado. Conecta tus credenciales primero.';
+      } else if (msg.contains('timeout') || msg.contains('agotada')) {
+        displayError = '⚠ Timeout: el scan tardó demasiado. Intenta de nuevo.';
+      } else {
+        displayError = msg;
+      }
       setState(() {
         _scanning = false;
-        _error = msg.contains('Gateway') || msg.contains('400')
-            ? '⚠ Gateway no conectado. Conecta tus credenciales primero.'
-            : msg;
+        _error = displayError;
       });
     }
   }

@@ -34,12 +34,14 @@ class RobustHttpClient {
   Future<Map<String, dynamic>> get(
     String endpoint, {
     Map<String, String>? headers,
+    Duration? timeout,
   }) =>
       _requestWithRetry(
         () => _inner.get(
           Uri.parse('$baseUrl$endpoint'),
           headers: headers,
         ),
+        timeout: timeout,
       );
 
   static const _jsonHeaders = {
@@ -132,13 +134,15 @@ class RobustHttpClient {
 
   /// Internal: retry logic with exponential backoff.
   Future<Map<String, dynamic>> _requestWithRetry(
-    Future<http.Response> Function() fn,
-  ) async {
+    Future<http.Response> Function() fn, {
+    Duration? timeout,
+  }) async {
+    final effectiveTimeout = timeout ?? config.timeout;
     int attempt = 0;
     while (true) {
       try {
         final response = await fn().timeout(
-          config.timeout,
+          effectiveTimeout,
           onTimeout: () => throw TimeoutException('Request timeout'),
         );
         return _parseResponse(response);

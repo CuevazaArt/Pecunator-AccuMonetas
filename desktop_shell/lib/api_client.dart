@@ -404,7 +404,10 @@ class EngineApi {
   // ── Prospector endpoints ──────────────────────────────────────
 
   Future<Map<String, dynamic>> prospectorScan({int topN = 15}) =>
-      _client.get('/prospector/scan?top_n=$topN');
+      _client.get(
+        '/prospector/scan?top_n=$topN',
+        timeout: const Duration(seconds: 120),
+      );
 
   Future<Map<String, dynamic>> prospectorLast() =>
       _client.get('/prospector/last');
