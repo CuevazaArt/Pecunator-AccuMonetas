@@ -66,6 +66,33 @@ def resolve_pair(
     return pair
 
 
+def resolve_pair_for_bot(
+    ctx: AppContext,
+    bot_type: str,
+) -> tuple[str, str] | None:
+    """Resolve credentials for a specific bot type from env sub-account keys.
+
+    Lookup order:
+      1. Bot-specific env vars: {BOT_TYPE}_API_KEY / {BOT_TYPE}_API_SECRET
+      2. Fallback: master credential via resolve_pair()
+
+    This enables future sub-account isolation when each bot has its own
+    Binance sub-account API keys in the .env file.
+    """
+    import os
+    prefix = bot_type.upper()
+    ak = os.environ.get(f"{prefix}_API_KEY", "").strip()
+    sec = os.environ.get(f"{prefix}_API_SECRET", "").strip()
+    if ak and sec:
+        ctx.active_api_key_hint = mask_pk(ak)
+        ctx.active_api_key_last4 = pk_last4(ak)
+        ctx.active_api_key_source = f"env:{bot_type}"
+        _LOG.info("credentials:resolved bot=%s source=env:%s", bot_type, prefix)
+        return ak, sec
+    # Fallback to master
+    return resolve_pair(ctx)
+
+
 # ── Snapshot builder ────────────────────────────────────────────────
 
 def build_snapshot(ctx: AppContext) -> GatewaySnapshotOut:

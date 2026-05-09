@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from runtime.api import deps
-from runtime.api._helpers import resolve_pair
+from runtime.api._helpers import resolve_pair, resolve_pair_for_bot
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.security_util import sanitize_log_message
@@ -24,9 +24,11 @@ async def lifespan(app: FastAPI):
     ctx = deps.get_ctx()
     bot = deps.get_bot()
     elphaba = deps.get_elphaba()
-    credential_resolver = lambda: resolve_pair(ctx)  # noqa: E731
-    bot.start_immortality(credential_resolver, interval_sec=5.0)
-    elphaba.start_immortality(credential_resolver, interval_sec=5.0)
+    credential_resolver = lambda: resolve_pair(ctx)  # noqa: E731 — master fallback
+    dorothy_resolver = lambda: resolve_pair_for_bot(ctx, "dorothy")  # noqa: E731
+    elphaba_resolver = lambda: resolve_pair_for_bot(ctx, "elphaba")  # noqa: E731
+    bot.start_immortality(dorothy_resolver, interval_sec=5.0)
+    elphaba.start_immortality(elphaba_resolver, interval_sec=5.0)
     await autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
