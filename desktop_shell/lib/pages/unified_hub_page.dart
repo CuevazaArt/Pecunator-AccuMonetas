@@ -114,16 +114,19 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       slivers: [
         // ── 1. Prospector (collapsible) ────────────────────────
         SliverToBoxAdapter(
-          child: ProspectorExpander(
-            api: _api,
-            onSymbolSelected: _handleSymbolSelected,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+            child: ProspectorExpander(
+              api: _api,
+              onSymbolSelected: _handleSymbolSelected,
+            ),
           ),
         ),
 
         // ── 2. Telemetry row ───────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
             child: Row(
               children: [
                 Expanded(
@@ -165,7 +168,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         // ── 3. Hub status + Paired instances ───────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -195,7 +198,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 2, 8, 12),
+            padding: const EdgeInsets.fromLTRB(24, 2, 24, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

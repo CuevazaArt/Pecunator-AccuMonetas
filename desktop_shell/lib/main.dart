@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'pages/home_shell.dart';
 
 void main() {
-  // Error boundary: prevent widget crashes from killing the entire app.
-  // Critical for production: bots in the backend keep running.
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     debugPrint('FlutterError caught: ${details.exceptionAsString()}');
@@ -50,8 +49,14 @@ class PecunatorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pecunator Desktop',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
-      darkTheme: ThemeData.dark(useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey, brightness: Brightness.dark),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+      ),
       themeMode: ThemeMode.dark,
       home: const PecunatorShell(),
     );
