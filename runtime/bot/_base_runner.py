@@ -1,6 +1,6 @@
 """T2.1: BaseStrategyRunner — common infrastructure for all bot runners.
 
-Deduplicates code shared by Dorothy, Masha, and Thusnelda:
+Deduplicates code shared by Dorothy and Elphaba:
 - Client management (_ensure_client, set_credentials, _to_thread)
 - Equity tracking (_register_equity, _record_return)
 - Metrics computation (_compute_metrics, _maybe_emit_metrics)

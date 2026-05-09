@@ -26,7 +26,7 @@ class SubAccountEntry:
     account_id: str                    # Internal short ID (e.g. "dorothy")
     email: str                         # Binance sub-account email
     role: str                          # "bot" | "strategy" | "reserve" | "personal"
-    bot_type: str = ""                 # "dorothy" | "masha" | "thusnelda" | ""
+    bot_type: str = ""                 # "dorothy" | "elphaba" | ""
     description: str = ""              # Human-readable description
     symbols: list[str] = field(default_factory=list)  # Assigned trading pairs
     max_equity_usdt: str = "0"         # Max capital allocation

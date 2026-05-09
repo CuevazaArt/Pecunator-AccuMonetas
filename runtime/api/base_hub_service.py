@@ -1,4 +1,4 @@
-"""Generic base class for Dorothy / Masha / Thusnelda hub services.
+"""Generic base class for Dorothy / Elphaba hub services.
 
 Each concrete service only needs to:
 
@@ -9,7 +9,7 @@ Each concrete service only needs to:
 5. Override ``_record_extra(runner)`` to append bot-specific fields to the
    payload dict.
 6. Override ``_save_instance(rec)`` / ``_load_instances_from_db()`` if the DB
-   schema has different columns (the Masha/Thusnelda tables differ from Dorothy).
+   schema has different columns (the Elphaba tables differ from Dorothy).
 
 All immortality logic, WAL-backed SQLite I/O, log sinks, equity persistence,
 and metrics persistence live here — written once.

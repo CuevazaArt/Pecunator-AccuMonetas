@@ -86,8 +86,6 @@ class _VmoDashboardState extends State<VmoDashboard> with SingleTickerProviderSt
         return Colors.greenAccent;
       case 'elphaba':
         return Colors.blueAccent;
-      case 'thusnelda':
-        return Colors.purpleAccent;
       case 'none':
       default:
         return Colors.grey;

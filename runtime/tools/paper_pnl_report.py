@@ -217,7 +217,7 @@ def format_report(data: dict[str, Any]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Paper Trading P&L Report")
-    parser.add_argument("--bot", default="", help="Filter by bot type (dorothy|masha|thusnelda)")
+    parser.add_argument("--bot", default="", help="Filter by bot type (dorothy|elphaba)")
     parser.add_argument("--symbol", default="", help="Filter by symbol (e.g. ETHUSDT)")
     parser.add_argument("--fee", type=float, default=0.001, help="Fee rate (default 0.1%%)")
     parser.add_argument("--limit", type=int, default=10000, help="Max trades to analyse")

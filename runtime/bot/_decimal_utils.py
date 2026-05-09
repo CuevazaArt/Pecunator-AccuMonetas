@@ -1,6 +1,6 @@
 """Shared Decimal helpers for all bot runners.
 
-Eliminates the _dec / _q duplication across dorothy.py, masha.py, thusnelda.py.
+Eliminates the _dec / _q duplication across dorothy.py and elphaba.py.
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ retroactively without reconstructing stdout.
 Schema:
     paper_trades(
         id          INTEGER PRIMARY KEY,
-        bot_type    TEXT,      -- "dorothy" | "masha" | "thusnelda"
+        bot_type    TEXT,      -- "dorothy" | "elphaba"
         bot_id      TEXT,      -- instance identifier
         symbol      TEXT,
         decision    TEXT,      -- "BUY_AND_SELL" | "WAIT" | "STOP_LOSS" | ...

@@ -71,7 +71,7 @@ class TransferService:
         """Transfer funds from MASTER to a bot's sub-account.
 
         Args:
-            bot_id: Internal bot ID (e.g. "dorothy", "masha")
+            bot_id: Internal bot ID (e.g. "dorothy", "elphaba")
             asset: Asset to transfer (e.g. "USDT", "BNB")
             amount: Amount as string (e.g. "100.50")
             dry_run: If True, validate but don't execute

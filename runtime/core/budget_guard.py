@@ -38,16 +38,14 @@ CREATE TABLE IF NOT EXISTS budget_ledger (
 # Default hub-level budget ratios (fraction of the global ceiling).
 # Values must sum to <= 1.0.  Anything not listed falls into "other".
 _DEFAULT_HUB_RATIOS: Dict[str, float] = {
-    "dorothy":   0.40,
-    "masha":     0.35,
-    "thusnelda": 0.20,
-    # 5% headroom for unclassified bots
+    "dorothy":  0.50,
+    "elphaba":  0.50,
 }
 
 
 def _hub_from_bot_id(bot_id: str) -> str:
-    """Extract hub name from a bot_id like 'dorothy-abc123' or 'thusnelda:PEPE…'."""
-    for prefix in ("dorothy", "masha", "thusnelda"):
+    """Extract hub name from a bot_id like 'dorothy-abc123' or 'elphaba-ton'."""
+    for prefix in ("dorothy", "elphaba"):
         if bot_id.lower().startswith(prefix):
             return prefix
     return "other"

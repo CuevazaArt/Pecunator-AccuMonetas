@@ -49,7 +49,7 @@ class StagedBot:
     from the vault at actual launch time by the caller.
     """
     bot_id: str
-    hub_type: str  # "dorothy", "masha", "thusnelda"
+    hub_type: str  # "dorothy", "elphaba"
     loop_interval_sec: float
     # credential_ref: optional vault ID for audit tracing (never the raw keys)
     credential_ref: str = ""  # vault credential_id, not the raw key
