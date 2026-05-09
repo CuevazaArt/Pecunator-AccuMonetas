@@ -22,12 +22,13 @@ class UnifiedHubPage extends StatefulWidget {
   const UnifiedHubPage({super.key, required this.engineBase});
 
   @override
-  State<UnifiedHubPage> createState() => _UnifiedHubPageState();
+  State<UnifiedHubPage> createState() => UnifiedHubPageState();
 }
 
-class _UnifiedHubPageState extends State<UnifiedHubPage> {
+class UnifiedHubPageState extends State<UnifiedHubPage> {
   late final EngineApi _api;
   Timer? _timer;
+  String? _injectedSymbol;
 
   // Dorothy + Elphaba reports for HubStatusExplainer
   Map<String, dynamic> _dorothyReport = {};
@@ -52,6 +53,8 @@ class _UnifiedHubPageState extends State<UnifiedHubPage> {
     _timer?.cancel();
     super.dispose();
   }
+
+  Future<void> forcePoll() async => await _poll();
 
   Future<void> _poll() async {
     if (!mounted) return;
@@ -95,6 +98,7 @@ class _UnifiedHubPageState extends State<UnifiedHubPage> {
   }
 
   void _handleSymbolSelected(String symbol) {
+    setState(() => _injectedSymbol = symbol);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Símbolo inyectado: $symbol → configurar en los hubs abajo'),
@@ -221,20 +225,20 @@ class _UnifiedHubPageState extends State<UnifiedHubPage> {
                       } catch (_) {}
                       return [];
                     },
-                    formFields: const [
-                      BotFormField(key: 'tag', label: 'Tag', hint: 'dorothy-ton', defaultValue: 'dorothy',
+                    formFields: [
+                      const BotFormField(key: 'tag', label: 'Tag', hint: 'dorothy-ton', defaultValue: 'dorothy',
                           tooltip: 'Identificador único de la instancia'),
-                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: 'TONUSDT',
+                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: _injectedSymbol ?? 'TONUSDT',
                           tooltip: 'Par de trading (debe tener margen aislado)'),
-                      BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
+                      const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
                           inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos (L0: 60s)'),
-                      BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
+                      const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
                           inputType: TextInputType.number, tooltip: 'USDT por rung (L0: \$6)'),
-                      BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
+                      const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
                           inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia objetivo'),
-                      BotFormField(key: 'drop_factor', label: 'Drop %', hint: '0.02', defaultValue: '0.02',
+                      const BotFormField(key: 'drop_factor', label: 'Drop %', hint: '0.02', defaultValue: '0.02',
                           inputType: TextInputType.number, tooltip: 'Caída para abrir siguiente rung DCA'),
-                      BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
+                      const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
                           tooltip: 'Nota libre para identificar la instancia'),
                     ],
                   ),
@@ -271,20 +275,20 @@ class _UnifiedHubPageState extends State<UnifiedHubPage> {
                       } catch (_) {}
                       return [];
                     },
-                    formFields: const [
-                      BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba',
+                    formFields: [
+                      const BotFormField(key: 'tag', label: 'Tag', hint: 'elphaba-ton', defaultValue: 'elphaba',
                           tooltip: 'Identificador único de la instancia'),
-                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: 'TONUSDT',
+                      BotFormField(key: 'symbol', label: 'Symbol', hint: 'TONUSDT', defaultValue: _injectedSymbol ?? 'TONUSDT',
                           tooltip: 'Par de trading (debe coincidir con Dorothy)'),
-                      BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
+                      const BotFormField(key: 'loop_interval_sec', label: 'Loop (s)', hint: '60', defaultValue: '60',
                           inputType: TextInputType.number, tooltip: 'Intervalo entre ciclos'),
-                      BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
+                      const BotFormField(key: 'quote_order_qty', label: 'Qty USDT', hint: '6', defaultValue: '6',
                           inputType: TextInputType.number, tooltip: 'USDT por operación short'),
-                      BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
+                      const BotFormField(key: 'profit_factor', label: 'Profit %', hint: '0.03', defaultValue: '0.03',
                           inputType: TextInputType.number, tooltip: 'Porcentaje de ganancia'),
-                      BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03',
+                      const BotFormField(key: 'margin_rise_factor', label: 'Rise %', hint: '0.03', defaultValue: '0.03',
                           inputType: TextInputType.number, tooltip: 'Subida para abrir siguiente rung short'),
-                      BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
+                      const BotFormField(key: 'note', label: 'Nota', hint: 'descripción',
                           tooltip: 'Nota libre para identificar la instancia'),
                     ],
                   ),

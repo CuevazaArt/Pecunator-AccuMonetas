@@ -22,6 +22,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   late final EngineApi _api;
   Timer? _timer;
   Timer? _clockTimer;
+  final GlobalKey<UnifiedHubPageState> _hubKey = GlobalKey<UnifiedHubPageState>();
 
   // AppBar state
   bool _loading = false;
@@ -73,6 +74,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   }
 
   Future<void> _fetchState() async {
+    _hubKey.currentState?.forcePoll();
     try {
       final snap = await _api.gatewaySnapshot();
       if (!mounted) return;
@@ -241,7 +243,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
         children: [
           // ── Main unified page ──────────────────────────
           Expanded(
-            child: UnifiedHubPage(engineBase: _engineBase),
+            child: UnifiedHubPage(key: _hubKey, engineBase: _engineBase),
           ),
           // ── Persistent footer ──────────────────────────
           Padding(
