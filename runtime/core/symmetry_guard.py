@@ -91,6 +91,7 @@ class SymmetryGuard:
         self._pause_ts: float = 0.0  # When the pause started
         self._recovery_attempts: int = 0
         self._needs_symbol_rotation: bool = False  # Flag for auto-rotation
+        self._paused_symbols: dict[str, dict[str, Any]] = {}  # symbol -> pause info
 
     # Error codes that indicate temporary liquidity issues (not system bugs)
     _RECOVERABLE_CODES = {"-3045", "-3041", "-3042"}
@@ -103,21 +104,25 @@ class SymmetryGuard:
         """Reset failure counter on successful order."""
         with self._lock:
             self._failure_counts[bot_key] = 0
-            # Auto-recovery: if the bot that caused the pause is now succeeding,
-            # clear the pause (liquidity restored or symbol changed)
+            # If this bot's symbol was individually paused, clear it
+            symbol = self._extract_symbol(bot_key)
+            if symbol and symbol in self._paused_symbols:
+                _LOG.info("SymmetryGuard: auto-clearing symbol pause — %s recovered", symbol)
+                del self._paused_symbols[symbol]
+            # Legacy: auto-recovery on global pause
             if self._hub_paused and bot_key in self._pause_reason:
-                _LOG.info("SymmetryGuard: auto-clearing pause — %s recovered", bot_key)
+                _LOG.info("SymmetryGuard: auto-clearing hub pause — %s recovered", bot_key)
                 self._hub_paused = False
                 self._pause_reason = ""
                 self._recovery_attempts = 0
                 self._needs_symbol_rotation = False
 
     def record_order_failure(self, bot_key: str, error: str) -> None:
-        """Increment failure counter; pause hub if threshold exceeded.
+        """Increment failure counter; pause the SYMBOL (not entire hub) if threshold exceeded.
 
-        L0 Doctrine: ALWAYS pause both bots on failure streak.
-        One side must NEVER operate without its symmetric counterpart.
-        For recoverable errors, the watchdog will auto-retry after cooldown.
+        Design: per-symbol isolation. A single illiquid symbol must NOT
+        poison the entire fleet. Only the failing symbol gets paused.
+        For non-recoverable errors, escalate to full hub pause.
         """
         with self._lock:
             count = self._failure_counts.get(bot_key, 0) + 1
@@ -126,32 +131,56 @@ class SymmetryGuard:
             is_recoverable = any(code in error for code in self._RECOVERABLE_CODES)
 
             if count >= self.MAX_FAILURE_STREAK:
-                self._hub_paused = True
-                self._pause_ts = time.time()
-                self._pause_reason = (
-                    f"Hub paused: {bot_key} hit {count} consecutive order failures. "
+                symbol = self._extract_symbol(bot_key)
+                reason = (
+                    f"{bot_key} hit {count} consecutive order failures. "
                     f"Last error: {error[:200]}"
                 )
-                if is_recoverable:
+
+                if is_recoverable and symbol:
+                    # ── Per-symbol pause (recoverable) ──────────────
+                    self._paused_symbols[symbol] = {
+                        "reason": reason,
+                        "ts": time.time(),
+                        "bot_key": bot_key,
+                        "attempts": self._paused_symbols.get(symbol, {}).get("attempts", 0),
+                    }
                     _LOG.warning(
-                        "SymmetryGuard: RECOVERABLE pause — %s (attempt %d/%d). "
-                        "Auto-retry in %ds. Error: %s",
-                        bot_key, self._recovery_attempts + 1,
-                        self.MAX_RECOVERY_ATTEMPTS,
-                        int(self.RECOVERY_COOLDOWN_SEC), error[:200],
+                        "SymmetryGuard: SYMBOL PAUSED %s (recoverable). "
+                        "Other symbols continue. Error: %s",
+                        symbol, error[:200],
                     )
                     try:
                         from runtime.core.alert_dispatcher import get_alert_dispatcher
-                        get_alert_dispatcher().warning("HUB_PAUSE_RECOVERABLE", f"{bot_key}: {error[:200]}")
+                        get_alert_dispatcher().warning("SYMBOL_PAUSED", f"{symbol}: {error[:200]}")
                     except Exception:
                         pass
                 else:
+                    # ── Global hub pause (non-recoverable) ──────────
+                    self._hub_paused = True
+                    self._pause_ts = time.time()
+                    self._pause_reason = f"Hub paused: {reason}"
                     _LOG.critical(self._pause_reason)
                     try:
                         from runtime.core.alert_dispatcher import get_alert_dispatcher
                         get_alert_dispatcher().critical("HUB_PAUSED", self._pause_reason)
                     except Exception:
                         pass
+
+    @staticmethod
+    def _extract_symbol(bot_key: str) -> str:
+        """Extract symbol from bot_key like 'elphaba:CHIPUSDT'."""
+        if ":" in bot_key:
+            return bot_key.split(":", 1)[1].upper()
+        return ""
+
+    def is_symbol_paused(self, symbol: str) -> bool:
+        """Check if a specific symbol is individually paused."""
+        return symbol.upper() in self._paused_symbols
+
+    def get_paused_symbols(self) -> dict[str, Any]:
+        """Return all individually paused symbols with reasons."""
+        return dict(self._paused_symbols)
 
     def tick(self) -> dict[str, Any]:
         """Watchdog tick — call this periodically (e.g., every bot cycle).
@@ -238,7 +267,8 @@ class SymmetryGuard:
             self._hub_paused = False
             self._pause_reason = ""
             self._failure_counts.clear()
-            _LOG.info("SymmetryGuard: pause state reset")
+            self._paused_symbols.clear()
+            _LOG.info("SymmetryGuard: pause state reset (hub + all symbols)")
 
     # ── Cached preflight ──────────────────────────────────────────
 

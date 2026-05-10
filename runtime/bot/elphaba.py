@@ -212,6 +212,10 @@ class ElphabaRunner(BaseStrategyRunner):
                     "tick": _tick,
                 })
                 return {"decision": "HUB_PAUSED", "reason": reason}
+            if _guard.is_symbol_paused(c.symbol):
+                reason = f"Symbol {c.symbol} paused (recoverable failure)"
+                self._emit("INFO", "elphaba:SYMBOL_PAUSED", {"symbol": c.symbol})
+                return {"decision": "HUB_PAUSED", "reason": reason}
         except Exception:
             pass
 
