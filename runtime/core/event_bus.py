@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any, Callable, DefaultDict, List
 
+_LOG = logging.getLogger("pecunator.core.event_bus")
 
 Subscriber = Callable[[str, Any], None]
 
@@ -26,8 +28,7 @@ class EventBus:
             try:
                 cb(topic, payload)
             except Exception:
-                # Keep bus alive; UI / callers should not crash publishers
-                pass
+                _LOG.warning("EventBus: subscriber %s crashed on topic '%s'", cb, topic, exc_info=True)
 
     def publish_prefix(self, prefix: str, payload: Any) -> None:
         for topic, cbs in list(self._subs.items()):
@@ -36,4 +37,4 @@ class EventBus:
                     try:
                         cb(topic, payload)
                     except Exception:
-                        pass
+                        _LOG.warning("EventBus: subscriber %s crashed on topic '%s'", cb, topic, exc_info=True)

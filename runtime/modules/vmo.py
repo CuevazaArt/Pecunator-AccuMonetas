@@ -18,9 +18,7 @@ from runtime.core.api_governor import get_api_governor, P_DIAGNOSIS
 
 _LOG = logging.getLogger("pecunator.modules.vmo")
 
-# Replace with env var in production if needed, but we have a dedicated key
-import os
-
+# Chart-IMG API key — read exclusively from environment.
 CHART_IMG_API_KEY = os.environ.get("CHART_IMG_API_KEY", "")
 CHART_IMG_URL = "https://api.chart-img.com/v2/tradingview/advanced-chart"
 
@@ -113,22 +111,19 @@ class VisualMarketObserver:
             )
 
     async def fetch_triplet(self, symbol: str) -> dict[str, Optional[Path]]:
-        """Fetch 4h, 1d, and 1w charts for the given symbol concurrently."""
+        """Fetch 4h, 1d, and 1w charts for the given symbol sequentially.
+
+        Governor gating happens inside ``_fetch_chart_sync`` — no need to
+        double-call ``request_token`` here.
+        """
         intervals = ["4h", "1d", "1w"]
-        loop = asyncio.get_event_loop()
-        
+        loop = asyncio.get_running_loop()
+
         results = {}
         for iv in intervals:
-            # We run them sequentially to avoid bursting Chart-IMG rate limit if strict
-            # Governor handles rate limiting (e.g. 1 request per second)
-            # wait if Governor requires it
-            allowed, wait = self._governor.request_token("chart-img")
-            if not allowed and wait > 0 and wait != float('inf'):
-                await asyncio.sleep(wait)
-            
             path = await loop.run_in_executor(None, self._fetch_chart_sync, symbol, iv)
             results[iv] = path
-            
+
         return results
 
 _instance: Optional[VisualMarketObserver] = None

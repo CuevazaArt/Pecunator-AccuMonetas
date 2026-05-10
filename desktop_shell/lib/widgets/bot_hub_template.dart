@@ -58,6 +58,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   bool _gatewayRunning = false;
   bool _fuseTripped = false;
   String? _expandedBotId;
+  final Map<String, List<String>> _botLogs = {};
 
   @override
   void initState() {
@@ -114,6 +115,14 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
         _gatewayRunning = snap['gateway_running'] == true;
         _fuseTripped = fuse;
       });
+      
+      // Fetch logs for expanded bot to keep them fresh without flickering
+      if (_expandedBotId != null) {
+        final logs = await widget.fetchLogs(_expandedBotId!);
+        if (mounted && _expandedBotId != null) {
+          setState(() => _botLogs[_expandedBotId!] = logs);
+        }
+      }
     } catch (_) {}
   }
 
@@ -147,14 +156,6 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                     style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, fontFamily: 'monospace',
                         color: _botsRunning > 0 ? Colors.greenAccent : Colors.white38),
                   ),
-                ),
-                const Spacer(),
-                StatusLights(
-                  gatewayRunning: _gatewayRunning,
-                  fuseTripped: _fuseTripped,
-                  botsRunning: _botsRunning,
-                  botsTotal: _bots.length,
-                  hubName: widget.hubName.toUpperCase(),
                 ),
               ],
             ),
@@ -205,7 +206,23 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
       child: Column(
         children: [
           InkWell(
-            onTap: () => setState(() => _expandedBotId = isExpanded ? null : botId),
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedBotId = null;
+                } else {
+                  _expandedBotId = botId;
+                  _botLogs.remove(botId); // Clear old logs to show loading
+                }
+              });
+              if (_expandedBotId == botId) {
+                widget.fetchLogs(botId).then((logs) {
+                  if (mounted && _expandedBotId == botId) {
+                    setState(() => _botLogs[botId] = logs);
+                  }
+                });
+              }
+            },
             borderRadius: BorderRadius.circular(6),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -268,31 +285,24 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
           ),
           // Expanded logs
           if (isExpanded)
-            FutureBuilder<List<String>>(
-              future: widget.fetchLogs(botId),
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator(minHeight: 2));
-                }
-                final logs = snap.data ?? [];
-                return Container(
-                  constraints: const BoxConstraints(maxHeight: 150),
-                  margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: ListView.builder(
-                    reverse: true,
-                    itemCount: logs.length,
-                    itemBuilder: (_, i) => Text(
-                      logs[logs.length - 1 - i],
-                      style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.white54),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: _botLogs[botId] == null
+                  ? const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator(minHeight: 2))
+                  : ListView.builder(
+                      reverse: true,
+                      itemCount: _botLogs[botId]!.length,
+                      itemBuilder: (_, i) => Text(
+                        _botLogs[botId]![_botLogs[botId]!.length - 1 - i],
+                        style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.white54),
+                      ),
                     ),
-                  ),
-                );
-              },
             ),
         ],
       ),

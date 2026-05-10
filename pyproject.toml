@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests", "runtime/tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:websockets.*",
+    "ignore::DeprecationWarning:binance.*",
+]

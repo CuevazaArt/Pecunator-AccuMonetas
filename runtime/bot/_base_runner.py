@@ -85,7 +85,10 @@ class BaseStrategyRunner:
 
     @property
     def last_report(self) -> dict[str, Any]:
-        return dict(self._last_report)
+        rep = dict(self._last_report)
+        if self._last_equity_usdt is not None:
+            rep["equity_usdt"] = str(self._last_equity_usdt)
+        return rep
 
     @property
     def last_error(self) -> Optional[str]:

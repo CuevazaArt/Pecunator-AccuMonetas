@@ -32,8 +32,9 @@ def _configure_logging() -> None:
         rh.setLevel(level)
         rh.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
         handlers.append(rh)
-    except Exception:
-        pass  # File handler optional — stdout always works
+    except Exception as exc:
+        # Log to stderr so operator is aware file-logging is unavailable
+        print(f"[WARN] RotatingFileHandler unavailable ({exc}), using stdout only", file=sys.stderr)
 
     logging.basicConfig(
         level=level,
@@ -54,7 +55,11 @@ def main() -> None:
     # ── AutoPilot mode: full autonomous operation ──
     if "--autopilot" in sys.argv or os.environ.get("PECUNATOR_AUTOPILOT", "").strip().lower() in ("1", "true"):
         lo.info("Starting in AUTOPILOT mode (full autonomous)")
-        from runtime.core.autopilot import run_autopilot
+        try:
+            from runtime.core.autopilot import run_autopilot
+        except ImportError:
+            lo.error("AutoPilot module not installed — runtime.core.autopilot is missing")
+            sys.exit(1)
         run_autopilot()
         return
 

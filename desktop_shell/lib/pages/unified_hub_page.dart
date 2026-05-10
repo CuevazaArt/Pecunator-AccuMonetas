@@ -121,8 +121,14 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       final dorBot = await _api.hubCreateBot(dConfig);
       final elpBot = await _api.elphabaCreateBot(eConfig);
       
-      if (dorBot['bot_id'] != null) await _api.hubStartBot(dorBot['bot_id']);
-      if (elpBot['bot_id'] != null) await _api.elphabaStartBot(elpBot['bot_id']);
+      // Fire and forget starts so we don't block on backend staging launch delays
+      if (dorBot['bot_id'] != null) {
+        _api.hubStartBot(dorBot['bot_id']).catchError((e) => debugPrint('Error auto-starting Dorothy: $e'));
+      }
+      if (elpBot['bot_id'] != null) {
+        _api.elphabaStartBot(elpBot['bot_id']).catchError((e) => debugPrint('Error auto-starting Elphaba: $e'));
+      }
+
       setState(() {
         _savedPresets[dConfig['symbol']] = dConfig; // You can save Dorothy's as reference, or combined
         _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig; // Save Elphaba separately if needed
@@ -323,7 +329,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         // ── 5. System drawer (collapsible) ─────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
             child: AccountSystemDrawer(api: _api),
           ),
         ),
