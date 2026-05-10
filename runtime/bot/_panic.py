@@ -20,9 +20,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from runtime.core.settings import data_dir
+
 # Resolved once at import time; bots check at the start of each cycle.
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-_PANIC_PATH = _DATA_DIR / "PANIC.lock"
+_PANIC_PATH = data_dir() / "PANIC.lock"
 
 
 def check_panic_lock() -> bool:

@@ -112,20 +112,20 @@ class ElphabaRunner(BaseStrategyRunner):
     # ── Margin helpers ───────────────────────────────────────────
 
     async def _ensure_collateral(
-        self, client: Any, symbol: str, amount: Decimal,
+        self, client: Any, symbol: str, amount: Decimal, active_rungs: int,
     ) -> bool:
         """Transfer USDT from Spot to Isolated Margin wallet if needed."""
+        required_equity = amount * (active_rungs + 1)
         try:
             iso_account = await client.get_isolated_margin_account(symbols=symbol)
             assets = iso_account.get("assets", [])
             if not assets:
-                # First time — need to transfer
                 pass
             else:
                 pair = assets[0] if isinstance(assets, list) else {}
                 quote_asset = pair.get("quoteAsset", {})
-                free_usdt = _dec(quote_asset.get("free", "0"), "0")
-                if free_usdt >= amount:
+                net_usdt = _dec(quote_asset.get("netAsset", "0"), "0")
+                if net_usdt >= required_equity:
                     return True  # Already enough collateral
         except Exception as e:
             self._emit("WARNING", f"elphaba:collateral_check_failed: {e}")
@@ -373,7 +373,7 @@ class ElphabaRunner(BaseStrategyRunner):
 
 
         # ── Ensure collateral in Isolated Margin wallet ───────────
-        if not await self._ensure_collateral(client, symbol, c.quote_order_qty):
+        if not await self._ensure_collateral(client, symbol, c.quote_order_qty, active_rungs):
             report["decision"] = "BLOCKED_COLLATERAL"
             self._emit("ERROR", "elphaba:collateral_insufficient", {"report": report})
             self._maybe_emit_metrics()

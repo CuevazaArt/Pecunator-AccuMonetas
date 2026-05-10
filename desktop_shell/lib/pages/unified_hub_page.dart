@@ -71,8 +71,8 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       // Bot lists are now part of the telemetry snapshot
       if (snap.dorothyBots.isNotEmpty || snap.elphabaBots.isNotEmpty ||
           snap.botsTotal == 0) {
-        _dorothyBots = snap.dorothyBots;
-        _elphabaBots = snap.elphabaBots;
+        _dorothyBots = snap.dorothyBots.reversed.toList();
+        _elphabaBots = snap.elphabaBots.reversed.toList();
       }
     });
   }
@@ -89,8 +89,8 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       final elpBots = ((results[1]['bots'] as List?) ?? []).cast<Map<String, dynamic>>();
       if (!mounted) return;
       setState(() {
-        _dorothyBots = dorBots;
-        _elphabaBots = elpBots;
+        _dorothyBots = dorBots.reversed.toList();
+        _elphabaBots = elpBots.reversed.toList();
       });
     } catch (_) {}
   }

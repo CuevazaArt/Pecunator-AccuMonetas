@@ -464,13 +464,25 @@ class DorothyRunner(BaseStrategyRunner):
             {"symbol": symbol, "response": buy},
         )
         fills = buy.get("fills") or []
+        net_qty = Decimal("0")
         if fills:
             buy_price = _dec(fills[0].get("price", "0"), "0")
+            for f in fills:
+                fill_qty = _dec(f.get("qty", "0"), "0")
+                comm = _dec(f.get("commission", "0"), "0")
+                comm_asset = f.get("commissionAsset", "")
+                # If commission is paid in the base asset (e.g., BTC in BTCUSDT), subtract it.
+                if symbol.startswith(comm_asset) and comm_asset != "":
+                    fill_qty -= comm
+                net_qty += fill_qty
         else:
             executed = _dec(buy.get("executedQty", "0"), "0")
             quote = _dec(buy.get("cummulativeQuoteQty", "0"), "0")
             buy_price = quote / executed if executed > 0 else est_buy
-        qty = _dec(buy.get("executedQty", "0"), "0")
+            # Fallback 0.1% worst-case fee deduction if fills are missing
+            net_qty = executed * Decimal("0.999")
+            
+        qty = net_qty
         sell_price = _q(buy_price * (Decimal("1") + c.profit_factor), c.price_decimals)
         sell_qty = _q(qty, c.qty_decimals)
 

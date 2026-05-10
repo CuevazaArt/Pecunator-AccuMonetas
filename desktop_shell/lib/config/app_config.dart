@@ -2,6 +2,9 @@
 library;
 
 class AppConfig {
+  // App Version
+  static const String appVersion = 'v3.7.5';
+
   // Engine API
   static const String engineDefaultHost = '127.0.0.1';
   static const int engineDefaultPort = 8000;

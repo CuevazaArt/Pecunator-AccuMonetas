@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../services/telemetry_hub.dart';
 import '../widgets/credential_manager_dialog.dart';
+import '../config/app_config.dart';
 import 'unified_hub_page.dart';
 
 /// Root scaffold — thin AppBar orchestrator.
@@ -17,7 +18,7 @@ class PecunatorShell extends StatefulWidget {
 }
 
 class _PecunatorShellState extends State<PecunatorShell> {
-  static const _engineBase = 'http://127.0.0.1:8000';
+  static final _engineBase = AppConfig.buildEngineUrl();
   late final EngineApi _api;
   Timer? _timer;
   Timer? _clockTimer;
@@ -185,7 +186,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
               ),
             ),
             const SizedBox(width: 8),
-            Text('v2.6.1', style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.3))),
+            Text(AppConfig.appVersion, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.3))),
           ],
         ),
         automaticallyImplyLeading: false,

@@ -176,23 +176,29 @@ class TestTransferServiceDryRun:
     """Test transfer validation without real API calls."""
 
     def test_fund_bot_dry_run(self, fresh_registry, fresh_governor):
+        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
-        result = ts.fund_bot("dorothy", "USDT", "100", dry_run=True)
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(ts.fund_bot("dorothy", "USDT", "100", dry_run=True))
         assert result["ok"] is True
         assert result["dry_run"] is True
 
     def test_fund_bot_over_limit(self, fresh_registry, fresh_governor):
+        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
-        result = ts.fund_bot("dorothy", "USDT", "99999", dry_run=True)
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(ts.fund_bot("dorothy", "USDT", "99999", dry_run=True))
         assert result["ok"] is False
         assert "exceeds" in result["error"].lower()
 
     def test_fund_unknown_bot(self, fresh_registry, fresh_governor):
+        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
-        result = ts.fund_bot("nonexistent", "USDT", "10", dry_run=True)
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(ts.fund_bot("nonexistent", "USDT", "10", dry_run=True))
         assert result["ok"] is False
         assert "unknown" in result["error"].lower()
 
