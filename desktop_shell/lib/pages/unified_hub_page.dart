@@ -4,19 +4,21 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../services/preferences.dart';
 import '../widgets/mini_charts.dart';
+import '../widgets/spot_balances_strip.dart';
 import '../widgets/bot_hub_template.dart';
 import '../widgets/prospector_expander.dart';
+import '../widgets/emergency_ops_drawer.dart';
 import '../widgets/staged_symbol_panel.dart';
-import '../widgets/account_system_drawer.dart';
+import '../widgets/order_ledger_panel.dart';
 
 /// Unified hub page — single view for the entire Pecunator operating console.
 ///
-/// Layout (top → bottom, minimal scroll):
-///   1. Telemetry bar (weight chart + equity + status lights)
+/// Layout (top → bottom):
+///   1. Telemetry bar (weight + equity + spot balances + status lights)
 ///   2. Prospector (collapsible)
-///   3. Hub status + paired instances
+///   3. Emergency Ops (collapsible, collapsed by default)
 ///   4. Dorothy ↔ Elphaba side-by-side hubs
-///   5. System drawer (collapsible: balances, budget, ledger, ops)
+///   5. Order Ledger (expandable details)
 class UnifiedHubPage extends StatefulWidget {
   final String engineBase;
 
@@ -96,7 +98,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
     try {
       final dorBot = await _api.hubCreateBot(dConfig);
       final elpBot = await _api.elphabaCreateBot(eConfig);
-      
+
       if (dorBot['bot_id'] != null) {
         _api.hubStartBot(dorBot['bot_id']).catchError((e) { debugPrint('Error auto-starting Dorothy: $e'); return <String, dynamic>{}; });
       }
@@ -106,7 +108,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
       setState(() {
         _savedPresets[dConfig['symbol']] = dConfig;
-        _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig;
+        _savedPresets['${eConfig['symbol']}_elphaba'] = eConfig;
         _stagedSymbol = null;
       });
       AppPreferences.setSavedPresetsJson(jsonEncode(_savedPresets));
@@ -133,25 +135,25 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
   @override
   Widget build(BuildContext context) {
-    const hPad = EdgeInsets.symmetric(horizontal: 16);
+    const pad = EdgeInsets.symmetric(horizontal: 16);
 
     return CustomScrollView(
       slivers: [
-        // ── 1. Telemetry bar (compact, full width) ─────────────
+        // ── 1. Telemetry bar ───────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
             child: Row(
               children: [
-                // Weight chart (auto-scaled)
+                // Weight chart
                 Expanded(
-                  flex: 5,
+                  flex: 4,
                   child: MiniWeightChart(api: _api, height: 48),
                 ),
                 const SizedBox(width: 4),
                 // Equity chart
                 Expanded(
-                  flex: 5,
+                  flex: 4,
                   child: MiniEquityChart(
                     api: _api,
                     label: 'Equity',
@@ -159,6 +161,12 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     height: 48,
                     syncInterval: const Duration(seconds: 8),
                   ),
+                ),
+                const SizedBox(width: 4),
+                // Spot balances
+                Expanded(
+                  flex: 2,
+                  child: SpotBalancesStrip(api: _api, height: 48),
                 ),
                 const SizedBox(width: 4),
                 // Status lights
@@ -188,7 +196,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         if (_stagedSymbol != null)
           SliverToBoxAdapter(
             child: Padding(
-              padding: hPad,
+              padding: pad,
               child: StagedSymbolPanel(
                 symbol: _stagedSymbol!,
                 initialPresetDorothy: _savedPresets[_stagedSymbol!],
@@ -199,7 +207,15 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
             ),
           ),
 
-        // ── 3. Dorothy ↔ Elphaba side-by-side ──────────────────
+        // ── 3. Emergency Ops (collapsed by default) ────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+            child: EmergencyOpsDrawer(api: _api),
+          ),
+        ),
+
+        // ── 4. Dorothy ↔ Elphaba + Order Ledger ────────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
@@ -208,6 +224,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
               children: [
                 // Dorothy (LONG)
                 Expanded(
+                  flex: 4,
                   child: BotHubTemplate(
                     hubName: 'Dorothy',
                     hubColor: Colors.greenAccent,
@@ -237,10 +254,11 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                 Container(
                   width: 1,
                   margin: const EdgeInsets.symmetric(vertical: 8),
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: Colors.white.withValues(alpha: 0.06),
                 ),
                 // Elphaba (SHORT)
                 Expanded(
+                  flex: 4,
                   child: BotHubTemplate(
                     hubName: 'Elphaba',
                     hubColor: const Color(0xFF00E676),
@@ -267,16 +285,14 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     },
                   ),
                 ),
+                const SizedBox(width: 4),
+                // Order Ledger
+                Expanded(
+                  flex: 3,
+                  child: OrderLedgerPanel(api: _api),
+                ),
               ],
             ),
-          ),
-        ),
-
-        // ── 5. System drawer (collapsible) ─────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: AccountSystemDrawer(api: _api),
           ),
         ),
       ],

@@ -185,8 +185,8 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
               Text(
                 'SEVI-M = EVI × Safety (Macro × Liquidity). Hard vetos pre-filtran activos letales.',
                 style: TextStyle(
-                  fontSize: 9,
-                  color: Colors.white.withValues(alpha: 0.35),
+                  fontSize: 10,
+                  color: Colors.white.withValues(alpha: 0.65),
                 ),
               ),
             ],
