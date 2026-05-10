@@ -30,7 +30,7 @@ jobs:
 
       - name: Pytest (core modules)
         run: |
-          pytest runtime/tests/ -v --tb=short -x || echo "::warning::Some tests failed"
+          pytest runtime/tests/ -v --tb=short -x
 
   flutter-analyze:
     name: "Flutter Analyze"
