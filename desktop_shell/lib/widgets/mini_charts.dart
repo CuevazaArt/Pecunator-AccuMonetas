@@ -112,7 +112,7 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'W',
+                  'WEIGHT',
                   style: TextStyle(
                     fontSize: 9,
                     color: color,
@@ -161,6 +161,166 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text('⚡', style: TextStyle(fontSize: 10)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact rolling order-rate chart — shows orders/10s over time.
+/// Reads X-MBX-ORDER-COUNT-10S from gateway snapshot (zero extra API cost).
+class MiniOrderRateChart extends StatefulWidget {
+  final EngineApi api;
+  final Duration syncInterval;
+  final Duration timeWindow;
+  final double height;
+
+  const MiniOrderRateChart({
+    super.key,
+    required this.api,
+    this.syncInterval = const Duration(seconds: 2),
+    this.timeWindow = const Duration(minutes: 10),
+    this.height = 54,
+  });
+
+  @override
+  State<MiniOrderRateChart> createState() => _MiniOrderRateChartState();
+}
+
+class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
+  Timer? _timer;
+  final List<_Sample> _data = [];
+  int _orderLimit = 100;
+  bool _danger = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick();
+    _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _tick() async {
+    try {
+      final snap = await widget.api.gatewaySnapshot();
+      final countRaw = snap['order_count_10s'];
+      int? count;
+      if (countRaw is int) {
+        count = countRaw;
+      } else if (countRaw is num) {
+        count = countRaw.toInt();
+      } else if (countRaw != null) {
+        count = int.tryParse('$countRaw');
+      }
+
+      final limitRaw = snap['order_limit_10s'];
+      int limit = 100;
+      if (limitRaw is int) {
+        limit = limitRaw;
+      } else if (limitRaw is num) {
+        limit = limitRaw.toInt();
+      } else if (limitRaw != null) {
+        limit = int.tryParse('$limitRaw') ?? 100;
+      }
+
+      if (!mounted) return;
+      final now = DateTime.now();
+      final cutoff = now.subtract(widget.timeWindow);
+      setState(() {
+        if (count != null) _data.add(_Sample(now, count.toDouble()));
+        _data.removeWhere((s) => s.time.isBefore(cutoff));
+        _orderLimit = limit > 0 ? limit : 100;
+        _danger = count != null && limit > 0 && (count / limit) >= 0.80;
+      });
+    } catch (_) {}
+  }
+
+  Color _colorForPct(double pct) {
+    if (pct >= 0.80) return const Color(0xFFFF1744);
+    if (pct >= 0.60) return const Color(0xFFFF9100);
+    if (pct >= 0.30) return const Color(0xFFFFEA00);
+    return const Color(0xFF7C4DFF);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = _data.isEmpty
+        ? 0.0
+        : (_data.last.value / _orderLimit).clamp(0.0, 1.0);
+    final color = _colorForPct(pct);
+    final pctStr = (pct * 100).toStringAsFixed(1);
+    final lastVal = _data.isEmpty ? '--' : _data.last.value.toInt().toString();
+
+    return Container(
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ORDERS',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '$pctStr%',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$lastVal/$_orderLimit',
+                  style: const TextStyle(
+                    fontSize: 7,
+                    color: Colors.white38,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: CustomPaint(
+              painter: _SparklinePainter(
+                data: _data,
+                maxY: _orderLimit.toDouble(),
+                color: color,
+                fuseTripped: _danger,
+              ),
+              size: Size.infinite,
+            ),
+          ),
+          if (_danger)
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0x44FF1744),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('⚠', style: TextStyle(fontSize: 10)),
             ),
         ],
       ),

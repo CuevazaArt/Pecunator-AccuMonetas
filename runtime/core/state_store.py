@@ -29,6 +29,9 @@ class StateStore:
     connected: bool = False
     # Last X-MBX-USED-WEIGHT-1M from python-binance after a REST call (IP-scoped).
     api_weight_used_1m: Optional[int] = None
+    # Last X-MBX-ORDER-COUNT-10S and 1M from Binance (UID-scoped order rate limits).
+    order_count_10s: Optional[int] = None
+    order_count_1m: Optional[int] = None
     # Last Binance clock sync values (for UI display/diagnostics).
     binance_server_time_ms: Optional[int] = None
     binance_local_time_ms_at_sync: Optional[int] = None

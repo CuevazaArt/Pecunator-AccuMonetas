@@ -143,10 +143,16 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
             child: Row(
               children: [
-                // Weight chart
+                // Weight monitor
                 Expanded(
-                  flex: 4,
+                  flex: 3,
                   child: MiniWeightChart(api: _api, height: 54),
+                ),
+                const SizedBox(width: 4),
+                // Order rate monitor
+                Expanded(
+                  flex: 3,
+                  child: MiniOrderRateChart(api: _api, height: 54),
                 ),
                 const SizedBox(width: 4),
                 // Equity chart + capital breakdown

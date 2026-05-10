@@ -107,6 +107,8 @@ def build_snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         selected_symbol=ctx.state.selected_symbol,
         used_weight_1m=getattr(ctx.state, "api_weight_used_1m", None),
         weight_limit_1m=api_weight_limit_1m_display(),
+        order_count_10s=getattr(ctx.state, "order_count_10s", None),
+        order_count_1m=getattr(ctx.state, "order_count_1m", None),
         binance_server_time_ms=getattr(ctx.state, "binance_server_time_ms", None),
         binance_local_time_ms_at_sync=getattr(
             ctx.state, "binance_local_time_ms_at_sync", None

@@ -56,6 +56,18 @@ class GatewaySnapshotOut(BaseModel):
         default=6000,
         description="Display cap; default from PECUNATOR_API_WEIGHT_LIMIT_1M or 6000",
     )
+    order_count_10s: Optional[int] = Field(
+        default=None,
+        description="X-MBX-ORDER-COUNT-10S from last REST response (UID-scoped)",
+    )
+    order_count_1m: Optional[int] = Field(
+        default=None,
+        description="X-MBX-ORDER-COUNT-1M from last REST response (UID-scoped)",
+    )
+    order_limit_10s: int = Field(
+        default=100,
+        description="Binance order rate limit per 10s (default 100 for Spot)",
+    )
     binance_server_time_ms: Optional[int] = Field(
         default=None,
         description="Last server time obtained from Binance (/api/v3/time)",
