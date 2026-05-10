@@ -8,7 +8,7 @@ from typing import Any
 
 _LOG = logging.getLogger("pecunator.api.system")
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from runtime.api import deps
 from runtime.api._helpers import rest_weight_estimate_report
@@ -238,6 +238,41 @@ async def symmetry_guard_reset() -> dict[str, Any]:
     guard.reset_pause()
     return {"ok": True, "hub_paused": guard.is_hub_paused()}
 
+
+# ── Toxic Symbol Registry ──────────────────────────────────────────
+
+@router.get("/api/v1/toxic-symbols")
+async def toxic_symbols_list() -> dict[str, Any]:
+    from runtime.core.toxic_symbols import get_toxic_registry
+    reg = get_toxic_registry()
+    return {
+        "blacklisted": reg.get_blacklist(),
+        "history": reg.get_history(limit=30),
+    }
+
+
+@router.post("/api/v1/toxic-symbols/blacklist")
+async def toxic_symbols_blacklist(request: Request) -> dict[str, Any]:
+    from runtime.core.toxic_symbols import get_toxic_registry
+    body = await request.json()
+    symbol = str(body.get("symbol", "")).upper()
+    reason = str(body.get("reason", "Manual blacklist"))
+    if not symbol:
+        return {"ok": False, "error": "symbol required"}
+    is_new = get_toxic_registry().blacklist(symbol, reason=reason)
+    return {"ok": True, "symbol": symbol, "newly_blacklisted": is_new}
+
+
+@router.post("/api/v1/toxic-symbols/whitelist")
+async def toxic_symbols_whitelist(request: Request) -> dict[str, Any]:
+    from runtime.core.toxic_symbols import get_toxic_registry
+    body = await request.json()
+    symbol = str(body.get("symbol", "")).upper()
+    notes = str(body.get("notes", "Manual whitelist"))
+    if not symbol:
+        return {"ok": False, "error": "symbol required"}
+    found = get_toxic_registry().whitelist(symbol, notes=notes)
+    return {"ok": True, "symbol": symbol, "was_blacklisted": found}
 
 # ── Sub-Account Registry ───────────────────────────────────────────
 

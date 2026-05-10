@@ -139,16 +139,38 @@ class SymmetryGuard:
 
                 if is_recoverable and symbol:
                     # ── Per-symbol pause (recoverable) ──────────────
+                    prev_attempts = self._paused_symbols.get(symbol, {}).get("attempts", 0) + 1
                     self._paused_symbols[symbol] = {
                         "reason": reason,
                         "ts": time.time(),
                         "bot_key": bot_key,
-                        "attempts": self._paused_symbols.get(symbol, {}).get("attempts", 0),
+                        "attempts": prev_attempts,
                     }
+
+                    if prev_attempts >= self.MAX_RECOVERY_ATTEMPTS:
+                        # ── Auto-blacklist: symbol is toxic ─────────
+                        _LOG.critical(
+                            "SymmetryGuard: %s exhausted %d attempts → BLACKLISTING",
+                            symbol, prev_attempts,
+                        )
+                        try:
+                            from runtime.core.toxic_symbols import get_toxic_registry
+                            error_code = ""
+                            for code in self._RECOVERABLE_CODES:
+                                if code in error:
+                                    error_code = code
+                                    break
+                            get_toxic_registry().blacklist(
+                                symbol, reason=reason, error_code=error_code,
+                            )
+                        except Exception as _te:
+                            _LOG.error("Failed to blacklist %s: %s", symbol, _te)
+
                     _LOG.warning(
-                        "SymmetryGuard: SYMBOL PAUSED %s (recoverable). "
+                        "SymmetryGuard: SYMBOL PAUSED %s (attempt %d/%d). "
                         "Other symbols continue. Error: %s",
-                        symbol, error[:200],
+                        symbol, prev_attempts, self.MAX_RECOVERY_ATTEMPTS,
+                        error[:200],
                     )
                     try:
                         from runtime.core.alert_dispatcher import get_alert_dispatcher

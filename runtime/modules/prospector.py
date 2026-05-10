@@ -510,12 +510,22 @@ class DorothyProspector:
         await asyncio.sleep(0.3)
 
         # ── Step 3: Filter candidates ─────────────────────────────
+        # Load toxic blacklist to exclude symbols with known failures
+        try:
+            from runtime.core.toxic_symbols import get_toxic_registry
+            _toxic = get_toxic_registry()
+        except Exception:
+            _toxic = None
+
         candidates: list[SymbolProfile] = []
         for t in (tickers if isinstance(tickers, list) else []):
             sym = str(t.get("symbol", ""))
             if not sym.endswith("USDT"):
                 continue
             if sym not in sym_filters:
+                continue
+            if _toxic and _toxic.is_blacklisted(sym):
+                _LOG.debug("Prospector: skipping %s (toxic blacklist)", sym)
                 continue
 
             vol = float(t.get("quoteVolume", "0"))
