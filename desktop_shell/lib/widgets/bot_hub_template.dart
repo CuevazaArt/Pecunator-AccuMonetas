@@ -66,9 +66,9 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   void initState() {
     super.initState();
     _refresh();
-    // Fallback REST polling — 30s (WebSocket provides real-time updates)
+    // Fallback REST polling — 60s (WebSocket provides real-time updates)
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 60),
       (_) => _refreshSilent(),
     );
   }

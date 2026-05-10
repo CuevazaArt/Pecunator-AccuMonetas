@@ -247,8 +247,6 @@ class TelemetryHub {
       const Duration(seconds: 8),
       (_) => _fallbackPoll(),
     );
-    // Also poll immediately
-    _fallbackPoll();
   }
 
   Future<void> _fallbackPoll() async {

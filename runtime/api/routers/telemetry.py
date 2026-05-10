@@ -141,9 +141,9 @@ async def equity_history(
         rows = tc.history(minutes=minutes, limit=limit)
         # Map to the equity chart expected format
         points = [
-            {"ts": r["ts_utc"], "equity": r.get("equity_usdt"), "capital": r.get("free_usdt")}
+            {"ts": r["ts_utc"], "equity": r.get("equity_usdt", 0), "capital": r.get("free_usdt", 0)}
             for r in rows
-            if r.get("equity_usdt")
+            if r.get("equity_usdt") is not None
         ]
         return {"points": points, "count": len(points), "minutes": minutes}
     except Exception:

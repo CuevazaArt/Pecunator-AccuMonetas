@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../services/telemetry_hub.dart';
 
 /// Improved Order Ledger panel — list view with expandable order details.
 /// Shows recent orders with side color coding, timestamps, and full
 /// order metadata when expanded.
+///
+/// Data flow: WebSocket push (primary) → REST fallback (120s).
 class OrderLedgerPanel extends StatefulWidget {
   final EngineApi api;
   const OrderLedgerPanel({super.key, required this.api});
@@ -15,6 +18,7 @@ class OrderLedgerPanel extends StatefulWidget {
 
 class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
   Timer? _timer;
+  StreamSubscription<TelemetrySnapshot>? _hubSub;
   Map<String, dynamic> _stats = {};
   List<dynamic> _orders = [];
   String? _expandedOrderId;
@@ -22,14 +26,29 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
   @override
   void initState() {
     super.initState();
-    _poll();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) => _poll());
+    _poll(); // initial load via REST
+    // WebSocket push — primary data source
+    _hubSub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
+    // REST fallback — reduced to 120s (WS delivers every 10s)
+    _timer = Timer.periodic(const Duration(seconds: 120), (_) => _poll());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _hubSub?.cancel();
     super.dispose();
+  }
+
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    final wsStats = snap.orderLedgerStats;
+    final wsRecent = snap.orderLedgerRecent;
+    if (wsStats == null && wsRecent.isEmpty) return; // no ledger data in this tick
+    setState(() {
+      if (wsStats != null) _stats = wsStats;
+      if (wsRecent.isNotEmpty) _orders = wsRecent;
+    });
   }
 
   Future<void> _poll() async {

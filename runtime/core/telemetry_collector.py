@@ -170,10 +170,12 @@ class TelemetryCollector:
                     break
 
         margin_usdt = max(0.0, equity - free_usdt - locked_usdt)
-        snapshot["equity_usdt"] = equity if equity > 0 else None
-        snapshot["free_usdt"] = free_usdt if equity > 0 else None
-        snapshot["locked_usdt"] = locked_usdt if equity > 0 else None
-        snapshot["margin_usdt"] = margin_usdt if equity > 0 else None
+        # Always emit numeric values — let the UI decide how to render zero.
+        # Sending None caused the frontend to discard ticks, freezing charts.
+        snapshot["equity_usdt"] = equity
+        snapshot["free_usdt"] = free_usdt
+        snapshot["locked_usdt"] = locked_usdt
+        snapshot["margin_usdt"] = margin_usdt
 
         # -- API weight --
         snapshot["used_weight_1m"] = getattr(state, "api_weight_used_1m", None) if state else None

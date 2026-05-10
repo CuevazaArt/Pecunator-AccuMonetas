@@ -8,14 +8,12 @@ import 'chart_primitives.dart';
 /// Receives live data via WebSocket push from TelemetryHub.
 class MiniWeightChart extends StatefulWidget {
   final EngineApi api;
-  final Duration syncInterval;
   final Duration timeWindow;
   final double height;
 
   const MiniWeightChart({
     super.key,
     required this.api,
-    this.syncInterval = const Duration(seconds: 2),
     this.timeWindow = const Duration(minutes: 10),
     this.height = 48,
   });
