@@ -48,8 +48,6 @@ class BotService(BaseHubService):
             max_drawdown_pct=Decimal(str(kwargs.get("max_drawdown_pct", "0.20"))),
             stop_loss_pct=Decimal(str(kwargs.get("stop_loss_pct", "0.10"))),
             metrics_interval_cycles=int(kwargs.get("metrics_interval_cycles", 5)),
-            simulated=False,  # DEPRECATED: always LIVE
-            trading_enabled=True,  # DEPRECATED: always enabled, other guards handle moderation
         )
         cfg.normalize()
         return cfg
@@ -158,8 +156,8 @@ class BotService(BaseHubService):
                         str(cfg.note or ""),
                         str(cfg.max_drawdown_pct), str(cfg.stop_loss_pct),
                         int(cfg.metrics_interval_cycles),
-                        1 if cfg.simulated else 0,
-                        1 if cfg.trading_enabled else 0,
+                        0,  # simulated: always LIVE
+                        1,  # trading_enabled: always active
                         1 if rec.desired_running else 0,
                     ),
                 )
@@ -201,8 +199,6 @@ class BotService(BaseHubService):
                 max_drawdown_pct=str(row["max_drawdown_pct"] or "0.20"),
                 stop_loss_pct=str(row["stop_loss_pct"] or "0.10"),
                 metrics_interval_cycles=int(row["metrics_interval_cycles"] or 5),
-                simulated=bool(int(row["simulated"])),
-                trading_enabled=bool(int(row["trading_enabled"])),
             )
             runner = self._make_runner(
                 self._runner_log_sink(bot_id),
@@ -273,8 +269,7 @@ class BotService(BaseHubService):
             "max_drawdown_pct": str(old_cfg.max_drawdown_pct),
             "stop_loss_pct": str(old_cfg.stop_loss_pct),
             "metrics_interval_cycles": old_cfg.metrics_interval_cycles,
-            "simulated": old_cfg.simulated,
-            "trading_enabled": old_cfg.trading_enabled,
+
         }
         for k, v in kwargs.items():
             if v is not None:
@@ -318,8 +313,6 @@ class BotService(BaseHubService):
             "running": p["running"],
             "preset_id": p.get("preset_id"),
             "symbol": p.get("symbol"),
-            "simulated": p.get("simulated"),
-            "trading_enabled": p.get("trading_enabled"),
             "loop_interval_sec": p.get("loop_interval_sec"),
             "last_cycle_ts": p["last_cycle_ts"],
             "last_error": p["last_error"],

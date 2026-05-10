@@ -345,9 +345,6 @@ class EngineApi {
 
   // ── v0.11 Risk Control endpoints ─────────────────────────────────
 
-  Future<Map<String, dynamic>> budgetGuardStatus() =>
-      _client.get('/api/v1/budget-guard/status');
-
   Future<Map<String, dynamic>> orderLedgerStats() =>
       _client.get('/api/v1/order-ledger/stats');
 

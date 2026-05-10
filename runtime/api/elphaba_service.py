@@ -146,7 +146,7 @@ class ElphabaService(BaseHubService):
                         str(cfg.max_drawdown_pct),
                         int(cfg.metrics_interval_cycles),
                         int(cfg.max_rungs_per_symbol),
-                        1 if cfg.trading_enabled else 0,
+                        1,  # trading_enabled: always active
                         1 if rec.desired_running else 0,
                     ),
                 )
@@ -188,7 +188,6 @@ class ElphabaService(BaseHubService):
                 max_drawdown_pct=str(row["max_drawdown_pct"] or "0.20"),
                 metrics_interval_cycles=int(row["metrics_interval_cycles"] or 5),
                 max_rungs_per_symbol=int(row["max_rungs_per_symbol"] or 3),
-                trading_enabled=bool(int(row["trading_enabled"])),
             )
             runner = self._make_runner(
                 self._runner_log_sink(bot_id),
@@ -258,7 +257,7 @@ class ElphabaService(BaseHubService):
             "max_drawdown_pct": str(old_cfg.max_drawdown_pct),
             "metrics_interval_cycles": old_cfg.metrics_interval_cycles,
             "max_rungs_per_symbol": old_cfg.max_rungs_per_symbol,
-            "trading_enabled": old_cfg.trading_enabled,
+
         }
         for k, v in kwargs.items():
             if v is not None:

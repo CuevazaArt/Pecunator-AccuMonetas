@@ -380,8 +380,6 @@ class DorothyRunner(BaseStrategyRunner):
         report: dict[str, Any] = {
             "preset_id": c.preset_id,
             "symbol": symbol,
-            "simulated": c.simulated,
-
             "open_orders_count": len(open_orders),
             "has_sell_limit_anchor": lowest_sell is not None,
             "market_price": str(market_price),
