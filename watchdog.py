@@ -37,20 +37,33 @@ def check_health() -> bool:
 
 
 def kill_port_8000() -> None:
-    """Kill any process on port 8000."""
+    """Kill any process on port 8000 (cross-platform)."""
     try:
-        result = subprocess.run(
-            ["netstat", "-ano", "-p", "tcp"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for line in result.stdout.splitlines():
-            if ":8000" in line and "LISTENING" in line:
-                parts = line.strip().split()
-                pid = parts[-1]
-                if pid.isdigit() and int(pid) > 0:
+        if os.name == "nt":
+            # Windows: netstat + taskkill
+            result = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                if ":8000" in line and "LISTENING" in line:
+                    parts = line.strip().split()
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) > 0:
+                        print(f"   ⚠️  Killing stale PID {pid} on :8000")
+                        subprocess.run(["taskkill", "/F", "/PID", pid],
+                                       capture_output=True, timeout=5)
+                        time.sleep(1)
+        else:
+            # POSIX (Linux/macOS): lsof + kill
+            result = subprocess.run(
+                ["lsof", "-ti", "tcp:8000"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for pid in result.stdout.strip().splitlines():
+                if pid.strip().isdigit():
                     print(f"   ⚠️  Killing stale PID {pid} on :8000")
-                    subprocess.run(["taskkill", "/F", "/PID", pid],
-                                   capture_output=True, timeout=5)
+                    os.kill(int(pid), signal.SIGTERM)
                     time.sleep(1)
     except Exception as e:
         print(f"   (port cleanup skipped: {e})")

@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 import math
 import statistics
+import time
+import traceback
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
@@ -188,7 +189,7 @@ def _compute_choppiness(highs: list[float], lows: list[float], closes: list[floa
     return max(0.0, min(100.0, chop))
 
 
-import traceback  # added for detailed error logging
+
 
 def _compute_speed_and_frequency(
     closes: list[float],
@@ -440,7 +441,7 @@ class DorothyProspector:
     ANALYSIS_POOL_SIZE = 30
     # Per-call timeout (seconds) to prevent hanging on unresponsive API
     API_CALL_TIMEOUT = 30
-    MARGIN_CALL_TIMEOUT = 10  # shorter — most likely to fail without creds
+
 
     def __init__(self) -> None:
         self._last_scan: Optional[list[SymbolProfile]] = None
@@ -657,8 +658,8 @@ class DorothyProspector:
                 # Determine standard loop interval (L0 defaults)
                 loop_interval = 450.0 
                 # Avoid staging if this symbol is already running in Dorothy
-                already_active = any(b.bot_id.endswith(rec.symbol.lower()) for b in coordinator._active.values())
-                already_staged = any(s.bot_id.endswith(rec.symbol.lower()) for s in coordinator._staged.values())
+                already_active = coordinator.has_active_symbol(rec.symbol)
+                already_staged = coordinator.has_staged_symbol(rec.symbol)
                 
                 if not already_active and not already_staged:
                     bot_id = f"dorothy-{rec.symbol.lower()}-auto"

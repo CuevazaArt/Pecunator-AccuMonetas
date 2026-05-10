@@ -184,6 +184,16 @@ class BotCoordinator:
         self._active.pop(bot_id, None)
         self._staged.pop(bot_id, None)
 
+    def has_active_symbol(self, symbol_suffix: str) -> bool:
+        """Thread-safe check: is any active bot targeting this symbol?"""
+        suffix = symbol_suffix.lower()
+        return any(b.bot_id.endswith(suffix) for b in list(self._active.values()))
+
+    def has_staged_symbol(self, symbol_suffix: str) -> bool:
+        """Thread-safe check: is any staged bot targeting this symbol?"""
+        suffix = symbol_suffix.lower()
+        return any(s.bot_id.endswith(suffix) for s in list(self._staged.values()))
+
     def report_cycle(self, bot_id: str) -> None:
         """Report that a bot just completed a cycle."""
         bot = self._active.get(bot_id)

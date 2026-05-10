@@ -52,16 +52,9 @@ def main() -> None:
     _configure_logging()
     lo = logging.getLogger("pecunator.engine")
 
-    # ── AutoPilot mode: full autonomous operation ──
-    if "--autopilot" in sys.argv or os.environ.get("PECUNATOR_AUTOPILOT", "").strip().lower() in ("1", "true"):
-        lo.info("Starting in AUTOPILOT mode (full autonomous)")
-        try:
-            from runtime.core.autopilot import run_autopilot
-        except ImportError:
-            lo.error("AutoPilot module not installed — runtime.core.autopilot is missing")
-            sys.exit(1)
-        run_autopilot()
-        return
+    # NOTE: --autopilot mode was removed in v3.1.x.
+    # Autonomous operation is handled by the Dorothy⇄Elphaba hub loop
+    # with ApiFuse, SymmetryGuard, and BudgetGuard as active governors.
 
     if os.environ.get("PECUNATOR_ENGINE_STUB", "").strip().lower() in ("1", "true", "yes"):
         lo.info(
