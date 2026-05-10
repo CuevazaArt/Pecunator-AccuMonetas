@@ -16,7 +16,8 @@ import uuid
 
 from runtime.api.base_hub_service import BaseHubService, BotRecord
 from runtime.core.db_util import open_db
-from runtime.modules.bots.dorothy import DorothyConfig, DorothyRunner
+from runtime.bot.dorothy import DorothyConfig, DorothyRunner
+from runtime.bot.elphaba import ElphabaConfig, ElphabaRunner
 
 
 class BotService(BaseHubService):

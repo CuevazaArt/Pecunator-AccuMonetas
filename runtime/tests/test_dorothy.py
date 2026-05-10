@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from runtime.modules.bots.dorothy import DorothyConfig, DorothyRunner
+from runtime.bot.dorothy import DorothyConfig, DorothyRunner
 
 
 class TestDorothyConfig:

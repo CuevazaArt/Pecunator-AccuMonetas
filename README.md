@@ -42,6 +42,16 @@ The engine auto-generates a bearer token on first boot at `runtime/data/api.toke
 - OpenAPI: [`http://127.0.0.1:8000/docs`](http://127.0.0.1:8000/docs)  
 - Solo stub de log (sin servidor): `PECUNATOR_ENGINE_STUB=1 python main.py`
 
+### Política de Despliegue en Producción (Explicit Deployment)
+
+El entorno de producción opera bajo una estricta política de **despliegue explícito**. El motor *no* hace `git pull` de manera automática al arrancar. Esto previene que código no probado (o con conflictos) se introduzca a producción inadvertidamente, lo que es vital al operar capital real.
+
+**Procedimiento de actualización por el operador:**
+1. Detener el motor de forma ordenada (apagar Gateway en el UI y detener el proceso Python).
+2. Traer los cambios: `git pull origin main` (verificando que la firma del commit es segura).
+3. Confirmar que los tests pasan: `pytest runtime/tests/ -x`
+4. Reiniciar el motor mediante el script correspondiente.
+
 Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/api/`).
 
 ### Estructura modular del repo (raíz)

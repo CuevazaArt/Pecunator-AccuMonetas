@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Production Hardening & Security (v3.7.5+)
+
+- **Explicit Deployment:** Removed dangerous auto-update loops (`git pull` at startup) to guarantee predictable and tested deployments.
+- **Security Audit:** Added a `CRITICAL` startup log if the engine runs with `PECUNATOR_API_AUTH_DISABLED=1` in production.
+- **Environment Schema:** Introduced `.env.example` mapping all environment toggles (`PECUNATOR_LOG_LEVEL`, `PECUNATOR_API_PORT`, `PECUNATOR_ALERT_TELEGRAM_TOKEN`, etc.) for seamless dev-to-prod transition.
+- **Alert Dispatcher Integration:** `AlertDispatcher` now pushes events asynchronously via Telegram Webhook (if token and chat ID are configured).
+- **UI Architecture Cleanup:** Centralized base engine URLs and app version strings into `app_config.dart`.
+- **Bot Orchestration Visibility:** Staged and running instances (Dorothy & Elphaba) are now sorted newest-to-oldest in the Hub UI.
+- **State Reliability:** Re-anchored the emergency `PANIC.lock` sentinel to the strictly managed `data_dir` configuration rather than dynamic relative paths.
+- **Clean Repository:** Purged all execution-time debris (e.g. `backend.log*`, `scratch/`, `vmo_captures/`, `analyze_out.txt`) from Git tracking. Removed redundant `launch.py` shims.
+- **Test Integrity:** Added `autouse` module-reset fixtures in `conftest.py` ensuring pure isolation between tests for Singleton architectures.
+
 ### Runtime immortality / auto-recovery
 
 - Added persistent `dorothy_instances` state in `runtime/data/dorothy_hub.sqlite` including `desired_running`.
