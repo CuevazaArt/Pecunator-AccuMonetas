@@ -11,6 +11,7 @@ class StatusLights extends StatelessWidget {
   final int botsRunning;
   final int botsTotal;
   final String? hubName;
+  final bool wsConnected;
 
   const StatusLights({
     super.key,
@@ -19,6 +20,7 @@ class StatusLights extends StatelessWidget {
     required this.botsRunning,
     required this.botsTotal,
     this.hubName,
+    this.wsConnected = false,
   });
 
   @override
@@ -26,6 +28,12 @@ class StatusLights extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        _light(
+          'WS',
+          wsConnected,
+          wsConnected ? const Color(0xFF00E5FF) : Colors.grey,
+        ),
+        const SizedBox(width: 4),
         _light(
           'GW',
           gatewayRunning,

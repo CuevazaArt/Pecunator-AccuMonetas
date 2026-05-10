@@ -10,7 +10,6 @@ class MiniEquityChart extends StatefulWidget {
   final EngineApi api;
   final String label;
   final Color color;
-  final Duration syncInterval;
   final Duration timeWindow;
   final double height;
   final String? subaccountId;
@@ -20,7 +19,6 @@ class MiniEquityChart extends StatefulWidget {
     required this.api,
     this.label = 'Equity',
     this.color = const Color(0xFF00E676),
-    this.syncInterval = const Duration(seconds: 5),
     this.timeWindow = const Duration(minutes: 30),
     this.height = 48,
     this.subaccountId,
@@ -55,12 +53,24 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
 
   void _onTelemetryTick(TelemetrySnapshot snap) {
     if (!mounted) return;
-    if (snap.equity <= 0) return;
+
+    // Primary source: equity_usdt from TELEMETRY_TICK
+    double equity = snap.equity;
+
+    // Fallback: extract equity from gateway_snapshot if primary is zero
+    if (equity <= 0 && snap.gatewaySnapshot != null) {
+      final gwEquity = snap.gatewaySnapshot!['account_equity'];
+      if (gwEquity is Map) {
+        equity = double.tryParse('${gwEquity['current']}') ?? 0;
+      }
+    }
+
+    if (equity <= 0) return;
 
     final now = DateTime.now();
     final cutoff = now.subtract(widget.timeWindow);
     setState(() {
-      _data.add(ChartSample(now, snap.equity));
+      _data.add(ChartSample(now, equity));
       _data.removeWhere((s) => s.time.isBefore(cutoff));
       if (_startEquity == 0 && _data.isNotEmpty) {
         _startEquity = _data.first.value.toDouble();

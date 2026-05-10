@@ -191,6 +191,9 @@ class TelemetryHub {
   /// Whether the WebSocket is connected.
   bool get isWsConnected => _wsConnected;
 
+  /// Stream of WebSocket connection state changes.
+  Stream<bool>? get connectionStream => _socket?.connectionStream;
+
   /// Initialize the hub — connects WebSocket and sets up REST fallback.
   void init({required EngineApi api}) {
     if (_socket != null) return; // already initialized

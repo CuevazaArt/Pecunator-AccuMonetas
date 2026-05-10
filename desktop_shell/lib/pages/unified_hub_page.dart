@@ -31,6 +31,8 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
   bool _fuseTripped = false;
   bool _gatewayRunning = false;
+  bool _wsConnected = false;
+  StreamSubscription<bool>? _wsStateSub;
 
   // Bot lists — now received via WebSocket telemetry push (no REST polling)
   List<Map<String, dynamic>> _dorothyBots = [];
@@ -47,11 +49,16 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
     // Subscribe to WebSocket-pushed telemetry for ALL state (gateway, fuse, bots)
     _telemetrySub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
+    // Track WebSocket connection state for the WS status indicator
+    _wsStateSub = TelemetryHub.instance.connectionStream?.listen((connected) {
+      if (mounted) setState(() => _wsConnected = connected);
+    });
   }
 
   @override
   void dispose() {
     _telemetrySub?.cancel();
+    _wsStateSub?.cancel();
     super.dispose();
   }
 
@@ -171,7 +178,6 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     label: 'Equity',
                     color: const Color(0xFF00E676),
                     height: 54,
-                    syncInterval: const Duration(seconds: 8),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -181,6 +187,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                   fuseTripped: _fuseTripped,
                   botsRunning: _botsRunning,
                   botsTotal: _botsTotal,
+                  wsConnected: _wsConnected,
                 ),
               ],
             ),
