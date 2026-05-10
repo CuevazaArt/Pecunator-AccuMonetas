@@ -80,8 +80,11 @@ def main() -> None:
     _configure_logging()
     lo = logging.getLogger("pecunator.engine")
 
-    # ── Auto-update: pull latest code before starting ──────────
-    _auto_update()
+    # ── Auto-update: only when explicitly opted-in ──────────
+    if os.environ.get("PECUNATOR_AUTO_UPDATE", "").strip().lower() in ("1", "true", "yes"):
+        _auto_update()
+    else:
+        lo.info("AUTO-UPDATE: disabled (set PECUNATOR_AUTO_UPDATE=1 to enable)")
 
     # NOTE: --autopilot mode was removed in v3.1.x.
     # Autonomous operation is handled by the Dorothy/Elphaba symmetric hub loop

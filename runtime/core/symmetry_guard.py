@@ -175,8 +175,8 @@ class SymmetryGuard:
                     try:
                         from runtime.core.alert_dispatcher import get_alert_dispatcher
                         get_alert_dispatcher().warning("SYMBOL_PAUSED", f"{symbol}: {error[:200]}")
-                    except Exception:
-                        pass
+                    except Exception as _ae:
+                        _LOG.warning("alert_dispatcher:SYMBOL_PAUSED failed: %s", _ae)
                 else:
                     # ── Global hub pause (non-recoverable) ──────────
                     self._hub_paused = True
@@ -186,8 +186,8 @@ class SymmetryGuard:
                     try:
                         from runtime.core.alert_dispatcher import get_alert_dispatcher
                         get_alert_dispatcher().critical("HUB_PAUSED", self._pause_reason)
-                    except Exception:
-                        pass
+                    except Exception as _ae:
+                        _LOG.warning("alert_dispatcher:HUB_PAUSED failed: %s", _ae)
 
     @staticmethod
     def _extract_symbol(bot_key: str) -> str:
@@ -327,7 +327,7 @@ class SymmetryGuard:
         async def _run(fn: Any) -> Any:
             if _to_thread:
                 return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         health = HubHealth(ts=time.time())
 
@@ -583,7 +583,7 @@ class SymmetryGuard:
         async def _run(fn: Any) -> Any:
             if _to_thread:
                 return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         MIN = self.MIN_RESERVE_USDT
         result: dict[str, Any] = {"action": "NONE", "trend": active_trend}
@@ -605,8 +605,8 @@ class SymmetryGuard:
                 assets = iso.get("assets", [])
                 if assets:
                     margin_free = _dec(assets[0].get("quoteAsset", {}).get("free", "0"), "0")
-            except Exception:
-                pass  # Margin wallet may not exist yet
+            except Exception as _me:
+                _LOG.debug("Margin wallet query failed (may not exist): %s", _me)
 
             total = spot_free + margin_free
             result["spot_before"] = str(spot_free)

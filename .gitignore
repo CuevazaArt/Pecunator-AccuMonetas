@@ -40,3 +40,4 @@ scratch_*.py
 *.sqlite
 scratch_db.py
 *.log
+backend.log.*
