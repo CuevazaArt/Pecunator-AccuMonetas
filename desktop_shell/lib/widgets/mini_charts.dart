@@ -69,7 +69,7 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
       final now = DateTime.now();
       final cutoff = now.subtract(widget.timeWindow);
       setState(() {
-        if (used != null) _data.add(_Sample(now, used));
+        if (used != null) _data.add(_Sample(now, used.toDouble()));
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         _weightLimit = limit > 0 ? limit : 6000;
         // Derive fuse-like state from weight percentage (>90% = danger)
@@ -229,7 +229,7 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       final now = DateTime.now();
       final cutoff = now.subtract(widget.timeWindow);
       setState(() {
-        _data.add(_Sample(now, equity.round()));
+        _data.add(_Sample(now, equity));
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         if (_startEquity == 0 && _data.isNotEmpty) {
           _startEquity = _data.first.value.toDouble();
@@ -410,7 +410,7 @@ class StatusLights extends StatelessWidget {
 
 class _Sample {
   final DateTime time;
-  final int value;
+  final double value;
   const _Sample(this.time, this.value);
 }
 
@@ -432,10 +432,10 @@ class _SparklinePainter extends CustomPainter {
     if (data.length < 2) return;
 
     final effectiveMaxY =
-        maxY ?? data.map((d) => d.value).reduce(math.max).toDouble() * 1.1;
+        maxY ?? data.map((d) => d.value).reduce(math.max) * 1.1;
     final effectiveMinY = maxY != null
         ? 0.0
-        : data.map((d) => d.value).reduce(math.min).toDouble() * 0.95;
+        : data.map((d) => d.value).reduce(math.min) * 0.95;
     final rangeY = effectiveMaxY - effectiveMinY;
     if (rangeY <= 0) return;
 
@@ -557,7 +557,8 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.data.length != data.length || old.color != color;
+      old.data.length != data.length || old.color != color ||
+      (data.isNotEmpty && old.data.isNotEmpty && old.data.last.value != data.last.value);
 }
 
 /// Weight oscillator with adjustable sync interval and time window.
@@ -631,7 +632,7 @@ class _WeightOscillatorState extends State<WeightOscillator> {
       final cutoff = now.subtract(Duration(minutes: _windowMin));
       setState(() {
         if (used != null) {
-          _data.add(_Sample(now, used));
+          _data.add(_Sample(now, used.toDouble()));
         }
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         _weightLimit = limit > 0 ? limit : 6000;
