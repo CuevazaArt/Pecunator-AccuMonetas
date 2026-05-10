@@ -317,52 +317,54 @@ class DorothyRunner(BaseStrategyRunner):
         # ── EVI GATE: Electric Volatility Index check ──────────────
         # Replaces legacy dual-gate TrendSignal with inline EVI computation.
         # Gate 1 (EVI): Symbol must have minimum volatility profile for DCA
-        # Gate 2 (Anti-peak): price < 1h candle open → avoid buying at tops
-        try:
-            from runtime.modules.prospector import compute_oscillation_score
+        # Gate 2 (EVI): DISABLED — operator override 2026-05-10.
+        # Rationale: EVI threshold blocks ALL entries in lateral markets,
+        # preventing bots from acting on valid entry signals.
+        # To re-enable: remove the `if False` guard below.
+        if False:  # EVI gate disabled — bots trade on entry signal + trend only
+            try:
+                from runtime.modules.prospector import compute_oscillation_score
 
-            # Fetch 1h klines for EVI computation (cached per cycle)
-            _evi_cache_key = f"_evi_{symbol}"
-            _cached = getattr(self, _evi_cache_key, None)
-            _cache_age = time.time() - getattr(self, f"{_evi_cache_key}_ts", 0)
-            if _cached is None or _cache_age > 3600:  # refresh every hour
-                klines_1h = await self._to_thread(
-                    lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=50)
-                )
-                _evi_data = compute_oscillation_score(klines_1h) if klines_1h and len(klines_1h) >= 20 else None
-                setattr(self, _evi_cache_key, _evi_data)
-                setattr(self, f"{_evi_cache_key}_ts", time.time())
-            else:
-                _evi_data = _cached
+                _evi_cache_key = f"_evi_{symbol}"
+                _cached = getattr(self, _evi_cache_key, None)
+                _cache_age = time.time() - getattr(self, f"{_evi_cache_key}_ts", 0)
+                if _cached is None or _cache_age > 3600:
+                    klines_1h = await self._to_thread(
+                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=50)
+                    )
+                    _evi_data = compute_oscillation_score(klines_1h) if klines_1h and len(klines_1h) >= 20 else None
+                    setattr(self, _evi_cache_key, _evi_data)
+                    setattr(self, f"{_evi_cache_key}_ts", time.time())
+                else:
+                    _evi_data = _cached
 
-            if _evi_data:
-                evi_score = _evi_data.get("evi_score", 0)
-                evi_threshold = float(c.evi_min_threshold)
-                self._emit("INFO", "dorothy:evi_gate", {
-                    "symbol": symbol,
-                    "evi_score": round(evi_score, 4),
-                    "evi_threshold": evi_threshold,
-                    "atr_pct": round(_evi_data.get("atr_pct", 0), 4),
-                    "choppiness": round(_evi_data.get("choppiness", 0), 2),
-                    "adx": round(_evi_data.get("adx", 0), 2),
-                    "market_price": str(market_price),
-                    "gate": "OPEN" if evi_score >= evi_threshold else "BLOCKED",
-                })
-
-                if evi_score < evi_threshold:
-                    return {
-                        "preset_id": c.preset_id, "symbol": symbol,
-
-                        "decision": "WAIT_EVI_LOW",
+                if _evi_data:
+                    evi_score = _evi_data.get("evi_score", 0)
+                    evi_threshold = float(c.evi_min_threshold)
+                    self._emit("INFO", "dorothy:evi_gate", {
+                        "symbol": symbol,
                         "evi_score": round(evi_score, 4),
                         "evi_threshold": evi_threshold,
+                        "atr_pct": round(_evi_data.get("atr_pct", 0), 4),
+                        "choppiness": round(_evi_data.get("choppiness", 0), 2),
+                        "adx": round(_evi_data.get("adx", 0), 2),
                         "market_price": str(market_price),
-                        "loop_interval_sec": c.loop_interval_sec,
-                    }
+                        "gate": "OPEN" if evi_score >= evi_threshold else "BLOCKED",
+                    })
 
-        except Exception as evi_err:
-            # Fail-open: if EVI computation fails, allow trading (conservative)
-            self._emit("WARNING", f"dorothy:evi_gate_error: {evi_err}")
+                    if evi_score < evi_threshold:
+                        return {
+                            "preset_id": c.preset_id, "symbol": symbol,
+
+                            "decision": "WAIT_EVI_LOW",
+                            "evi_score": round(evi_score, 4),
+                            "evi_threshold": evi_threshold,
+                            "market_price": str(market_price),
+                            "loop_interval_sec": c.loop_interval_sec,
+                        }
+
+            except Exception as evi_err:
+                self._emit("WARNING", f"dorothy:evi_gate_error: {evi_err}")
 
         # ── DCA entry logic (only reached when both gates are open) ──
         should_buy = False
