@@ -336,15 +336,15 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
           ),
           // Right: capital breakdown
           Padding(
-            padding: const EdgeInsets.only(left: 2, right: 6),
+            padding: const EdgeInsets.only(left: 4, right: 6),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 _capitalRow('FREE', _free, const Color(0xFF00E676)),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 _capitalRow('LOCK', _locked, const Color(0xFFFFEA00)),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 _capitalRow('MRGN', _margin, const Color(0xFF00B0FF)),
               ],
             ),
@@ -359,8 +359,8 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 4,
-          height: 4,
+          width: 5,
+          height: 5,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color,
@@ -373,8 +373,8 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
         Text(
           label,
           style: TextStyle(
-            fontSize: 7,
-            color: color.withValues(alpha: 0.7),
+            fontSize: 8,
+            color: color.withValues(alpha: 0.8),
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -382,10 +382,10 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
         Text(
           '\$${value.toStringAsFixed(2)}',
           style: TextStyle(
-            fontSize: 7,
+            fontSize: 8,
             color: color,
             fontFamily: 'monospace',
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],

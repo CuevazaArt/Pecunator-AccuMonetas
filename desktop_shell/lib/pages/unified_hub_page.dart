@@ -146,17 +146,17 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                 // Weight chart
                 Expanded(
                   flex: 4,
-                  child: MiniWeightChart(api: _api, height: 48),
+                  child: MiniWeightChart(api: _api, height: 54),
                 ),
                 const SizedBox(width: 4),
-                // Equity chart
+                // Equity chart + capital breakdown
                 Expanded(
-                  flex: 4,
+                  flex: 5,
                   child: MiniEquityChart(
                     api: _api,
                     label: 'Equity',
                     color: const Color(0xFF00E676),
-                    height: 48,
+                    height: 54,
                     syncInterval: const Duration(seconds: 8),
                   ),
                 ),
