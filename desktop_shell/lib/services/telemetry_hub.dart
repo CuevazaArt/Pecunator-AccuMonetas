@@ -62,6 +62,10 @@ class TelemetrySnapshot {
   // Gateway
   final bool gatewayRunning;
 
+  // Bot detail lists (pushed via WS — eliminates REST polling)
+  final List<Map<String, dynamic>> dorothyBots;
+  final List<Map<String, dynamic>> elphabaBots;
+
   const TelemetrySnapshot({
     required this.timestamp,
     this.equity = 0,
@@ -81,6 +85,8 @@ class TelemetrySnapshot {
     this.apiFuseOk = true,
     this.orderFuseOk = true,
     this.gatewayRunning = false,
+    this.dorothyBots = const [],
+    this.elphabaBots = const [],
   });
 
   factory TelemetrySnapshot.fromPayload(Map<String, dynamic> payload) {
@@ -103,6 +109,8 @@ class TelemetrySnapshot {
       apiFuseOk: (payload['api_fuse_ok'] ?? 1) == 1,
       orderFuseOk: (payload['order_fuse_ok'] ?? 1) == 1,
       gatewayRunning: (payload['gateway_running'] ?? 0) == 1,
+      dorothyBots: _toBotList(payload['dorothy_bots']),
+      elphabaBots: _toBotList(payload['elphaba_bots']),
     );
   }
 
@@ -128,6 +136,16 @@ class TelemetrySnapshot {
     if (v is int) return v;
     if (v is double) return v.toInt();
     return int.tryParse('$v') ?? fallback;
+  }
+
+  static List<Map<String, dynamic>> _toBotList(dynamic v) {
+    if (v == null) return [];
+    if (v is List) {
+      return v
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    }
+    return [];
   }
 }
 

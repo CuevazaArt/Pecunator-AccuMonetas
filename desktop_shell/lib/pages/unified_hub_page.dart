@@ -13,9 +13,9 @@ import '../widgets/order_ledger_panel.dart';
 
 /// Unified hub page — single view for the entire Pecunator operating console.
 ///
-/// Telemetry (weight, equity, fuses, gateway) is received via WebSocket push
-/// from TelemetryHub. Bot lists are polled via REST every 15s (they are not
-/// part of the telemetry snapshot).
+/// All state (telemetry, fuses, gateway, bot lists) is received via WebSocket
+/// push from TelemetryHub. REST is used only for mutations (create/start/stop)
+/// and for one-shot refreshes after those mutations (forcePoll).
 class UnifiedHubPage extends StatefulWidget {
   final String engineBase;
 
@@ -28,12 +28,11 @@ class UnifiedHubPage extends StatefulWidget {
 class UnifiedHubPageState extends State<UnifiedHubPage> {
   late final EngineApi _api;
   StreamSubscription<TelemetrySnapshot>? _telemetrySub;
-  Timer? _botPollTimer;
 
   bool _fuseTripped = false;
   bool _gatewayRunning = false;
 
-  // Bot lists (still fetched via REST — not in telemetry snapshot)
+  // Bot lists — now received via WebSocket telemetry push (no REST polling)
   List<Map<String, dynamic>> _dorothyBots = [];
   List<Map<String, dynamic>> _elphabaBots = [];
 
@@ -46,32 +45,33 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
     _loadPresets();
     _api = EngineApi(widget.engineBase);
 
-    // Subscribe to WebSocket-pushed telemetry for gateway/fuse state
+    // Subscribe to WebSocket-pushed telemetry for ALL state (gateway, fuse, bots)
     _telemetrySub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
-
-    // Poll bot lists via REST (not in telemetry snapshot) — every 15s
-    _pollBots();
-    _botPollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pollBots());
   }
 
   @override
   void dispose() {
     _telemetrySub?.cancel();
-    _botPollTimer?.cancel();
     super.dispose();
   }
 
-  /// Handle a WebSocket telemetry tick.
+  /// Handle a WebSocket telemetry tick — updates gateway, fuse, and bot lists.
   void _onTelemetryTick(TelemetrySnapshot snap) {
     if (!mounted) return;
     setState(() {
       _fuseTripped = snap.fuseTripped;
       _gatewayRunning = snap.gatewayRunning;
+      // Bot lists are now part of the telemetry snapshot
+      if (snap.dorothyBots.isNotEmpty || snap.elphabaBots.isNotEmpty ||
+          snap.botsTotal == 0) {
+        _dorothyBots = snap.dorothyBots;
+        _elphabaBots = snap.elphabaBots;
+      }
     });
   }
 
-  /// Poll bot lists only (not covered by telemetry).
-  Future<void> _pollBots() async {
+  /// Force refresh bot lists after a mutation (create/delete/start/stop).
+  Future<void> forcePoll() async {
     if (!mounted) return;
     try {
       final results = await Future.wait([
@@ -86,10 +86,6 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         _elphabaBots = elpBots;
       });
     } catch (_) {}
-  }
-
-  Future<void> forcePoll() async {
-    _pollBots();
   }
 
   void _loadPresets() {

@@ -31,6 +31,15 @@ from runtime.bot._decimal_utils import dec as _dec
 from runtime.bot._panic import check_panic_lock
 from runtime.core.security_util import sanitize_log_message
 
+# Core singletons — imported at module level to eliminate inline imports
+# in hot-path methods (_loop, _capture_order_rate, _order_fuse_allows).
+from runtime.core.api_fuse import get_api_fuse
+from runtime.core.bot_coordinator import get_bot_coordinator
+from runtime.core.hub_state import get_hub_state
+from runtime.core.market_cache import get_market_cache, MarketCache
+from runtime.core.order_fuse import get_order_fuse
+from runtime.core.weight_governor import get_weight_governor
+
 
 class BaseStrategyRunner:
     """Abstract base for all Pecunator bot runners."""
@@ -143,7 +152,6 @@ class BaseStrategyRunner:
                         from runtime.api import deps
                         deps.get_context().state.order_count_10s = count
                         # Feed Order Fuse
-                        from runtime.core.order_fuse import get_order_fuse
                         get_order_fuse().check_order_count(count)
                     except Exception:
                         pass
@@ -159,7 +167,6 @@ class BaseStrategyRunner:
     def _order_fuse_allows(self) -> bool:
         """Check if the OrderFuse allows placing orders right now."""
         try:
-            from runtime.core.order_fuse import get_order_fuse
             fuse = get_order_fuse()
             if fuse.is_tripped():
                 remaining = fuse.remaining_cooldown_sec()
@@ -229,7 +236,6 @@ class BaseStrategyRunner:
         entire account.
         """
         try:
-            from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
             account = await _cache.get_or_fetch(
                 MarketCache.scoped_key("account", self._api_key),
@@ -394,7 +400,6 @@ class BaseStrategyRunner:
             # If fuse is tripped, skip the cycle but add random jitter
             # so all bots don't converge when the fuse resets.
             try:
-                from runtime.core.api_fuse import get_api_fuse
                 fuse = get_api_fuse()
                 if fuse.is_tripped():
                     remaining = fuse.remaining_cooldown_sec()
@@ -410,7 +415,6 @@ class BaseStrategyRunner:
                 self._log(f"{self.BOT_TYPE}:WARN fuse_check_failed: {_fuse_err}")
             # ── Governor permission gate ─────────────────────────
             try:
-                from runtime.core.weight_governor import get_weight_governor
                 gov = get_weight_governor()
                 bot_key = self._bot_key()
                 wait = gov.request_permission(bot_key)
@@ -442,7 +446,6 @@ class BaseStrategyRunner:
                 
                 # Record decision in Hub State
                 try:
-                    from runtime.core.hub_state import get_hub_state
                     get_hub_state().log_decision(
                         bot_id=self._bot_key(),
                         symbol=rep.get("symbol", getattr(getattr(self, 'config', None), 'symbol', "UNKNOWN")),
@@ -457,7 +460,6 @@ class BaseStrategyRunner:
 
                 # Report cycle to coordinator for phase tracking
                 try:
-                    from runtime.core.bot_coordinator import get_bot_coordinator
                     get_bot_coordinator().report_cycle(self._bot_key())
                 except Exception as _coord_err:
                     self._log(f"{self.BOT_TYPE}:WARN coordinator_report_failed: {_coord_err}")
@@ -481,7 +483,6 @@ class BaseStrategyRunner:
                 )
             # Add coordinator jitter to prevent cycle collisions
             try:
-                from runtime.core.bot_coordinator import get_bot_coordinator
                 jitter = get_bot_coordinator().compute_jitter(self._bot_key())
                 if jitter > 0:
                     sleep_sec += jitter

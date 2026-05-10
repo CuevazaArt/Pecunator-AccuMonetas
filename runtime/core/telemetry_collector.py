@@ -195,13 +195,25 @@ class TelemetryCollector:
         d_total = 0
         e_running = 0
         e_total = 0
+        dorothy_bots_list: list[dict[str, Any]] = []
+        elphaba_bots_list: list[dict[str, Any]] = []
         try:
             from runtime.api import deps
             bot_svc = deps.get_bot()
             for rec in bot_svc._bots.values():
                 d_total += 1
-                if getattr(rec.runner, "running", False):
+                is_running = getattr(rec.runner, "running", False)
+                if is_running:
                     d_running += 1
+                dorothy_bots_list.append({
+                    "bot_id": rec.bot_id,
+                    "tag": rec.tag,
+                    "running": is_running,
+                    "symbol": getattr(rec.runner.config, "symbol", ""),
+                    "preset_id": getattr(rec.runner.config, "preset_id", ""),
+                    "last_cycle_ts": rec.runner.last_cycle_ts,
+                    "last_error": rec.runner.last_error,
+                })
         except Exception:
             pass
         try:
@@ -209,8 +221,18 @@ class TelemetryCollector:
             eph_svc = deps.get_elphaba()
             for rec in eph_svc._bots.values():
                 e_total += 1
-                if getattr(rec.runner, "running", False):
+                is_running = getattr(rec.runner, "running", False)
+                if is_running:
                     e_running += 1
+                elphaba_bots_list.append({
+                    "bot_id": rec.bot_id,
+                    "tag": rec.tag,
+                    "running": is_running,
+                    "symbol": getattr(rec.runner.config, "symbol", ""),
+                    "preset_id": getattr(rec.runner.config, "preset_id", ""),
+                    "last_cycle_ts": rec.runner.last_cycle_ts,
+                    "last_error": rec.runner.last_error,
+                })
         except Exception:
             pass
         snapshot["dorothy_running"] = d_running
@@ -219,6 +241,8 @@ class TelemetryCollector:
         snapshot["elphaba_total"] = e_total
         snapshot["bots_running"] = d_running + e_running
         snapshot["bots_total"] = d_total + e_total
+        snapshot["dorothy_bots"] = dorothy_bots_list
+        snapshot["elphaba_bots"] = elphaba_bots_list
 
         # -- Fuse status --
         snapshot["api_fuse_ok"] = 1
