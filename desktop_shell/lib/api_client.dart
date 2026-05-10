@@ -113,6 +113,10 @@ class EngineApi {
   Future<Map<String, dynamic>> equityHistory({int minutes = 60, int limit = 500}) =>
       _client.get('/api/v1/equity/history?minutes=$minutes&limit=$limit');
 
+  /// Fetch unified telemetry history (equity, weight, orders, fleet, fuses).
+  Future<Map<String, dynamic>> telemetryHistory({int minutes = 60, int limit = 500}) =>
+      _client.get('/api/v1/telemetry/history?minutes=$minutes&limit=$limit');
+
   Future<Map<String, dynamic>> terminalExecute({required String command}) =>
       _client.post('/api/v1/terminal/execute', body: {'command': command});
 

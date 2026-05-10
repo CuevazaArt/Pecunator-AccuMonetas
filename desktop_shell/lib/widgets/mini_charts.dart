@@ -28,10 +28,12 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
   final List<_Sample> _data = [];
   int _weightLimit = 6000;
   bool _fuseTripped = false;
+  bool _historyLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _loadHistory();
     _tick();
     _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
   }
@@ -40,6 +42,34 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Seed weight chart from unified telemetry history.
+  Future<void> _loadHistory() async {
+    if (_historyLoaded) return;
+    try {
+      final resp = await widget.api.telemetryHistory(
+        minutes: widget.timeWindow.inMinutes,
+        limit: 500,
+      );
+      final pts = resp['points'];
+      if (pts is List && pts.isNotEmpty) {
+        final now = DateTime.now();
+        final cutoff = now.subtract(widget.timeWindow);
+        final samples = <_Sample>[];
+        for (final p in pts) {
+          final ts = DateTime.tryParse('${p['ts_utc']}');
+          final w = double.tryParse('${p['used_weight_1m']}') ?? 0;
+          if (ts != null && w > 0 && ts.isAfter(cutoff)) {
+            samples.add(_Sample(ts, w));
+          }
+        }
+        if (samples.isNotEmpty && mounted) {
+          setState(() => _data.insertAll(0, samples));
+        }
+      }
+    } catch (_) {}
+    _historyLoaded = true;
   }
 
   Future<void> _tick() async {
@@ -193,10 +223,12 @@ class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
   final List<_Sample> _data = [];
   int _orderLimit = 100;
   bool _danger = false;
+  bool _historyLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _loadHistory();
     _tick();
     _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
   }
@@ -205,6 +237,34 @@ class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Seed order rate chart from unified telemetry history.
+  Future<void> _loadHistory() async {
+    if (_historyLoaded) return;
+    try {
+      final resp = await widget.api.telemetryHistory(
+        minutes: widget.timeWindow.inMinutes,
+        limit: 500,
+      );
+      final pts = resp['points'];
+      if (pts is List && pts.isNotEmpty) {
+        final now = DateTime.now();
+        final cutoff = now.subtract(widget.timeWindow);
+        final samples = <_Sample>[];
+        for (final p in pts) {
+          final ts = DateTime.tryParse('${p['ts_utc']}');
+          final c = double.tryParse('${p['order_count_10s']}') ?? -1;
+          if (ts != null && c >= 0 && ts.isAfter(cutoff)) {
+            samples.add(_Sample(ts, c));
+          }
+        }
+        if (samples.isNotEmpty && mounted) {
+          setState(() => _data.insertAll(0, samples));
+        }
+      }
+    } catch (_) {}
+    _historyLoaded = true;
   }
 
   Future<void> _tick() async {

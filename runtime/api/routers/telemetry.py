@@ -91,7 +91,39 @@ async def usage_rest_weight_report(ctx: AppContext = Depends(deps.get_ctx)) -> d
     }
 
 
-# ── Equity History ──────────────────────────────────────────────────
+# ── Unified Telemetry History ──────────────────────────────────────
+
+@router.get("/api/v1/telemetry/history")
+async def telemetry_history(
+    minutes: int = 60,
+    limit: int = 500,
+    ctx: AppContext = Depends(deps.get_ctx),
+) -> dict[str, Any]:
+    """Return historical telemetry snapshots for persistent charting.
+
+    Contains ALL observable metrics: equity, capital, weight, order rate,
+    fleet state, and fuse status — sampled every 10s by TelemetryCollector.
+    """
+    try:
+        from runtime.core.telemetry_collector import get_telemetry_collector
+        tc = get_telemetry_collector()
+        rows = tc.history(minutes=minutes, limit=limit)
+        return {"points": rows, "count": len(rows), "minutes": minutes}
+    except Exception as e:
+        return {"points": [], "count": 0, "minutes": minutes, "error": str(e)}
+
+
+@router.get("/api/v1/telemetry/stats")
+async def telemetry_stats(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
+    """Return statistics on the telemetry store (row count, time range)."""
+    try:
+        from runtime.core.telemetry_collector import get_telemetry_collector
+        return get_telemetry_collector().stats()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ── Legacy equity endpoint (delegates to unified telemetry) ────────
 
 @router.get("/api/v1/equity/history")
 async def equity_history(
@@ -99,57 +131,61 @@ async def equity_history(
     limit: int = 500,
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    """Return recent equity snapshots aggregated across all bots.
+    """Legacy equity history — delegates to unified telemetry.
 
-    The Flutter MiniEquityChart calls this on init to seed its graph
-    with historical data instead of starting from zero.
+    Returns format compatible with MiniEquityChart._loadHistory().
     """
-    import datetime as _dt
-    import sqlite3
-    from pathlib import Path
+    try:
+        from runtime.core.telemetry_collector import get_telemetry_collector
+        tc = get_telemetry_collector()
+        rows = tc.history(minutes=minutes, limit=limit)
+        # Map to the equity chart expected format
+        points = [
+            {"ts": r["ts_utc"], "equity": r.get("equity_usdt"), "capital": r.get("free_usdt")}
+            for r in rows
+            if r.get("equity_usdt")
+        ]
+        return {"points": points, "count": len(points), "minutes": minutes}
+    except Exception:
+        # Fallback to direct DB query if collector not initialized
+        import datetime as _dt
+        import sqlite3
+        from pathlib import Path
 
-    points: list[dict[str, Any]] = []
-    cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=minutes)).isoformat()
-    data_dir = Path(ctx.config.data_dir)
+        points: list[dict[str, Any]] = []
+        cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=minutes)).isoformat()
+        data_dir = Path(ctx.config.data_dir)
 
-    for db_file, pfx in [("dorothy_hub.sqlite", "dorothy"), ("elphaba_hub.sqlite", "elphaba")]:
-        db_path = data_dir / db_file
-        if not db_path.exists():
-            continue
-        try:
-            conn = sqlite3.connect(str(db_path), timeout=2)
+        for db_file, pfx in [("dorothy_hub.sqlite", "dorothy"), ("elphaba_hub.sqlite", "elphaba")]:
+            db_path = data_dir / db_file
+            if not db_path.exists():
+                continue
             try:
-                rows = conn.execute(
-                    f"""
-                    SELECT ts_utc, equity_usdt, capital_usdt
-                    FROM {pfx}_equity_snapshots
-                    WHERE ts_utc >= ?
-                    ORDER BY ts_utc DESC
-                    LIMIT ?
-                    """,
-                    (cutoff, limit),
-                ).fetchall()
-                for r in rows:
-                    points.append({
-                        "ts": r[0],
-                        "equity": r[1],
-                        "capital": r[2],
-                        "source": pfx,
-                    })
-            finally:
-                conn.close()
-        except Exception:
-            pass
+                conn = sqlite3.connect(str(db_path), timeout=2)
+                try:
+                    rows = conn.execute(
+                        f"""
+                        SELECT ts_utc, equity_usdt, capital_usdt
+                        FROM {pfx}_equity_snapshots
+                        WHERE ts_utc >= ?
+                        ORDER BY ts_utc DESC
+                        LIMIT ?
+                        """,
+                        (cutoff, limit),
+                    ).fetchall()
+                    for r in rows:
+                        points.append({"ts": r[0], "equity": r[1], "capital": r[2], "source": pfx})
+                finally:
+                    conn.close()
+            except Exception:
+                pass
 
-    # Sort chronologically and deduplicate by timestamp (take max equity)
-    seen: dict[str, dict[str, Any]] = {}
-    for p in points:
-        ts = p["ts"]
-        eq = float(p.get("equity") or 0)
-        if ts not in seen or eq > float(seen[ts].get("equity") or 0):
-            seen[ts] = p
-    result = sorted(seen.values(), key=lambda x: x["ts"])[-limit:]
-
-    return {"points": result, "count": len(result), "minutes": minutes}
-
+        seen: dict[str, dict[str, Any]] = {}
+        for p in points:
+            ts = p["ts"]
+            eq = float(p.get("equity") or 0)
+            if ts not in seen or eq > float(seen[ts].get("equity") or 0):
+                seen[ts] = p
+        result = sorted(seen.values(), key=lambda x: x["ts"])[-limit:]
+        return {"points": result, "count": len(result), "minutes": minutes}
 

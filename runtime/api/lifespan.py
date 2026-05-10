@@ -50,7 +50,25 @@ async def lifespan(app: FastAPI):
     coord.start_launcher()
 
     await autostart_gateway_if_possible(ctx)
+
+    # ── Start centralized telemetry collector ──────────────────────
+    try:
+        from runtime.core.telemetry_collector import get_telemetry_collector
+        _tc = get_telemetry_collector(ctx.config.data_dir)
+        await _tc.start(ctx)
+    except Exception as e:
+        _LOG.warning("telemetry_collector startup failed: %s", e)
+
     yield
+
+    # ── Shutdown ──────────────────────────────────────────────────
+    # Stop telemetry collector
+    try:
+        from runtime.core.telemetry_collector import get_telemetry_collector
+        await get_telemetry_collector().stop()
+    except Exception:
+        pass
+
     ctx = deps.peek_ctx()
     bot = deps.get_bot()
     elphaba = deps.get_elphaba()

@@ -19,14 +19,19 @@ class BotHubTemplate extends StatefulWidget {
 
   /// Fetches bot list — returns List<Map> of bots
   final Future<List<Map<String, dynamic>>> Function() fetchBots;
+
   /// Creates a new bot
   final Future<void> Function(Map<String, dynamic> config) createBot;
+
   /// Starts a bot by ID
   final Future<void> Function(String botId) startBot;
+
   /// Stops a bot by ID
   final Future<void> Function(String botId) stopBot;
+
   /// Deletes a bot by ID
   final Future<void> Function(String botId) deleteBot;
+
   /// Returns log entries for a bot
   final Future<List<String>> Function(String botId) fetchLogs;
 
@@ -61,7 +66,10 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   void initState() {
     super.initState();
     _refresh();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshSilent());
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshSilent(),
+    );
   }
 
   @override
@@ -96,7 +104,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
       setState(() {
         _bots = bots;
       });
-      
+
       // Fetch logs for expanded bot to keep them fresh without flickering
       if (_expandedBotId != null) {
         final logs = await widget.fetchLogs(_expandedBotId!);
@@ -123,33 +131,58 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
               children: [
                 Icon(widget.hubIcon, size: 18, color: widget.hubColor),
                 const SizedBox(width: 6),
-                Text(widget.hubName,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: widget.hubColor, letterSpacing: 0.5)),
+                Text(
+                  widget.hubName,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: widget.hubColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: _botsRunning > 0 ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+                    color: _botsRunning > 0
+                        ? Colors.greenAccent.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '$_botsRunning/${_bots.length} active',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                        color: _botsRunning > 0 ? Colors.greenAccent : Colors.white38),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'monospace',
+                      color: _botsRunning > 0
+                          ? Colors.greenAccent
+                          : Colors.white38,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          
+
           // ── Section 3: Bot Queue ────────────────────────────────
           if (_loading && _bots.isEmpty)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(20),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
           else if (_error != null && _bots.isEmpty)
-            Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.redAccent, fontSize: 11)))
+            Center(
+              child: Text(
+                'Error: $_error',
+                style: const TextStyle(color: Colors.redAccent, fontSize: 11),
+              ),
+            )
           else
             ..._bots.map((bot) => _buildBotCard(bot)),
         ],
@@ -168,18 +201,23 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
     final loop = bot['loop_interval_sec'] ?? '';
     final rawPreset = '${bot['preset_id'] ?? bot['tag'] ?? ''}';
     // Show D for Dorothy (preset B), E for Elphaba (preset E1), or raw preset
-    final preset = rawPreset == 'B' ? 'D' : rawPreset == 'E1' ? 'E' : rawPreset;
+    final preset = rawPreset == 'B'
+        ? 'D'
+        : rawPreset == 'E1'
+        ? 'E'
+        : rawPreset;
     // Cycle count lives inside last_report from the API
     final lastReport = bot['last_report'] as Map<String, dynamic>? ?? {};
-    final cycles = lastReport['cycle_count'] ?? bot['cycles'] ?? bot['total_cycles'] ?? 0;
+    final cycles =
+        lastReport['cycle_count'] ?? bot['cycles'] ?? bot['total_cycles'] ?? 0;
     final lastDecision = lastReport['decision'] ?? bot['last_decision'] ?? '';
     final equity = lastReport['equity_usdt'] ?? bot['last_equity_usdt'];
 
     final statusColor = running
         ? Colors.greenAccent
         : desired
-            ? Colors.orangeAccent
-            : Colors.grey;
+        ? Colors.orangeAccent
+        : Colors.grey;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 3),
@@ -215,55 +253,134 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                 children: [
                   // Status dot
                   Container(
-                    width: 8, height: 8,
+                    width: 8,
+                    height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: statusColor,
-                      boxShadow: running ? [BoxShadow(color: statusColor.withValues(alpha: 0.5), blurRadius: 4)] : null,
+                      boxShadow: running
+                          ? [
+                              BoxShadow(
+                                color: statusColor.withValues(alpha: 0.5),
+                                blurRadius: 4,
+                              ),
+                            ]
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 6),
                   // Symbol
-                  Text(symbol, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'monospace')),
+                  Text(
+                    symbol,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   // Preset tag
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: widget.hubColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text('$preset', style: TextStyle(fontSize: 8, color: widget.hubColor, fontFamily: 'monospace')),
+                    child: Text(
+                      preset,
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: widget.hubColor,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   // Loop interval
-                  Text('${loop}s', style: const TextStyle(fontSize: 9, color: Colors.white38, fontFamily: 'monospace')),
+                  Text(
+                    '${loop}s',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white38,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   // Cycles
-                  Text('#$cycles', style: const TextStyle(fontSize: 9, color: Colors.white38, fontFamily: 'monospace')),
+                  Text(
+                    '#$cycles',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white38,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                   const SizedBox(width: 6),
                   // Decision
                   Expanded(
-                    child: Text('$lastDecision', style: TextStyle(
-                      fontSize: 9, fontFamily: 'monospace',
-                      color: lastDecision.toString().contains('BUY')
-                          ? Colors.greenAccent
-                          : lastDecision.toString().contains('BLOCKED')
-                              ? Colors.orangeAccent
-                              : Colors.white30,
-                    ), overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      '$lastDecision',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontFamily: 'monospace',
+                        color: lastDecision.toString().contains('BUY')
+                            ? Colors.greenAccent
+                            : lastDecision.toString().contains('BLOCKED')
+                            ? Colors.orangeAccent
+                            : Colors.white30,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   // Equity
                   if (equity != null)
-                    Text('\$$equity', style: const TextStyle(fontSize: 9, color: Colors.white54, fontFamily: 'monospace')),
+                    Text(
+                      '\$$equity',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.white54,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   const SizedBox(width: 4),
                   // Controls
                   if (running)
-                    Tooltip(message: 'Detener bot', child: _miniBtn(Icons.stop, Colors.orangeAccent, () => widget.stopBot(botId).then((_) => _refresh())))
+                    Tooltip(
+                      message: 'Detener bot',
+                      child: _miniBtn(
+                        Icons.stop,
+                        Colors.orangeAccent,
+                        () => widget.stopBot(botId).then((_) => _refresh()),
+                      ),
+                    )
                   else
-                    Tooltip(message: 'Iniciar bot', child: _miniBtn(Icons.play_arrow, Colors.greenAccent, () => widget.startBot(botId).then((_) => _refresh()))),
-                  Tooltip(message: 'Eliminar bot', child: _miniBtn(Icons.delete_outline, Colors.redAccent, () => _confirmDelete(botId, symbol))),
-                  Tooltip(message: 'Ver logs', child: Icon(isExpanded ? Icons.expand_less : Icons.expand_more, size: 14, color: Colors.white24)),
+                    Tooltip(
+                      message: 'Iniciar bot',
+                      child: _miniBtn(
+                        Icons.play_arrow,
+                        Colors.greenAccent,
+                        () => widget.startBot(botId).then((_) => _refresh()),
+                      ),
+                    ),
+                  Tooltip(
+                    message: 'Eliminar bot',
+                    child: _miniBtn(
+                      Icons.delete_outline,
+                      Colors.redAccent,
+                      () => _confirmDelete(botId, symbol),
+                    ),
+                  ),
+                  Tooltip(
+                    message: 'Ver logs',
+                    child: Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 14,
+                      color: Colors.white24,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -279,13 +396,20 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: _botLogs[botId] == null
-                  ? const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator(minHeight: 2))
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    )
                   : ListView.builder(
                       reverse: true,
                       itemCount: _botLogs[botId]!.length,
                       itemBuilder: (_, i) => Text(
                         _botLogs[botId]![_botLogs[botId]!.length - 1 - i],
-                        style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.white54),
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                          color: Colors.white54,
+                        ),
                       ),
                     ),
             ),
@@ -312,7 +436,10 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
         title: const Text('Eliminar bot'),
         content: Text('¿Eliminar $symbol ($botId)?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
