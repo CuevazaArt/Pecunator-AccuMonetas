@@ -71,8 +71,11 @@ async def health_deep() -> dict[str, Any]:
     bot = deps.get_bot()
     elphaba = deps.get_elphaba()
     gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
+    
+    status = "ok" if gw_ok else "degraded"
+    
     return {
-        "status": "ok",
+        "status": status,
         "gateway_connected": gw_ok,
         "gateway_last_error": ctx.state.last_error,
         "hubs": {
