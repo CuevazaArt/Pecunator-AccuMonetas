@@ -173,7 +173,15 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
           ),
         ),
 
-
+        // ── 2. Manual symbol capture ──────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+            child: _ManualSymbolBar(
+              onSymbolSelected: _handleSymbolSelected,
+            ),
+          ),
+        ),
 
         // ── 2.5 Staged Symbol Panel ────────────────────────────
         if (_stagedSymbol != null)
@@ -276,6 +284,105 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Manual symbol capture bar ──────────────────────────────────────
+/// Compact inline bar: text field for typing a symbol + "Go" button.
+/// Replaces the full SEVI-M Prospector panel with minimal, direct input.
+class _ManualSymbolBar extends StatefulWidget {
+  final ValueChanged<String> onSymbolSelected;
+
+  const _ManualSymbolBar({required this.onSymbolSelected});
+
+  @override
+  State<_ManualSymbolBar> createState() => _ManualSymbolBarState();
+}
+
+class _ManualSymbolBarState extends State<_ManualSymbolBar> {
+  final _ctrl = TextEditingController();
+
+  void _submit() {
+    final raw = _ctrl.text.trim().toUpperCase();
+    if (raw.isEmpty) return;
+    // Auto-append USDT if missing
+    final symbol = raw.endsWith('USDT') ? raw : '${raw}USDT';
+    widget.onSymbolSelected(symbol);
+    _ctrl.clear();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // Label
+        const Icon(Icons.add_circle_outline, color: Color(0xFF00E676), size: 18),
+        const SizedBox(width: 6),
+        const Text(
+          'DEPLOY',
+          style: TextStyle(
+            color: Color(0xFF00E676),
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Text field
+        Expanded(
+          child: SizedBox(
+            height: 30,
+            child: TextField(
+              controller: _ctrl,
+              onSubmitted: (_) => _submit(),
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'SYMBOL...',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.06),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: Color(0xFF00E676)),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Go button
+        SizedBox(
+          height: 30,
+          child: ElevatedButton(
+            onPressed: _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00E676),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+            child: const Text('Go'),
           ),
         ),
       ],
