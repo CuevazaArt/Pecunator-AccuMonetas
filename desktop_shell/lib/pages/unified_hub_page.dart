@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../api_client.dart';
 import '../services/preferences.dart';
 import '../widgets/mini_charts.dart';
-import '../widgets/spot_balances_strip.dart';
 import '../widgets/bot_hub_template.dart';
 import '../widgets/prospector_expander.dart';
 import '../widgets/emergency_ops_drawer.dart';
@@ -161,12 +160,6 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     height: 48,
                     syncInterval: const Duration(seconds: 8),
                   ),
-                ),
-                const SizedBox(width: 4),
-                // Spot balances
-                Expanded(
-                  flex: 2,
-                  child: SpotBalancesStrip(api: _api, height: 48),
                 ),
                 const SizedBox(width: 4),
                 // Status lights
