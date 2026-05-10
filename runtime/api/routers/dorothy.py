@@ -108,7 +108,7 @@ async def bot_presets() -> list[dict[str, Any]]:
             "preset_id": "B",
             "name": "Dorothy7 preset B",
             "symbol": "XRPUSDT",
-            "loop_interval_sec": 450,
+            "loop_interval_sec": 75,
             "quote_order_qty": "8",
             "profit_factor": "0.05",
             "margin_drop_factor": "0.004",

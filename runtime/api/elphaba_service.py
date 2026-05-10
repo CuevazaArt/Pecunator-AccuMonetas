@@ -36,7 +36,7 @@ class ElphabaService(BaseHubService):
         cfg = ElphabaConfig(
             preset_id=str(kwargs.get("preset_id", "E1")),
             symbol=kwargs.get("symbol", "XRPUSDT"),
-            loop_interval_sec=int(kwargs.get("loop_interval_sec", 450)),
+            loop_interval_sec=int(kwargs.get("loop_interval_sec", 75)),
             quote_order_qty=Decimal(str(kwargs.get("quote_order_qty", "6"))),
             profit_factor=Decimal(str(kwargs.get("profit_factor", "0.05"))),
             margin_rise_factor=Decimal(str(kwargs.get("margin_rise_factor", "0.03"))),

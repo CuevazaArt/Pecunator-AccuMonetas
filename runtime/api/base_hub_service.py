@@ -451,7 +451,7 @@ class BaseHubService(ABC):
         # Register with governor and coordinator for phase tracking
         try:
             interval = getattr(rec.runner, 'config', None)
-            loop_sec = getattr(interval, 'loop_interval_sec', 450) if interval else 450
+            loop_sec = getattr(interval, 'loop_interval_sec', 75) if interval else 75
             from runtime.core.weight_governor import get_weight_governor
             get_weight_governor().register_bot(
                 rec.bot_id, weight_per_cycle=15, loop_interval_sec=float(loop_sec),
@@ -474,7 +474,7 @@ class BaseHubService(ABC):
         launch_delay = 0.0
         try:
             interval = getattr(rec.runner, 'config', None)
-            loop_sec = getattr(interval, 'loop_interval_sec', 450) if interval else 450
+            loop_sec = getattr(interval, 'loop_interval_sec', 75) if interval else 75
             from runtime.core.bot_coordinator import get_bot_coordinator
             coord = get_bot_coordinator()
             staged = coord.stage_bot(

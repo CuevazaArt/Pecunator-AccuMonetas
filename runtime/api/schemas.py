@@ -88,7 +88,7 @@ class GatewaySnapshotOut(BaseModel):
 
 class BotConfigBody(BaseModel):
     symbol: str = Field(default="XRPUSDT", min_length=5, max_length=32)
-    loop_interval_sec: int = Field(default=450, ge=1, le=86400)
+    loop_interval_sec: int = Field(default=75, ge=1, le=86400)
     quote_order_qty: str = Field(default="8")
     profit_factor: str = Field(default="0.05")
     margin_drop_factor: str = Field(default="0.004")
@@ -147,7 +147,7 @@ class HubBotCreateBody(BaseModel):
     bot_id: Optional[str] = None
     tag: str = Field(default="Dorothy", min_length=1, max_length=64)
     symbol: str = Field(default="XRPUSDT", min_length=5, max_length=32)
-    loop_interval_sec: int = Field(default=450, ge=1, le=86400)
+    loop_interval_sec: int = Field(default=75, ge=1, le=86400)
     quote_order_qty: str = Field(default="8")
     profit_factor: str = Field(default="0.05")
     margin_drop_factor: str = Field(default="0.004")
