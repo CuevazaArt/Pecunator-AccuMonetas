@@ -190,7 +190,7 @@ class TelemetryCollector:
             bot_svc = deps.get_bot()
             for rec in bot_svc._bots.values():
                 d_total += 1
-                if rec.running:
+                if getattr(rec.runner, "running", False):
                     d_running += 1
         except Exception:
             pass
@@ -199,7 +199,7 @@ class TelemetryCollector:
             eph_svc = deps.get_elphaba()
             for rec in eph_svc._bots.values():
                 e_total += 1
-                if rec.running:
+                if getattr(rec.runner, "running", False):
                     e_running += 1
         except Exception:
             pass
