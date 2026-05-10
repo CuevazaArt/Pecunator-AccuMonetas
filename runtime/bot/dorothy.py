@@ -236,84 +236,79 @@ class DorothyRunner(BaseStrategyRunner):
             {"symbol": symbol, "response": ticker},
         )
         market_price = _dec(ticker.get("price", "0"), "0")
-        stop_loss_triggered = False
-        liquidated_qty = Decimal("0")
-        if sell_limit and c.stop_loss_pct > 0:
-            for sl_order in sell_limit:
-                anchor_sell_price = _dec(sl_order.get("price", "0"), "0")
-                implied_buy = anchor_sell_price / (Decimal("1") + c.profit_factor) if c.profit_factor >= 0 else anchor_sell_price
-                stop_price = implied_buy * (Decimal("1") - c.stop_loss_pct)
-                if market_price <= stop_price:
-                    stop_payload: dict[str, Any] = {
-                        "symbol": symbol,
-                        "anchor_sell_price": str(anchor_sell_price),
-                        "implied_buy_price": str(implied_buy),
-                        "stop_price": str(stop_price),
-                        "market_price": str(market_price),
-                    }
-                    oid = sl_order.get("orderId")
-                    qty = _dec(sl_order.get("origQty", "0"), "0")
-                    if oid is not None:
-                        try:
-                            cancelled = await self._to_thread(lambda o=oid: client.cancel_order(symbol=symbol, orderId=o))
-                            self._emit("INFO", "binance:cancel_order_stop_loss", {"symbol": symbol, "response": cancelled})
-                        except Exception as e:
-                            self._emit("ERROR", f"binance:cancel_order_stop_loss_failed: {e}")
-                    if qty > 0:
-                        # Record stop-loss in forensic ledger
-                        _sl_lid = None
-                        try:
-                            from runtime.core.order_ledger import get_order_ledger
-                            _sl_lid = get_order_ledger().record(
-                                bot_id=getattr(self, '_bot_id', 'dorothy'),
-                                bot_type="dorothy", symbol=symbol, side="SELL",
-                                order_type="MARKET", qty=str(_q(qty, c.qty_decimals)),
-                                reason="STOP_LOSS",
-                                execution_mode="LIVE",
-                            )
-                        except Exception:
-                            pass
-                        try:
-                            sold = await self._to_thread(
-                                lambda q=qty: client.create_order(
-                                    symbol=symbol,
-                                    side=client.SIDE_SELL,
-                                    type=client.ORDER_TYPE_MARKET,
-                                    quantity=str(_q(q, c.qty_decimals)),
-                                    newClientOrderId=f"{my_tag}-sl-{int(time.time())}"
-                                )
-                            )
-                            self._emit("INFO", "binance:create_order_sell_market_stop_loss", {"symbol": symbol, "response": sold})
-                            if _sl_lid:
-                                try:
-                                    from runtime.core.order_ledger import get_order_ledger
-                                    get_order_ledger().update_binance_response(
-                                        _sl_lid,
-                                        str(sold.get("orderId", "")),
-                                        str(sold.get("status", "")),
-                                    )
-                                except Exception:
-                                    pass
-                            liquidated_qty += qty
-                        except Exception as e:
-                            self._emit("ERROR", f"binance:create_order_sell_market_stop_loss_failed: {e}")
-                    stop_payload["execution"] = "LIVE"
-                    self._emit("WARNING", "bot:stop_loss_triggered", stop_payload)
-                    stop_loss_triggered = True
-                        
-            if stop_loss_triggered:
-                stop_report = {
-                    "preset_id": c.preset_id,
-                    "symbol": symbol,
 
+        # ── TREND GATE: HA crossover + price vs candle open ────────
+        # Gate 1: HA MA(1) > MA(2) → BULLISH required for Dorothy
+        # Gate 2: price < 1h candle open → buying into a dip
+        try:
+            from runtime.modules.trend_signal import get_trend_signal_service
+            _trend_svc = get_trend_signal_service()
 
-                    "decision": "STOP_LOSS",
+            if _trend_svc.needs_trend_refresh(symbol):
+                try:
+                    klines_1h = await self._to_thread(
+                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=10)
+                    )
+                    _trend_svc.update_trend(symbol, klines_1h)
+                except Exception as kl_err:
+                    self._emit("WARNING", f"dorothy:trend_refresh_failed: {kl_err}")
+
+            if _trend_svc.needs_entry_refresh(symbol):
+                try:
+                    kline_now = await self._to_thread(
+                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=1)
+                    )
+                    candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
+                    _trend_svc.update_entry_gate(symbol, float(market_price), candle_open_1h)
+                except Exception as eg_err:
+                    self._emit("WARNING", f"dorothy:entry_gate_refresh_failed: {eg_err}")
+
+            _full = _trend_svc.get_full_state(symbol)
+            trend_direction = _full.get("trend")
+            # Dorothy requires BULLISH trend
+            trend_ok = trend_direction == "BULLISH"
+            # Dorothy entry gate: price < candle open (BLOCKED = buying the dip)
+            entry_ok = _full.get("entry_gate") == "BLOCKED"
+
+            self._emit("INFO", "dorothy:trend_gate", {
+                "symbol": symbol,
+                "trend": trend_direction,
+                "entry_gate": _full.get("entry_gate"),
+                "trend_ok_for_long": trend_ok,
+                "entry_ok_for_long": entry_ok,
+                "should_buy": trend_ok and entry_ok,
+            })
+
+            if not trend_ok:
+                return {
+                    "preset_id": c.preset_id, "symbol": symbol,
+                    "decision": "WAIT_TREND_BEARISH",
+                    "trend": trend_direction,
                     "market_price": str(market_price),
-                    "liquidated_qty": str(liquidated_qty),
                     "loop_interval_sec": c.loop_interval_sec,
                 }
-                self._maybe_emit_metrics()
-                return stop_report
+
+            if not entry_ok:
+                return {
+                    "preset_id": c.preset_id, "symbol": symbol,
+                    "decision": "WAIT_ENTRY_BLOCKED",
+                    "trend": trend_direction,
+                    "entry_gate": _full.get("entry_gate"),
+                    "market_price": str(market_price),
+                    "loop_interval_sec": c.loop_interval_sec,
+                }
+
+        except ImportError:
+            self._emit("WARNING", "dorothy:trend_signal_not_available")
+        except Exception as ts_err:
+            self._emit("ERROR", f"dorothy:trend_service_error: {ts_err}")
+            return {
+                "preset_id": c.preset_id, "symbol": symbol,
+                "decision": "WAIT_TREND_ERROR",
+                "error": str(ts_err),
+                "market_price": str(market_price),
+                "loop_interval_sec": c.loop_interval_sec,
+            }
 
         # ── DCA entry logic ────────────────────────────────────────
         should_buy = False
@@ -384,21 +379,7 @@ class DorothyRunner(BaseStrategyRunner):
             return report
         # Trend + entry gates already checked above — both are OPEN at this point
 
-        # T0.2: Block if daily spend limit exceeded
-        if should_buy:
-            try:
-                from runtime.core.budget_guard import get_budget_guard
-                bg = get_budget_guard()
-                if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty):
-                    report["decision"] = "BLOCKED_BUDGET"
-                    self._emit("WARNING", "bot:budget_blocked", {"report": report})
-                    self._maybe_emit_metrics()
-                    return report
-            except Exception as e:
-                report["decision"] = "BLOCKED_BUDGET"
-                self._emit("WARNING", f"bot:budget_error FAIL_CLOSED {e}", {"report": report})
-                self._maybe_emit_metrics()
-                return report
+
 
         est_buy = market_price if market_price > 0 else Decimal("1")
         # T1.6: Model fees + slippage for honest paper trading

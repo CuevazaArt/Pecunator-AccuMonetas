@@ -301,62 +301,8 @@ class ElphabaRunner(BaseStrategyRunner):
 
             _full = _trend_svc.get_full_state(symbol)
 
-            # ── SAFETY VALVE: Trend flipped BULLISH → close all shorts ──
+
             trend_direction = _full.get("trend")
-            if trend_direction == "BULLISH" and active_rungs > 0:
-                self._emit("WARNING", "elphaba:trend_reversal_exit", {
-                    "symbol": symbol, "active_rungs": active_rungs,
-                    "trend": trend_direction,
-                })
-                # Cancel all BUY LIMIT TPs and cover at market
-                for order in buy_limit:
-                    oid = order.get("orderId")
-                    qty = _dec(order.get("origQty", "0"), "0")
-                    if oid:
-                        try:
-                            await self._to_thread(
-                                lambda o=oid: client.cancel_margin_order(
-                                    symbol=symbol, orderId=o, isIsolated="TRUE",
-                                )
-                            )
-                        except Exception:
-                            pass
-                    # Buy-to-cover at market
-                    if qty > 0:
-                        # Record emergency cover in forensic ledger
-                        _cover_lid = None
-                        try:
-                            from runtime.core.order_ledger import get_order_ledger
-                            _cover_lid = get_order_ledger().record(
-                                bot_id=getattr(self, '_bot_id', 'elphaba'),
-                                bot_type="elphaba", symbol=symbol, side="BUY",
-                                order_type="MARKET", qty=str(qty),
-                                reason="TREND_REVERSAL_EXIT",
-                                execution_mode="MARGIN_SHORT",
-                            )
-                        except Exception:
-                            pass
-                        cover = await self._close_position_at_market(client, symbol, qty, my_tag)
-                        if _cover_lid and cover:
-                            try:
-                                from runtime.core.order_ledger import get_order_ledger
-                                get_order_ledger().update_binance_response(
-                                    _cover_lid,
-                                    str(cover.get("orderId", "")),
-                                    str(cover.get("status", "")),
-                                )
-                            except Exception:
-                                pass
-
-                return {
-                    "preset_id": c.preset_id, "symbol": symbol,
-                    "decision": "TREND_REVERSAL_EXIT",
-                    "closed_rungs": active_rungs,
-                    "trend": trend_direction,
-                    "market_price": str(market_price),
-                    "loop_interval_sec": c.loop_interval_sec,
-                }
-
             # Elphaba requires BEARISH (inverse of Dorothy)
             trend_ok = trend_direction == "BEARISH"
             # Inverse entry gate: price > candle open = shorting into a pump
@@ -443,20 +389,7 @@ class ElphabaRunner(BaseStrategyRunner):
             self._maybe_emit_metrics()
             return report
 
-        # ── Budget guard ──────────────────────────────────────────
-        try:
-            from runtime.core.budget_guard import get_budget_guard
-            bg = get_budget_guard()
-            if not bg.try_reserve(self._bot_key(), symbol, c.quote_order_qty):
-                report["decision"] = "BLOCKED_BUDGET"
-                self._emit("WARNING", "elphaba:budget_blocked", {"report": report})
-                self._maybe_emit_metrics()
-                return report
-        except Exception as e:
-            report["decision"] = "BLOCKED_BUDGET"
-            self._emit("WARNING", f"elphaba:budget_error FAIL_CLOSED {e}", {"report": report})
-            self._maybe_emit_metrics()
-            return report
+
 
         # ── Ensure collateral in Isolated Margin wallet ───────────
         if not await self._ensure_collateral(client, symbol, c.quote_order_qty):
