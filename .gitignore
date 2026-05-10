@@ -41,3 +41,6 @@ scratch_*.py
 scratch_db.py
 *.log
 backend.log.*
+.coverage
+*.sqlite-shm
+*.sqlite-wal
