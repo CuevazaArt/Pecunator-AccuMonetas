@@ -124,6 +124,8 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
       'loop_interval_sec': dLoop.toString(),
       'max_rungs_per_symbol': dRungs.toString(),
       'tag': _dTagCtrl.text.trim(),
+      'trading_enabled': true,
+      'simulated': false,
     };
 
     final eConfig = {
@@ -134,6 +136,8 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
       'loop_interval_sec': eLoop.toString(),
       'max_rungs_per_symbol': eRungs.toString(),
       'tag': _eTagCtrl.text.trim(),
+      'trading_enabled': true,
+      'simulated': false,
     };
 
     widget.onAcceptSymmetric(dConfig, eConfig);
