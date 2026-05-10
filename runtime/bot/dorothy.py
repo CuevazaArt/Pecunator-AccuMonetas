@@ -119,9 +119,12 @@ class DorothyRunner(BaseStrategyRunner):
         c = self.config
         c.normalize()
         if not c.trading_enabled:
-            raise RuntimeError(
-                "LIVE mode requires trading_enabled=true (explicit switch).",
-            )
+            self._emit("INFO", f"dorothy:STANDBY trading_enabled=false for {c.symbol}")
+            return {
+                "preset_id": c.preset_id, "symbol": c.symbol,
+                "decision": "STANDBY_TRADING_DISABLED",
+                "loop_interval_sec": c.loop_interval_sec,
+            }
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:

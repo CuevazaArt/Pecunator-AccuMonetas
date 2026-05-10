@@ -151,6 +151,10 @@ class ElphabaRunner(BaseStrategyRunner):
             )
             return orders if isinstance(orders, list) else []
         except Exception as e:
+            # -11001 = Isolated margin account not yet created for this symbol.
+            # This is expected on first run — no orders exist, return empty.
+            if "-11001" in str(e):
+                return []
             self._emit("WARNING", f"elphaba:get_margin_orders_failed: {e}")
             return []
 
@@ -190,7 +194,12 @@ class ElphabaRunner(BaseStrategyRunner):
         c = self.config
         c.normalize()
         if not c.trading_enabled:
-            raise RuntimeError("LIVE mode requires trading_enabled=true (explicit switch).")
+            self._emit("INFO", f"elphaba:STANDBY trading_enabled=false for {c.symbol}")
+            return {
+                "preset_id": c.preset_id, "symbol": c.symbol,
+                "decision": "STANDBY_TRADING_DISABLED",
+                "loop_interval_sec": c.loop_interval_sec,
+            }
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:

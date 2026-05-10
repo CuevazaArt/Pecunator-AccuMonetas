@@ -96,15 +96,15 @@ class TestElphabaRunner:
             result = asyncio.get_event_loop().run_until_complete(r.run_once())
             assert result["decision"] == "FUSE_TRIPPED"
 
-    def test_trading_disabled_raises(self):
+    def test_trading_disabled_returns_standby(self):
         r = _make_runner()
         r.config.trading_enabled = False
         with patch("runtime.core.api_fuse.get_api_fuse") as mock_fuse:
             fuse = MagicMock()
             fuse.is_tripped.return_value = False
             mock_fuse.return_value = fuse
-            with pytest.raises(RuntimeError, match="trading_enabled"):
-                asyncio.get_event_loop().run_until_complete(r.run_once())
+            result = asyncio.get_event_loop().run_until_complete(r.run_once())
+            assert result["decision"] == "STANDBY_TRADING_DISABLED"
 
 
 # ── Margin Logic Tests ───────────────────────────────────────────
