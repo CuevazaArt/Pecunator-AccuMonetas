@@ -15,6 +15,13 @@ import sys
 import subprocess
 import time
 
+# Fix Windows console encoding for emoji/unicode
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)
 
