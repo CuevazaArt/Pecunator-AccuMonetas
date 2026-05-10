@@ -214,13 +214,13 @@ class TelemetryCollector:
         snapshot["api_fuse_ok"] = 1
         try:
             from runtime.core.api_fuse import get_api_fuse
-            snapshot["api_fuse_ok"] = 0 if get_api_fuse().is_tripped else 1
+            snapshot["api_fuse_ok"] = 0 if get_api_fuse().is_tripped() else 1
         except Exception:
             pass
         snapshot["order_fuse_ok"] = 1
         try:
             from runtime.core.order_fuse import get_order_fuse
-            snapshot["order_fuse_ok"] = 0 if get_order_fuse().is_tripped else 1
+            snapshot["order_fuse_ok"] = 0 if get_order_fuse().is_tripped() else 1
         except Exception:
             pass
 
