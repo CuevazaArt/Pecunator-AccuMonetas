@@ -22,7 +22,11 @@ class AppConfig {
   // Bot defaults
   static const String defaultBotTag = 'Dorothy';
   static const String defaultSymbol = 'XRPUSDT';
-  static const int defaultLoopInterval = 450;
+  static const int defaultLoopInterval = 75;
+
+  // WebSocket
+  static const Duration wsReconnectDelay = Duration(seconds: 3);
+  static const int wsMaxReconnectAttempts = 50;  // ~2.5 min then reset
   static const String defaultQuoteQty = '8';
   static const String defaultProfit = '0.05';
   static const String defaultDrop = '0.004';
@@ -41,5 +45,13 @@ class AppConfig {
     int port = engineDefaultPort,
   }) {
     return 'http://$host:$port';
+  }
+
+  /// Build WebSocket URL from host and port.
+  static String buildWsUrl({
+    String host = engineDefaultHost,
+    int port = engineDefaultPort,
+  }) {
+    return 'ws://$host:$port/ws/telemetry';
   }
 }

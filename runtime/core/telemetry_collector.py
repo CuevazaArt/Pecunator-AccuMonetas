@@ -118,9 +118,19 @@ class TelemetryCollector:
             try:
                 snapshot = self._collect(ctx)
                 self._persist(snapshot)
+                # Push to WebSocket clients (zero-polling telemetry)
+                await self._broadcast(snapshot)
             except Exception as e:
                 _LOG.warning("telemetry_collector: sample failed: %s", e)
             await asyncio.sleep(self._interval)
+
+    async def _broadcast(self, snapshot: dict[str, Any]) -> None:
+        """Push snapshot to all connected WebSocket clients."""
+        try:
+            from runtime.core.ws_broadcaster import get_broadcaster
+            await get_broadcaster().publish("TELEMETRY_TICK", snapshot)
+        except Exception as e:
+            _LOG.debug("telemetry_collector: ws broadcast skipped: %s", e)
 
     # ── Collection ────────────────────────────────────────────────────
 

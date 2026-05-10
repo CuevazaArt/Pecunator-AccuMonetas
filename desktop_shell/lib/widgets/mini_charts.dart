@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../services/telemetry_hub.dart';
 
 /// Compact rolling weight chart — shows API weight over a configurable time window.
-/// Zero API weight cost: reads from local gateway snapshot only.
+/// Receives live data via WebSocket push from TelemetryHub.
 class MiniWeightChart extends StatefulWidget {
   final EngineApi api;
-  final Duration syncInterval;
+  final Duration syncInterval; // kept for history seeding interval
   final Duration timeWindow;
   final double height;
 
@@ -24,7 +25,7 @@ class MiniWeightChart extends StatefulWidget {
 }
 
 class _MiniWeightChartState extends State<MiniWeightChart> {
-  Timer? _timer;
+  StreamSubscription<TelemetrySnapshot>? _hubSub;
   final List<_Sample> _data = [];
   int _weightLimit = 6000;
   bool _fuseTripped = false;
@@ -34,14 +35,29 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
   void initState() {
     super.initState();
     _loadHistory();
-    _tick();
-    _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
+    // Subscribe to WebSocket-pushed telemetry
+    _hubSub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _hubSub?.cancel();
     super.dispose();
+  }
+
+  /// Handle a WebSocket telemetry tick.
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final cutoff = now.subtract(widget.timeWindow);
+    setState(() {
+      if (snap.usedWeight > 0) {
+        _data.add(_Sample(now, snap.usedWeight.toDouble()));
+      }
+      _data.removeWhere((s) => s.time.isBefore(cutoff));
+      _weightLimit = snap.weightLimit > 0 ? snap.weightLimit : 6000;
+      _fuseTripped = !snap.apiFuseOk;
+    });
   }
 
   /// Seed weight chart from unified telemetry history.
@@ -70,42 +86,6 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
       }
     } catch (_) {}
     _historyLoaded = true;
-  }
-
-  Future<void> _tick() async {
-    try {
-      final snap = await widget.api.gatewaySnapshot();
-      final usedRaw = snap['used_weight_1m'];
-      int? used;
-      if (usedRaw is int) {
-        used = usedRaw;
-      } else if (usedRaw is num) {
-        used = usedRaw.toInt();
-      } else {
-        used = int.tryParse('$usedRaw');
-      }
-
-      final limitRaw = snap['weight_limit_1m'];
-      int limit = 6000;
-      if (limitRaw is int) {
-        limit = limitRaw;
-      } else if (limitRaw is num) {
-        limit = limitRaw.toInt();
-      } else {
-        limit = int.tryParse('$limitRaw') ?? 6000;
-      }
-
-      if (!mounted) return;
-      final now = DateTime.now();
-      final cutoff = now.subtract(widget.timeWindow);
-      setState(() {
-        if (used != null) _data.add(_Sample(now, used.toDouble()));
-        _data.removeWhere((s) => s.time.isBefore(cutoff));
-        _weightLimit = limit > 0 ? limit : 6000;
-        // Derive fuse-like state from weight percentage (>90% = danger)
-        _fuseTripped = used != null && limit > 0 && (used / limit) >= 0.90;
-      });
-    } catch (_) {}
   }
 
   Color _colorForPct(double pct) {
@@ -219,7 +199,7 @@ class MiniOrderRateChart extends StatefulWidget {
 }
 
 class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
-  Timer? _timer;
+  StreamSubscription<TelemetrySnapshot>? _hubSub;
   final List<_Sample> _data = [];
   int _orderLimit = 100;
   bool _danger = false;
@@ -229,14 +209,25 @@ class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
   void initState() {
     super.initState();
     _loadHistory();
-    _tick();
-    _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
+    _hubSub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _hubSub?.cancel();
     super.dispose();
+  }
+
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final cutoff = now.subtract(widget.timeWindow);
+    setState(() {
+      _data.add(_Sample(now, snap.orderCount10s.toDouble()));
+      _data.removeWhere((s) => s.time.isBefore(cutoff));
+      _orderLimit = snap.orderLimit10s > 0 ? snap.orderLimit10s : 100;
+      _danger = !snap.orderFuseOk || snap.orderRatePct >= 0.80;
+    });
   }
 
   /// Seed order rate chart from unified telemetry history.
@@ -265,41 +256,6 @@ class _MiniOrderRateChartState extends State<MiniOrderRateChart> {
       }
     } catch (_) {}
     _historyLoaded = true;
-  }
-
-  Future<void> _tick() async {
-    try {
-      final snap = await widget.api.gatewaySnapshot();
-      final countRaw = snap['order_count_10s'];
-      int? count;
-      if (countRaw is int) {
-        count = countRaw;
-      } else if (countRaw is num) {
-        count = countRaw.toInt();
-      } else if (countRaw != null) {
-        count = int.tryParse('$countRaw');
-      }
-
-      final limitRaw = snap['order_limit_10s'];
-      int limit = 100;
-      if (limitRaw is int) {
-        limit = limitRaw;
-      } else if (limitRaw is num) {
-        limit = limitRaw.toInt();
-      } else if (limitRaw != null) {
-        limit = int.tryParse('$limitRaw') ?? 100;
-      }
-
-      if (!mounted) return;
-      final now = DateTime.now();
-      final cutoff = now.subtract(widget.timeWindow);
-      setState(() {
-        if (count != null) _data.add(_Sample(now, count.toDouble()));
-        _data.removeWhere((s) => s.time.isBefore(cutoff));
-        _orderLimit = limit > 0 ? limit : 100;
-        _danger = count != null && limit > 0 && (count / limit) >= 0.80;
-      });
-    } catch (_) {}
   }
 
   Color _colorForPct(double pct) {
@@ -422,7 +378,7 @@ class MiniEquityChart extends StatefulWidget {
 }
 
 class _MiniEquityChartState extends State<MiniEquityChart> {
-  Timer? _timer;
+  StreamSubscription<TelemetrySnapshot>? _hubSub;
   final List<_Sample> _data = [];
   double _startEquity = 0;
   bool _historyLoaded = false;
@@ -436,14 +392,31 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
   void initState() {
     super.initState();
     _loadHistory();
-    _tick();
-    _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
+    _hubSub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _hubSub?.cancel();
     super.dispose();
+  }
+
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    if (snap.equity <= 0) return;
+
+    final now = DateTime.now();
+    final cutoff = now.subtract(widget.timeWindow);
+    setState(() {
+      _data.add(_Sample(now, snap.equity));
+      _data.removeWhere((s) => s.time.isBefore(cutoff));
+      if (_startEquity == 0 && _data.isNotEmpty) {
+        _startEquity = _data.first.value.toDouble();
+      }
+      _free = snap.freeUsdt;
+      _locked = snap.lockedUsdt;
+      _margin = snap.marginUsdt;
+    });
   }
 
   /// Seed chart with historical equity from the backend SQLite.
@@ -475,49 +448,6 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       }
     } catch (_) {}
     _historyLoaded = true;
-  }
-
-  Future<void> _tick() async {
-    try {
-      final snap = await widget.api.gatewaySnapshot();
-      final eqMap = snap['account_equity'];
-      double equity = 0;
-      if (eqMap is Map) {
-        final raw = eqMap['current'] ?? eqMap['total_usdt'] ?? '0';
-        equity = double.tryParse('$raw') ?? 0;
-      }
-      if (equity <= 0) return;
-
-      // Extract USDT capital breakdown from balances
-      double free = 0;
-      double locked = 0;
-      final balances = snap['balances'];
-      if (balances is List && balances.isNotEmpty) {
-        for (final b in balances) {
-          if (b is Map && b['asset'] == 'USDT') {
-            free = double.tryParse('${b['free']}') ?? 0;
-            locked = double.tryParse('${b['locked']}') ?? 0;
-            break;
-          }
-        }
-      }
-      // Margin/deployed = equity minus spot USDT (other assets + margin positions)
-      final deployed = (equity - free - locked).clamp(0.0, equity);
-
-      if (!mounted) return;
-      final now = DateTime.now();
-      final cutoff = now.subtract(widget.timeWindow);
-      setState(() {
-        _data.add(_Sample(now, equity));
-        _data.removeWhere((s) => s.time.isBefore(cutoff));
-        if (_startEquity == 0 && _data.isNotEmpty) {
-          _startEquity = _data.first.value.toDouble();
-        }
-        _free = free;
-        _locked = locked;
-        _margin = deployed;
-      });
-    } catch (_) {}
   }
 
   @override
@@ -912,13 +842,13 @@ class WeightOscillator extends StatefulWidget {
 }
 
 class _WeightOscillatorState extends State<WeightOscillator> {
-  Timer? _timer;
+  StreamSubscription<TelemetrySnapshot>? _hubSub;
   final List<_Sample> _data = [];
   int _weightLimit = 6000;
   bool _fuseTripped = false;
 
   // Adjustable controls
-  int _syncMs = 2000;
+  int _syncMs = 2000;  // kept for UI label only
   int _windowMin = 10;
   static const _syncOptions = [1000, 2000, 3000, 5000, 10000];
   static const _windowOptions = [1, 5, 10, 30, 60];
@@ -926,56 +856,27 @@ class _WeightOscillatorState extends State<WeightOscillator> {
   @override
   void initState() {
     super.initState();
-    _tick();
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(Duration(milliseconds: _syncMs), (_) => _tick());
+    _hubSub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _hubSub?.cancel();
     super.dispose();
   }
 
-  Future<void> _tick() async {
-    try {
-      final snap = await widget.api.gatewaySnapshot();
-      final usedRaw = snap['used_weight_1m'];
-      int? used;
-      if (usedRaw is int) {
-        used = usedRaw;
-      } else if (usedRaw is num) {
-        used = usedRaw.toInt();
-      } else {
-        used = int.tryParse('$usedRaw');
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final cutoff = now.subtract(Duration(minutes: _windowMin));
+    setState(() {
+      if (snap.usedWeight > 0) {
+        _data.add(_Sample(now, snap.usedWeight.toDouble()));
       }
-
-      final limitRaw = snap['weight_limit_1m'];
-      int limit = 6000;
-      if (limitRaw is int) {
-        limit = limitRaw;
-      } else if (limitRaw is num) {
-        limit = limitRaw.toInt();
-      } else {
-        limit = int.tryParse('$limitRaw') ?? 6000;
-      }
-
-      if (!mounted) return;
-      final now = DateTime.now();
-      final cutoff = now.subtract(Duration(minutes: _windowMin));
-      setState(() {
-        if (used != null) {
-          _data.add(_Sample(now, used.toDouble()));
-        }
-        _data.removeWhere((s) => s.time.isBefore(cutoff));
-        _weightLimit = limit > 0 ? limit : 6000;
-        _fuseTripped = used != null && limit > 0 && (used / limit) >= 0.90;
-      });
-    } catch (_) {}
+      _data.removeWhere((s) => s.time.isBefore(cutoff));
+      _weightLimit = snap.weightLimit > 0 ? snap.weightLimit : 6000;
+      _fuseTripped = !snap.apiFuseOk;
+    });
   }
 
   Color _colorForPct(double pct) {
@@ -1025,7 +926,6 @@ class _WeightOscillatorState extends State<WeightOscillator> {
                     final idx = _syncOptions.indexOf(_syncMs);
                     setState(() {
                       _syncMs = _syncOptions[(idx + 1) % _syncOptions.length];
-                      _startTimer();
                     });
                   },
                   child: Text(

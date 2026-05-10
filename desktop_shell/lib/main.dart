@@ -3,10 +3,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'pages/home_shell.dart';
 
 import 'services/preferences.dart';
+import 'services/telemetry_hub.dart';
+import 'api_client.dart';
+import 'config/app_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppPreferences.init();
+
+  // Initialize the central telemetry hub (WebSocket push + REST fallback)
+  final api = EngineApi(AppConfig.buildEngineUrl());
+  TelemetryHub.instance.init(api: api);
 
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
