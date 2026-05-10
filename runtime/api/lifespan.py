@@ -20,6 +20,10 @@ _LOG = logging.getLogger("pecunator.api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start Dorothy + Elphaba services, optionally autostart gateway."""
+    import os
+    if os.environ.get("PECUNATOR_API_AUTH_DISABLED", "").strip() in ("1", "true"):
+        _LOG.critical("⚠️ PECUNATOR_API_AUTH_DISABLED is active! The API is exposed without authentication. DO NOT USE IN PRODUCTION.")
+
     deps.init_context()
     ctx = deps.get_ctx()
     bot = deps.get_bot()

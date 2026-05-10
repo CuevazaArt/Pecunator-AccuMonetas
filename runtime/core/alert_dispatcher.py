@@ -47,6 +47,27 @@ class AlertDispatcher:
         except Exception:
             pass
 
+    def _send_telegram(self, text: str) -> None:
+        token = os.environ.get("PECUNATOR_ALERT_TELEGRAM_TOKEN", "").strip()
+        chat_id = os.environ.get("PECUNATOR_ALERT_TELEGRAM_CHAT_ID", "").strip()
+        if not token or not chat_id:
+            return
+
+        def _post() -> None:
+            import urllib.request
+            import json
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = json.dumps({"chat_id": chat_id, "text": text}).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+            except Exception as e:
+                _LOG.warning("Failed to send Telegram alert: %s", e)
+
+        import threading
+        threading.Thread(target=_post, daemon=True).start()
+
     def _dispatch(self, level: str, code: str, message: str, payload: Optional[dict] = None) -> dict[str, Any]:
         ts_utc = datetime.now(timezone.utc).isoformat()
         alert = {
@@ -74,6 +95,9 @@ class AlertDispatcher:
 
         # Write to dedicated alert log file
         self._write_to_file(level, code, message)
+
+        # Dispatch to Telegram (external channel)
+        self._send_telegram(f"[{level}] {code}\n{message}")
 
         return alert
 
