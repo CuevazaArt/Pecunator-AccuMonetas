@@ -252,6 +252,28 @@ class OrphanGuard:
             )
             sell_qty = _q(asset_free, config.qty_decimals)
 
+            # ── ExchangeFilter validation ────────────────────────
+            try:
+                from runtime.core.exchange_filters import get_exchange_filters
+                _sf = get_exchange_filters().get(symbol)
+                if _sf:
+                    sell_price = _sf.quantize_price(sell_price)
+                    sell_qty = _sf.quantize_qty(sell_qty)
+                    _ok, _reason = _sf.validate_order(sell_qty, sell_price)
+                    if not _ok:
+                        _LOG.warning("ORPHAN RECOVERY pre-flight: %s — %s", symbol, _reason)
+                        if "minNotional" in _reason and sell_price > 0:
+                            sell_qty = _sf.quantize_qty(
+                                (_sf.min_notional / sell_price) * Decimal("1.05")
+                            )
+                            sell_qty = max(sell_qty, _sf.min_qty)
+                        _ok2, _r2 = _sf.validate_order(sell_qty, sell_price)
+                        if not _ok2:
+                            self._retry_counts[key] = attempts + 1
+                            return {"action": "FILTER_REJECTED", "symbol": symbol, "reason": _r2}
+            except Exception as _ef_err:
+                _LOG.warning("ORPHAN RECOVERY filter check failed: %s — %s", symbol, _ef_err)
+
             if sell_qty <= 0:
                 _LOG.warning("ORPHAN RECOVERY: zero qty for %s", symbol)
                 self._retry_counts[key] = attempts + 1

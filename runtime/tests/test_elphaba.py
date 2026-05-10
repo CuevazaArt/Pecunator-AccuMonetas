@@ -14,7 +14,7 @@ class TestElphabaConfig:
         c = ElphabaConfig()
         c.normalize()
         assert c.symbol == "XRPUSDT"
-        assert c.quote_order_qty == Decimal("6")
+        assert c.quote_order_qty == Decimal("7")
         assert c.profit_factor == Decimal("0.05")
         assert c.margin_type == "ISOLATED"
         assert c.max_rungs_per_symbol == 3

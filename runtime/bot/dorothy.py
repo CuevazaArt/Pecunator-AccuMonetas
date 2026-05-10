@@ -28,20 +28,21 @@ class DorothyConfig:
     preset_id: str = "B"
     symbol: str = "XRPUSDT"
     loop_interval_sec: int = 450
-    quote_order_qty: Decimal = Decimal("6")  # Conservative: 6 USDT per rung
+    quote_order_qty: Decimal = Decimal("7")  # 7 USDT per rung (above MIN_NOTIONAL)
     profit_factor: Decimal = Decimal("0.05")
     margin_drop_factor: Decimal = Decimal("0.03")  # L0: 3% between DCA steps
     qty_decimals: int = 8
     price_decimals: int = 4
     note: str = ""
-    # [MEJORA] Proteccion de riesgo configurable.
-    max_drawdown_pct: Decimal = Decimal("0.20")
-    stop_loss_pct: Decimal = Decimal("0")  # L0: disabled — symmetric hub with Elphaba replaces SL
+    # Drawdown guard DEPRECATED — symmetric hub edge absorbs drawdown.
+    # Kept as telemetry-only field (0 = disabled / no blocking).
+    max_drawdown_pct: Decimal = Decimal("0")
+    stop_loss_pct: Decimal = Decimal("0")  # Disabled — symmetric hub replaces SL
     metrics_interval_cycles: int = 5
     # T0.1: Hard ceiling on DCA rungs per symbol.
     # Each BUY_AND_SELL creates a SELL LIMIT anchor = 1 rung.
     # When open SELL LIMITs >= max_rungs, new buys are BLOCKED.
-    max_rungs_per_symbol: int = 3  # Conservative: 3 rungs × 6 USDT = 18 USDT max exposure
+    max_rungs_per_symbol: int = 3  # Conservative: 3 rungs × 7 USDT = 21 USDT max exposure
     # T0.4: Force-liquidate worst position when drawdown exceeds this.
     # 0 = disabled (only blocks buys). Example: 0.40 = liquidate at 40% DD.
     drawdown_liquidate_pct: Decimal = Decimal("0")
@@ -147,29 +148,17 @@ class DorothyRunner(BaseStrategyRunner):
         client = self._ensure_client()
         symbol = c.symbol
 
-        # ── Auto-resolve precision from Binance exchangeInfo ──────────
-        # Cached per-symbol to avoid redundant API calls each cycle.
-        if symbol not in self._precision_cache:
-            try:
-                from decimal import Decimal as _D
-                sym_info = await self._to_thread(
-                    lambda: client.get_symbol_info(symbol)
-                )
-                if sym_info:
-                    for flt in sym_info.get('filters', []):
-                        ft = str(flt.get('filterType', '')).upper()
-                        if ft == 'LOT_SIZE':
-                            step = flt.get('stepSize', '1')
-                            c.qty_decimals = max(0, -_D(str(step)).normalize().as_tuple().exponent)
-                        elif ft == 'PRICE_FILTER':
-                            tick = flt.get('tickSize', '0.01')
-                            c.price_decimals = max(0, -_D(str(tick)).normalize().as_tuple().exponent)
-                    self._precision_cache[symbol] = (c.qty_decimals, c.price_decimals)
-                    self._emit("INFO", f"precision:resolved {symbol} qty_dec={c.qty_decimals} price_dec={c.price_decimals}")
-            except Exception as e:
-                self._emit("WARNING", f"precision:fallback {symbol} — {e}")
-        else:
-            c.qty_decimals, c.price_decimals = self._precision_cache[symbol]
+        # ── Auto-resolve precision from ExchangeFilterCache ──────────
+        # Universal solution: fetches LOT_SIZE, PRICE_FILTER, MIN_NOTIONAL
+        # once per symbol and caches. Prevents TP failures from precision.
+        try:
+            from runtime.core.exchange_filters import get_exchange_filters
+            _ef = get_exchange_filters()
+            _sf = await _ef.ensure_loaded(symbol, client, _to_thread=self._to_thread)
+            c.qty_decimals = _sf.qty_decimals
+            c.price_decimals = _sf.price_decimals
+        except Exception as e:
+            self._emit("WARNING", f"exchange_filters:fallback {symbol} — {e}")
 
         prev_equity = self._last_equity_usdt
         equity, capital = await self._compute_equity_usdt(client, symbol=symbol)
@@ -366,30 +355,16 @@ class DorothyRunner(BaseStrategyRunner):
             "active_rungs": active_rungs,
             "max_rungs": c.max_rungs_per_symbol,
         }
+        # Drawdown guard DEPRECATED — symmetric hub absorbs drawdown.
+        # trading_blocked is always False when max_drawdown_pct=0.
+        # Kept as telemetry field, never blocks trading.
         if trading_blocked:
-            report["decision"] = "WAIT_DRAWDOWN_GUARD"
-            report["trading_blocked"] = True
-            report["drawdown_pct"] = str(drawdown)
-            # T0.4: HARD PAUSE — if drawdown exceeds liquidation threshold,
-            # do NOT auto-liquidate (doom button removed per audit).
-            # Instead: emit CRITICAL alert and keep trading fully blocked.
-            # Human operator must manually decide to liquidate or hold.
-            if (c.drawdown_liquidate_pct > 0
-                    and drawdown > c.drawdown_liquidate_pct):
-                self._emit("CRITICAL", "bot:DRAWDOWN_CRITICAL_PAUSE", {
-                    "symbol": symbol,
-                    "drawdown_pct": str(drawdown),
-                    "threshold": str(c.drawdown_liquidate_pct),
-                    "active_rungs": active_rungs,
-                    "market_price": str(market_price),
-                    "message": "DRAWDOWN EXCEEDS CRITICAL THRESHOLD. "
-                               "Trading paused. NO auto-liquidation. "
-                               "Manual intervention required.",
-                })
-                report["decision"] = "CRITICAL_PAUSE_DRAWDOWN"
-            self._emit("WARNING", "bot:drawdown_guard_active", {"report": report})
-            self._maybe_emit_metrics()
-            return report
+            # Only log as telemetry, do NOT block.
+            self._emit("INFO", "bot:drawdown_telemetry", {
+                "symbol": symbol,
+                "drawdown_pct": str(drawdown),
+                "note": "Symmetric hub — drawdown guard deprecated, telemetry only.",
+            })
         # T0.1: Block new buys when rung ceiling is reached
         if should_buy and active_rungs >= c.max_rungs_per_symbol:
             report["decision"] = "BLOCKED_MAX_RUNGS"
@@ -507,6 +482,31 @@ class DorothyRunner(BaseStrategyRunner):
         qty = _dec(buy.get("executedQty", "0"), "0")
         sell_price = _q(buy_price * (Decimal("1") + c.profit_factor), c.price_decimals)
         sell_qty = _q(qty, c.qty_decimals)
+
+        # ── Universal filter validation before SELL LIMIT ──────────
+        try:
+            from runtime.core.exchange_filters import get_exchange_filters
+            _sf = get_exchange_filters().get(symbol)
+            if _sf:
+                sell_price = _sf.quantize_price(sell_price)
+                sell_qty = _sf.quantize_qty(sell_qty)
+                _ok, _reason = _sf.validate_order(sell_qty, sell_price)
+                if not _ok:
+                    self._emit("WARNING", f"dorothy:pre_flight_fail: {_reason}", {
+                        "symbol": symbol, "sell_qty": str(sell_qty),
+                        "sell_price": str(sell_price), "reason": _reason,
+                    })
+                    # Auto-adjust: if notional too low, use all available qty
+                    if "minNotional" in _reason and sell_price > 0:
+                        sell_qty = _sf.quantize_qty(
+                            (_sf.min_notional / sell_price) * Decimal("1.05")
+                        )
+                        sell_qty = max(sell_qty, _sf.min_qty)
+                        _ok2, _r2 = _sf.validate_order(sell_qty, sell_price)
+                        if not _ok2:
+                            self._emit("ERROR", f"dorothy:filter_unrecoverable: {_r2}")
+        except Exception as _ef_err:
+            self._emit("WARNING", f"exchange_filters:validate_failed: {_ef_err}")
 
         # T0.4: Record OPEN RUNG in local hub state
         _hub_rung_id = 0

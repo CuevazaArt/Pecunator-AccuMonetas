@@ -223,22 +223,59 @@ class BaseHubService(ABC):
         equity_msg = self.HUB_CONFIG.get("equity_msg", "bot:equity_snapshot")
         metrics_msg = self.HUB_CONFIG.get("metrics_msg", "bot:metrics")
 
+        # ── Structured JSON logger (events.jsonl) ────────────────
+        import json as _json
+        _jsonl_logger = logging.getLogger("pecunator.events.jsonl")
+        if not _jsonl_logger.handlers:
+            try:
+                from logging.handlers import RotatingFileHandler as _RFH
+                _jsonl_path = os.path.join(
+                    os.path.dirname(self._db_path or ""),
+                    "..", "events.jsonl"
+                )
+                _jsonl_path = os.path.abspath(_jsonl_path)
+                _jh = _RFH(_jsonl_path, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
+                _jh.setFormatter(logging.Formatter("%(message)s"))
+                _jsonl_logger.addHandler(_jh)
+                _jsonl_logger.setLevel(logging.DEBUG)
+                _jsonl_logger.propagate = False
+            except Exception:
+                pass
+
         def _sink(level: str, msg: str, payload: Optional[dict[str, Any]] = None) -> None:
+            import datetime as _dt
             rec = self._bots.get(bot_id)
             tag = rec.tag if rec is not None else "-"
             self._write_log(bot_id, tag, level or "INFO", msg, payload)
             
-            # Print to standard logs so execution is visible
             log_level_str = (level or "INFO").upper()
-            msg_formatted = f"[{log_level_str}] pecunator.hub_base: [{bot_id}] {msg}"
-            print(msg_formatted, flush=True)
-            
+
+            # ── Structured JSON event ────────────────────────────
+            try:
+                _event = {
+                    "ts": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                    "bot_id": bot_id,
+                    "tag": tag,
+                    "level": log_level_str,
+                    "msg": msg,
+                }
+                if isinstance(payload, dict):
+                    # Include full payload for traceability
+                    _event["payload"] = {
+                        k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                        for k, v in payload.items()
+                        if k != "report"  # Exclude bulky report to avoid duplication
+                    }
+                _jsonl_logger.info(_json.dumps(_event, default=str, ensure_ascii=False))
+            except Exception:
+                pass
+
+            # ── Console + flat log ───────────────────────────────
             log_level = getattr(logging, log_level_str, logging.INFO)
-            # For CRITICAL/ERROR, include key payload fields in flat log
             _flat_extra = ""
             if log_level >= logging.ERROR and isinstance(payload, dict):
                 _parts = []
-                for _k in ("symbol", "error", "action"):
+                for _k in ("symbol", "error", "action", "reason"):
                     _v = payload.get(_k)
                     if _v:
                         _parts.append(f"{_k}={_v}")

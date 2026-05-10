@@ -11,7 +11,7 @@ Execution via Binance Isolated Margin at 1x leverage:
   - No stop-loss (L0 symmetric hub doctrine)
   - Safety exit: close all shorts when TrendSignal flips BULLISH
 
-Capital: 18 USDT per symbol (3 rungs × 6 USDT). Liquidation at +81.8%.
+Capital: 21 USDT per symbol (3 rungs × 7 USDT). Liquidation at +81.8%.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ class ElphabaConfig:
     preset_id: str = "E1"
     symbol: str = "XRPUSDT"
     loop_interval_sec: int = 450
-    # L0: 6 USDT per rung — matches Dorothy for symmetric hedge
-    quote_order_qty: Decimal = Decimal("6")
+    # L0: 7 USDT per rung — matches Dorothy for symmetric hedge
+    quote_order_qty: Decimal = Decimal("7")
     # Take-profit: buy back at entry × (1 - profit_factor)
     profit_factor: Decimal = Decimal("0.05")
     # DCA margin: short next rung when price rises this much above anchor
@@ -41,10 +41,10 @@ class ElphabaConfig:
     qty_decimals: int = 8
     price_decimals: int = 4
     note: str = ""
-    # Drawdown guard (equity-based, not price-based)
-    max_drawdown_pct: Decimal = Decimal("0.20")
+    # Drawdown guard DEPRECATED — symmetric hub edge absorbs drawdown.
+    max_drawdown_pct: Decimal = Decimal("0")
     metrics_interval_cycles: int = 5
-    # Max DCA rungs: 3 rungs × 6 USDT = 18 USDT max collateral per symbol
+    # Max DCA rungs: 3 rungs × 7 USDT = 21 USDT max collateral per symbol
     max_rungs_per_symbol: int = 3
     # Isolated Margin settings
     margin_type: str = "ISOLATED"  # Only ISOLATED supported
@@ -223,27 +223,15 @@ class ElphabaRunner(BaseStrategyRunner):
         client = self._ensure_client()
         symbol = c.symbol
 
-        # ── Auto-resolve precision ────────────────────────────────
-        if symbol not in self._precision_cache:
-            try:
-                from decimal import Decimal as _D
-                sym_info = await self._to_thread(
-                    lambda: client.get_symbol_info(symbol)
-                )
-                if sym_info:
-                    for flt in sym_info.get('filters', []):
-                        ft = str(flt.get('filterType', '')).upper()
-                        if ft == 'LOT_SIZE':
-                            step = flt.get('stepSize', '1')
-                            c.qty_decimals = max(0, -_D(str(step)).normalize().as_tuple().exponent)
-                        elif ft == 'PRICE_FILTER':
-                            tick = flt.get('tickSize', '0.01')
-                            c.price_decimals = max(0, -_D(str(tick)).normalize().as_tuple().exponent)
-                    self._precision_cache[symbol] = (c.qty_decimals, c.price_decimals)
-            except Exception as e:
-                self._emit("WARNING", f"precision:fallback {symbol} — {e}")
-        else:
-            c.qty_decimals, c.price_decimals = self._precision_cache[symbol]
+        # ── Auto-resolve precision from ExchangeFilterCache ─────────
+        try:
+            from runtime.core.exchange_filters import get_exchange_filters
+            _ef = get_exchange_filters()
+            _sf = await _ef.ensure_loaded(symbol, client, _to_thread=self._to_thread)
+            c.qty_decimals = _sf.qty_decimals
+            c.price_decimals = _sf.price_decimals
+        except Exception as e:
+            self._emit("WARNING", f"exchange_filters:fallback {symbol} — {e}")
 
         # ── Market price ──────────────────────────────────────────
         try:

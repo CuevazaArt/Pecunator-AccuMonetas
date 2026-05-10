@@ -48,9 +48,40 @@ def _configure_logging() -> None:
     if os.environ.get("PECUNATOR_ACCESS_LOGS") != "1":
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
+def _auto_update() -> None:
+    """Auto-pull latest code from git on startup (non-blocking, best-effort)."""
+    import subprocess
+    try:
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            if "Already up to date" not in output:
+                logging.getLogger("pecunator.engine").info(
+                    "AUTO-UPDATE: git pull succeeded — %s", output.split("\n")[0]
+                )
+            else:
+                logging.getLogger("pecunator.engine").info("AUTO-UPDATE: already up to date")
+        else:
+            logging.getLogger("pecunator.engine").warning(
+                "AUTO-UPDATE: git pull failed — %s", result.stderr.strip()[:200]
+            )
+    except Exception as e:
+        logging.getLogger("pecunator.engine").warning("AUTO-UPDATE: skipped — %s", e)
+
+
 def main() -> None:
     _configure_logging()
     lo = logging.getLogger("pecunator.engine")
+
+    # ── Auto-update: pull latest code before starting ──────────
+    _auto_update()
 
     # NOTE: --autopilot mode was removed in v3.1.x.
     # Autonomous operation is handled by the Dorothy/Elphaba symmetric hub loop
@@ -69,14 +100,33 @@ def main() -> None:
 
     host = api_bind_host()
     port = api_bind_port()
-    lo.info("Starting engine HTTP API at http://%s:%s (docs /docs)", host, port)
-    uvicorn.run(
-        create_app(),
-        host=host,
-        port=port,
-        log_level=os.environ.get("UVICORN_LOG_LEVEL", "info").lower(),
-        log_config=None,  # Do not override our custom logging (rotation, noise silencing)
-    )
+
+    # ── Reload mode: auto-reload on file changes in dev ────────
+    use_reload = os.environ.get("PECUNATOR_RELOAD", "").strip().lower() in ("1", "true", "yes")
+
+    lo.info("Starting engine HTTP API at http://%s:%s (docs /docs)%s",
+            host, port, " [RELOAD ON]" if use_reload else "")
+
+    if use_reload:
+        # Reload mode requires app as import string, not factory
+        uvicorn.run(
+            "runtime.api.app:create_app",
+            factory=True,
+            host=host,
+            port=port,
+            log_level=os.environ.get("UVICORN_LOG_LEVEL", "info").lower(),
+            log_config=None,
+            reload=True,
+            reload_dirs=[os.path.dirname(__file__)],
+        )
+    else:
+        uvicorn.run(
+            create_app(),
+            host=host,
+            port=port,
+            log_level=os.environ.get("UVICORN_LOG_LEVEL", "info").lower(),
+            log_config=None,
+        )
 
 if __name__ == "__main__":
     main()
