@@ -185,7 +185,120 @@ class OrphanGuard:
 
         return orphans
 
-    # ── Combined scan ─────────────────────────────────────────────
+    # ── Dorothy auto-repair ─────────────────────────────────────────
+
+    async def recover_dorothy_orphan(
+        self,
+        client: Any,
+        orphan: dict[str, Any],
+        config: Any,
+        bot_tag: str,
+        *,
+        _to_thread: Any = None,
+    ) -> dict[str, Any]:
+        """Place missing SELL LIMIT for a Dorothy orphan.
+
+        Estimates the buy price from recent trades and computes TP as:
+            sell_price = estimated_buy * (1 + profit_factor)
+        """
+        import asyncio
+
+        async def _run(fn: Any) -> Any:
+            if _to_thread:
+                return await _to_thread(fn)
+            return await asyncio.get_event_loop().run_in_executor(None, fn)
+
+        symbol = orphan["symbol"]
+        asset_free = _dec(orphan["asset_free"], "0")
+        key = f"{symbol}:SELL_LIMIT"
+
+        # Retry guard
+        attempts = self._retry_counts.get(key, 0)
+        if attempts >= self.MAX_RETRY_ATTEMPTS:
+            _LOG.error(
+                "ORPHAN RECOVERY EXHAUSTED: %s after %d attempts — manual intervention needed",
+                symbol, attempts,
+            )
+            return {"action": "EXHAUSTED", "symbol": symbol, "attempts": attempts}
+
+        try:
+            # Estimate buy price from recent trades
+            my_trades = await _run(
+                lambda: client.get_my_trades(symbol=symbol, limit=5)
+            )
+            buy_trades = [
+                t for t in (my_trades or [])
+                if str(t.get("isBuyer")) == "True"
+            ]
+
+            if buy_trades:
+                # Use the most recent buy trade price
+                est_price = _dec(buy_trades[-1].get("price", "0"), "0")
+            else:
+                # Fallback: use current market price
+                ticker = await _run(
+                    lambda: client.get_symbol_ticker(symbol=symbol)
+                )
+                est_price = _dec(ticker.get("price", "0"), "0")
+
+            if est_price <= 0:
+                _LOG.error("ORPHAN RECOVERY: cannot estimate price for %s", symbol)
+                self._retry_counts[key] = attempts + 1
+                return {"action": "PRICE_UNKNOWN", "symbol": symbol}
+
+            sell_price = _q(
+                est_price * (Decimal("1") + config.profit_factor),
+                config.price_decimals,
+            )
+            sell_qty = _q(asset_free, config.qty_decimals)
+
+            if sell_qty <= 0:
+                _LOG.warning("ORPHAN RECOVERY: zero qty for %s", symbol)
+                self._retry_counts[key] = attempts + 1
+                return {"action": "ZERO_QTY", "symbol": symbol}
+
+            order = await _run(
+                lambda: client.create_order(
+                    symbol=symbol,
+                    side="SELL",
+                    type="LIMIT",
+                    timeInForce="GTC",
+                    quantity=str(sell_qty),
+                    price=str(sell_price),
+                    newClientOrderId=f"{bot_tag}-orphan-tp-{int(time.time())}",
+                )
+            )
+
+            # Reset retry on success
+            self._retry_counts.pop(key, None)
+
+            _LOG.critical(
+                "ORPHAN RECOVERED ✅: %s SELL LIMIT placed — qty=%s price=%s orderId=%s",
+                symbol, sell_qty, sell_price, order.get("orderId"),
+            )
+            return {
+                "action": "RECOVERED",
+                "symbol": symbol,
+                "sell_price": str(sell_price),
+                "sell_qty": str(sell_qty),
+                "order_id": order.get("orderId"),
+                "estimated_buy_price": str(est_price),
+            }
+
+        except Exception as e:
+            self._retry_counts[key] = attempts + 1
+            _LOG.error(
+                "ORPHAN RECOVERY FAILED: %s — %s (attempt %d/%d)",
+                symbol, e, attempts + 1, self.MAX_RETRY_ATTEMPTS,
+            )
+            return {
+                "action": "FAILED",
+                "symbol": symbol,
+                "error": str(e)[:300],
+                "attempt": attempts + 1,
+            }
+
+    # ── Combined scan + auto-repair ────────────────────────────────
 
     async def scan_all(
         self,
@@ -197,7 +310,7 @@ class OrphanGuard:
         *,
         _to_thread: Any = None,
     ) -> dict[str, Any]:
-        """Run both orphan scans and return combined report."""
+        """Run both orphan scans, attempt recovery, and return combined report."""
         self._last_scan_mono = time.monotonic()
 
         d_orphans = await self.scan_dorothy_orphans(
@@ -211,6 +324,7 @@ class OrphanGuard:
 
         all_orphans = d_orphans + e_orphans
         self._orphans = all_orphans
+        recoveries: list[dict[str, Any]] = []
 
         for orphan in all_orphans:
             _LOG.critical(
@@ -218,11 +332,20 @@ class OrphanGuard:
                 orphan["type"], orphan["symbol"], orphan["missing"],
             )
 
+        # Auto-repair Dorothy orphans
+        for orphan in d_orphans:
+            result = await self.recover_dorothy_orphan(
+                client, orphan, dorothy_config, dorothy_tag,
+                _to_thread=_to_thread,
+            )
+            recoveries.append(result)
+
         return {
             "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "symbol": symbol,
             "orphans_found": len(all_orphans),
             "orphans": all_orphans,
+            "recoveries": recoveries,
             "healthy": len(all_orphans) == 0,
         }
 

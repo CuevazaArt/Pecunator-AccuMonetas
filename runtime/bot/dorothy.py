@@ -237,6 +237,32 @@ class DorothyRunner(BaseStrategyRunner):
         )
         market_price = _dec(ticker.get("price", "0"), "0")
 
+        # ── ORPHAN GUARD: periodic scan + auto-repair ──────────────
+        try:
+            from runtime.core.orphan_guard import get_orphan_guard
+            _oguard = get_orphan_guard()
+            if _oguard.needs_scan():
+                _scan = await _oguard.scan_dorothy_orphans(
+                    client, symbol, my_tag, c,
+                    _to_thread=self._to_thread,
+                )
+                if _scan:
+                    for _orphan in _scan:
+                        self._emit("CRITICAL", "dorothy:ORPHAN_DETECTED", _orphan)
+                        _recovery = await _oguard.recover_dorothy_orphan(
+                            client, _orphan, c, my_tag,
+                            _to_thread=self._to_thread,
+                        )
+                        self._emit(
+                            "CRITICAL" if _recovery.get("action") != "RECOVERED" else "INFO",
+                            f"dorothy:orphan_recovery:{_recovery.get('action')}",
+                            _recovery,
+                        )
+                        self._capture_order_rate(client)
+                _oguard._last_scan_mono = time.monotonic()
+        except Exception as _og_err:
+            self._emit("WARNING", f"orphan_guard:scan_failed: {_og_err}")
+
         # ── TREND GATE: HA crossover + price vs candle open ────────
         # Gate 1: HA MA(1) > MA(2) → BULLISH required for Dorothy
         # Gate 2: price < 1h candle open → buying into a dip
