@@ -31,7 +31,7 @@ class ElphabaConfig:
     """Configuration for Elphaba short-selling bot."""
     preset_id: str = "E1"
     symbol: str = "XRPUSDT"
-    loop_interval_sec: int = 450
+    loop_interval_sec: int = 225
     # L0: 7 USDT per rung — matches Dorothy for symmetric hedge
     quote_order_qty: Decimal = Decimal("7")
     # Take-profit: buy back at entry × (1 - profit_factor)

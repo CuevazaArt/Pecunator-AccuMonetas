@@ -365,6 +365,7 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
   Timer? _timer;
   final List<_Sample> _data = [];
   double _startEquity = 0;
+  bool _historyLoaded = false;
 
   // Capital breakdown
   double _free = 0;
@@ -374,6 +375,7 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
   @override
   void initState() {
     super.initState();
+    _loadHistory();
     _tick();
     _timer = Timer.periodic(widget.syncInterval, (_) => _tick());
   }
@@ -382,6 +384,37 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Seed chart with historical equity from the backend SQLite.
+  Future<void> _loadHistory() async {
+    if (_historyLoaded) return;
+    try {
+      final resp = await widget.api.equityHistory(
+        minutes: widget.timeWindow.inMinutes,
+        limit: 500,
+      );
+      final pts = resp['points'];
+      if (pts is List && pts.isNotEmpty) {
+        final now = DateTime.now();
+        final cutoff = now.subtract(widget.timeWindow);
+        final samples = <_Sample>[];
+        for (final p in pts) {
+          final ts = DateTime.tryParse('${p['ts']}');
+          final eq = double.tryParse('${p['equity']}') ?? 0;
+          if (ts != null && eq > 0 && ts.isAfter(cutoff)) {
+            samples.add(_Sample(ts, eq));
+          }
+        }
+        if (samples.isNotEmpty && mounted) {
+          setState(() {
+            _data.insertAll(0, samples);
+            _startEquity = _data.first.value.toDouble();
+          });
+        }
+      }
+    } catch (_) {}
+    _historyLoaded = true;
   }
 
   Future<void> _tick() async {

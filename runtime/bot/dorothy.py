@@ -27,7 +27,7 @@ class DorothyConfig:
     # Preset B with safe mode defaults.
     preset_id: str = "B"
     symbol: str = "XRPUSDT"
-    loop_interval_sec: int = 450
+    loop_interval_sec: int = 225
     quote_order_qty: Decimal = Decimal("7")  # 7 USDT per rung (above MIN_NOTIONAL)
     profit_factor: Decimal = Decimal("0.05")
     margin_drop_factor: Decimal = Decimal("0.03")  # L0: 3% between DCA steps

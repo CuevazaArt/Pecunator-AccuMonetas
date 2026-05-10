@@ -14,6 +14,7 @@ from runtime.api.schemas import (
     HubBotLogsOut,
     HubBotOut,
     HubBotsOut,
+    HubBotUpdateBody,
 )
 from runtime.app import AppContext
 from runtime.core.security_util import sanitize_log_message
@@ -56,6 +57,31 @@ async def elphaba_bots_create(body: HubBotCreateBody) -> Any:
             metrics_interval_cycles=body.metrics_interval_cycles,
         )
     except ValueError as e:
+        raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
+    return HubBotOut(**row)
+
+
+@router.patch("/bots/{bot_id}", response_model=HubBotOut)
+async def elphaba_bots_update(bot_id: str, body: HubBotUpdateBody) -> Any:
+    svc = deps.get_elphaba()
+    try:
+        row = svc.update_instance(
+            bot_id,
+            tag=body.tag,
+            symbol=body.symbol,
+            loop_interval_sec=body.loop_interval_sec,
+            quote_order_qty=body.quote_order_qty,
+            profit_factor=body.profit_factor,
+            margin_rise_factor=body.margin_drop_factor,
+            qty_decimals=body.qty_decimals,
+            price_decimals=body.price_decimals,
+            note=body.note,
+            max_drawdown_pct=body.max_drawdown_pct,
+            metrics_interval_cycles=body.metrics_interval_cycles,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Bot not found") from None
+    except Exception as e:
         raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
     return HubBotOut(**row)
 

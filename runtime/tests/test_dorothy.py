@@ -17,7 +17,7 @@ class TestDorothyConfig:
         """Test default configuration."""
         cfg = DorothyConfig()
         assert cfg.symbol == "XRPUSDT"
-        assert cfg.loop_interval_sec == 450
+        assert cfg.loop_interval_sec == 225
         assert cfg.quote_order_qty == Decimal("7")
         assert cfg.profit_factor == Decimal("0.05")
 

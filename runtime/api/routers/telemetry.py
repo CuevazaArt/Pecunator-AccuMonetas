@@ -89,3 +89,67 @@ async def usage_rest_weight_report(ctx: AppContext = Depends(deps.get_ctx)) -> d
             "A window reset can make per-call deltas unavailable for a sample.",
         ],
     }
+
+
+# ── Equity History ──────────────────────────────────────────────────
+
+@router.get("/api/v1/equity/history")
+async def equity_history(
+    minutes: int = 60,
+    limit: int = 500,
+) -> dict[str, Any]:
+    """Return recent equity snapshots aggregated across all bots.
+
+    The Flutter MiniEquityChart polls this on init to seed its graph
+    with historical data instead of starting from zero.
+    """
+    import datetime as _dt
+    import sqlite3
+
+    from runtime.api import deps
+
+    points: list[dict[str, Any]] = []
+    cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=minutes)).isoformat()
+
+    # Query Dorothy hub equity snapshots
+    for svc_getter, pfx in [(deps.get_bot, "dorothy"), (deps.get_elphaba, "elphaba")]:
+        try:
+            svc = svc_getter()
+            db_path = getattr(svc, "_db_path", None)
+            if not db_path:
+                continue
+            conn = sqlite3.connect(str(db_path), timeout=2)
+            try:
+                rows = conn.execute(
+                    f"""
+                    SELECT ts_utc, equity_usdt, capital_usdt
+                    FROM {pfx}_equity_snapshots
+                    WHERE ts_utc >= ?
+                    ORDER BY ts_utc DESC
+                    LIMIT ?
+                    """,
+                    (cutoff, limit),
+                ).fetchall()
+                for r in rows:
+                    points.append({
+                        "ts": r[0],
+                        "equity": r[1],
+                        "capital": r[2],
+                        "source": pfx,
+                    })
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+    # Sort chronologically and deduplicate by timestamp (take max equity)
+    seen: dict[str, dict[str, Any]] = {}
+    for p in points:
+        ts = p["ts"]
+        eq = float(p.get("equity") or 0)
+        if ts not in seen or eq > float(seen[ts].get("equity") or 0):
+            seen[ts] = p
+    result = sorted(seen.values(), key=lambda x: x["ts"])[-limit:]
+
+    return {"points": result, "count": len(result), "minutes": minutes}
+

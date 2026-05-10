@@ -109,6 +109,10 @@ class EngineApi {
   Future<Map<String, dynamic>> symbolPrecision(String symbol) =>
       _client.get('/api/v1/gateway/symbol_precision?symbol=${Uri.encodeComponent(symbol)}');
 
+  /// Fetch historical equity snapshots from the backend (SQLite).
+  Future<Map<String, dynamic>> equityHistory({int minutes = 60, int limit = 500}) =>
+      _client.get('/api/v1/equity/history?minutes=$minutes&limit=$limit');
+
   Future<Map<String, dynamic>> terminalExecute({required String command}) =>
       _client.post('/api/v1/terminal/execute', body: {'command': command});
 
