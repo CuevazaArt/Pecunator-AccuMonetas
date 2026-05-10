@@ -365,10 +365,15 @@ class _AccountSystemDrawerState extends State<AccountSystemDrawer> {
   Future<void> _executeOp(String op) async {
     setState(() { _operating = true; });
     try {
-      if (op == 'close') await widget.api.executeCloseProtocol();
-      else if (op == 'cancel_limits') await widget.api.executeOrderCleanupLimit();
-      else if (op == 'red_button') await widget.api.executeRedButton();
-      else if (op == 'reset_fuse') await widget.api.apiFuseReset();
+      if (op == 'close') {
+        await widget.api.executeCloseProtocol();
+      } else if (op == 'cancel_limits') {
+        await widget.api.executeOrderCleanupLimit();
+      } else if (op == 'red_button') {
+        await widget.api.executeRedButton();
+      } else if (op == 'reset_fuse') {
+        await widget.api.apiFuseReset();
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Operación $op completada'), backgroundColor: Colors.green));
@@ -380,15 +385,5 @@ class _AccountSystemDrawerState extends State<AccountSystemDrawer> {
     } finally {
       if (mounted) setState(() => _operating = false);
     }
-  }
-
-  Widget _kpi(String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
-      child: Column(children: [
-        Text(value, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: color)),
-        Text(label, style: const TextStyle(fontSize: 6, color: Colors.white38)),
-      ]),
-    );
   }
 }

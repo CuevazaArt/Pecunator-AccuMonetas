@@ -14,11 +14,11 @@ import '../widgets/account_system_drawer.dart';
 /// Unified hub page — single view for the entire Pecunator operating console.
 ///
 /// Layout (top → bottom, minimal scroll):
-///   1. Prospector (collapsible)
-///   2. Telemetry row (weight chart + oscillator + equity)
+///   1. Telemetry bar (weight chart + equity + status lights)
+///   2. Prospector (collapsible)
 ///   3. Hub status + paired instances
 ///   4. Dorothy ↔ Elphaba side-by-side hubs
-///   5. System drawer (collapsible: balances, budget, ledger, guards, ops)
+///   5. System drawer (collapsible: balances, budget, ledger, ops)
 class UnifiedHubPage extends StatefulWidget {
   final String engineBase;
 
@@ -32,12 +32,12 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
   late final EngineApi _api;
   Timer? _timer;
 
-
   // Dorothy + Elphaba reports for HubStatusExplainer
   Map<String, dynamic> _dorothyReport = {};
   Map<String, dynamic> _elphabaReport = {};
   bool _fuseTripped = false;
   bool _budgetBlocked = false;
+  bool _gatewayRunning = false;
 
   // Bot lists for paired instances
   List<Map<String, dynamic>> _dorothyBots = [];
@@ -71,6 +71,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         _api.elphabaBots().catchError((_) => <String, dynamic>{}),
         _api.apiFuseStatus().catchError((_) => <String, dynamic>{}),
         _api.budgetGuardStatus().catchError((_) => <String, dynamic>{}),
+        _api.gatewaySnapshot().catchError((_) => <String, dynamic>{}),
       ]);
 
       final dorBots = ((results[0]['bots'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -100,6 +101,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         _elphabaReport = elpReport;
         _fuseTripped = results[2]['tripped'] == true;
         _budgetBlocked = results[3]['blocked'] == true;
+        _gatewayRunning = results[4]['gateway_running'] == true;
       });
     } catch (_) {}
   }
@@ -121,17 +123,16 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       final dorBot = await _api.hubCreateBot(dConfig);
       final elpBot = await _api.elphabaCreateBot(eConfig);
       
-      // Fire and forget starts so we don't block on backend staging launch delays
       if (dorBot['bot_id'] != null) {
-        _api.hubStartBot(dorBot['bot_id']).catchError((e) => debugPrint('Error auto-starting Dorothy: $e'));
+        _api.hubStartBot(dorBot['bot_id']).catchError((e) { debugPrint('Error auto-starting Dorothy: $e'); return <String, dynamic>{}; });
       }
       if (elpBot['bot_id'] != null) {
-        _api.elphabaStartBot(elpBot['bot_id']).catchError((e) => debugPrint('Error auto-starting Elphaba: $e'));
+        _api.elphabaStartBot(elpBot['bot_id']).catchError((e) { debugPrint('Error auto-starting Elphaba: $e'); return <String, dynamic>{}; });
       }
 
       setState(() {
-        _savedPresets[dConfig['symbol']] = dConfig; // You can save Dorothy's as reference, or combined
-        _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig; // Save Elphaba separately if needed
+        _savedPresets[dConfig['symbol']] = dConfig;
+        _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig;
         _stagedSymbol = null;
       });
       AppPreferences.setSavedPresetsJson(jsonEncode(_savedPresets));
@@ -150,54 +151,33 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
     }
   }
 
+  int get _botsRunning =>
+      _dorothyBots.where((b) => b['running'] == true).length +
+      _elphabaBots.where((b) => b['running'] == true).length;
+
+  int get _botsTotal => _dorothyBots.length + _elphabaBots.length;
+
   @override
   Widget build(BuildContext context) {
+    const hPad = EdgeInsets.symmetric(horizontal: 16);
+
     return CustomScrollView(
       slivers: [
-        // ── 1. Prospector (collapsible) ────────────────────────
+        // ── 1. Telemetry bar (compact, full width) ─────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 4),
-            child: ProspectorExpander(
-              api: _api,
-              onSymbolSelected: _handleSymbolSelected,
-            ),
-          ),
-        ),
-
-        // ── 1.5 Staged Symbol Panel ────────────────────────────
-        if (_stagedSymbol != null)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 72),
-              child: StagedSymbolPanel(
-                symbol: _stagedSymbol!,
-                initialPresetDorothy: _savedPresets[_stagedSymbol!],
-                initialPresetElphaba: _savedPresets[_stagedSymbol! + '_elphaba'],
-                onAcceptSymmetric: _handleStagedAcceptSymmetric,
-                onCancel: () => setState(() => _stagedSymbol = null),
-              ),
-            ),
-          ),
-
-        // ── 2. Telemetry row ───────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
             child: Row(
               children: [
+                // Weight chart (auto-scaled)
                 Expanded(
-                  flex: 3,
+                  flex: 5,
                   child: MiniWeightChart(api: _api, height: 48),
                 ),
                 const SizedBox(width: 4),
+                // Equity chart
                 Expanded(
-                  flex: 3,
-                  child: WeightOscillator(api: _api, height: 48),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  flex: 3,
+                  flex: 5,
                   child: MiniEquityChart(
                     api: _api,
                     label: 'Equity',
@@ -207,25 +187,48 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Expanded(
-                  flex: 2,
-                  child: StatusLights(
-                    gatewayRunning: _dorothyBots.isNotEmpty || _elphabaBots.isNotEmpty,
-                    fuseTripped: _fuseTripped,
-                    botsRunning: _dorothyBots.where((b) => b['running'] == true).length +
-                        _elphabaBots.where((b) => b['running'] == true).length,
-                    botsTotal: _dorothyBots.length + _elphabaBots.length,
-                  ),
+                // Status lights
+                StatusLights(
+                  gatewayRunning: _gatewayRunning,
+                  fuseTripped: _fuseTripped,
+                  botsRunning: _botsRunning,
+                  botsTotal: _botsTotal,
                 ),
               ],
             ),
           ),
         ),
 
+        // ── 2. Prospector (collapsible) ────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+            child: ProspectorExpander(
+              api: _api,
+              onSymbolSelected: _handleSymbolSelected,
+            ),
+          ),
+        ),
+
+        // ── 2.5 Staged Symbol Panel ────────────────────────────
+        if (_stagedSymbol != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: hPad,
+              child: StagedSymbolPanel(
+                symbol: _stagedSymbol!,
+                initialPresetDorothy: _savedPresets[_stagedSymbol!],
+                initialPresetElphaba: _savedPresets['${_stagedSymbol!}_elphaba'],
+                onAcceptSymmetric: _handleStagedAcceptSymmetric,
+                onCancel: () => setState(() => _stagedSymbol = null),
+              ),
+            ),
+          ),
+
         // ── 3. Hub status + Paired instances ───────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -253,13 +256,14 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
           ),
         ),
 
+        // ── 4. Dorothy ↔ Elphaba side-by-side ──────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(72, 2, 72, 12),
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Dorothy (LONG) ──────────────────────────
+                // Dorothy (LONG)
                 Expanded(
                   child: BotHubTemplate(
                     hubName: 'Dorothy',
@@ -287,13 +291,12 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     },
                   ),
                 ),
-                // ── Divider ─────────────────────────────────
                 Container(
                   width: 1,
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   color: Colors.white.withValues(alpha: 0.08),
                 ),
-                // ── Elphaba (SHORT) ─────────────────────────
+                // Elphaba (SHORT)
                 Expanded(
                   child: BotHubTemplate(
                     hubName: 'Elphaba',
@@ -329,13 +332,10 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         // ── 5. System drawer (collapsible) ─────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 72, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: AccountSystemDrawer(api: _api),
           ),
         ),
-
-        // Bottom padding
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
       ],
     );
   }

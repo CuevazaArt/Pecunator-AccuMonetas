@@ -14,7 +14,7 @@ class MiniWeightChart extends StatefulWidget {
   const MiniWeightChart({
     super.key,
     required this.api,
-    this.syncInterval = const Duration(milliseconds: 200),
+    this.syncInterval = const Duration(seconds: 2),
     this.timeWindow = const Duration(minutes: 10),
     this.height = 48,
   });
@@ -65,12 +65,6 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
         limit = int.tryParse('$limitRaw') ?? 6000;
       }
 
-      bool fuse = false;
-      try {
-        final fs = await widget.api.apiFuseStatus();
-        fuse = fs['tripped'] == true;
-      } catch (_) {}
-
       if (!mounted) return;
       final now = DateTime.now();
       final cutoff = now.subtract(widget.timeWindow);
@@ -78,7 +72,8 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
         if (used != null) _data.add(_Sample(now, used));
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         _weightLimit = limit > 0 ? limit : 6000;
-        _fuseTripped = fuse;
+        // Derive fuse-like state from weight percentage (>90% = danger)
+        _fuseTripped = used != null && limit > 0 && (used / limit) >= 0.90;
       });
     } catch (_) {}
   }
@@ -585,9 +580,9 @@ class _WeightOscillatorState extends State<WeightOscillator> {
   bool _fuseTripped = false;
 
   // Adjustable controls
-  int _syncMs = 200;
+  int _syncMs = 2000;
   int _windowMin = 10;
-  static const _syncOptions = [100, 200, 500, 1000, 3000];
+  static const _syncOptions = [1000, 2000, 3000, 5000, 10000];
   static const _windowOptions = [1, 5, 10, 30, 60];
 
   @override
@@ -631,12 +626,6 @@ class _WeightOscillatorState extends State<WeightOscillator> {
         limit = int.tryParse('$limitRaw') ?? 6000;
       }
 
-      bool fuse = false;
-      try {
-        final fs = await widget.api.apiFuseStatus();
-        fuse = fs['tripped'] == true;
-      } catch (_) {}
-
       if (!mounted) return;
       final now = DateTime.now();
       final cutoff = now.subtract(Duration(minutes: _windowMin));
@@ -646,7 +635,7 @@ class _WeightOscillatorState extends State<WeightOscillator> {
         }
         _data.removeWhere((s) => s.time.isBefore(cutoff));
         _weightLimit = limit > 0 ? limit : 6000;
-        _fuseTripped = fuse;
+        _fuseTripped = used != null && limit > 0 && (used / limit) >= 0.90;
       });
     } catch (_) {}
   }

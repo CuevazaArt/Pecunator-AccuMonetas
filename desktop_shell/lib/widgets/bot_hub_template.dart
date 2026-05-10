@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
-import 'mini_charts.dart'; // StatusLights widget
 
 /// Reusable template for any bot hub page.
 ///
@@ -55,8 +54,6 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   List<Map<String, dynamic>> _bots = [];
   bool _loading = true;
   String? _error;
-  bool _gatewayRunning = false;
-  bool _fuseTripped = false;
   String? _expandedBotId;
   final Map<String, List<String>> _botLogs = {};
 
@@ -77,17 +74,9 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
     setState(() => _loading = true);
     try {
       final bots = await widget.fetchBots();
-      final snap = await widget.api.gatewaySnapshot();
-      bool fuse = false;
-      try {
-        final fs = await widget.api.apiFuseStatus();
-        fuse = fs['tripped'] == true;
-      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _bots = bots;
-        _gatewayRunning = snap['gateway_running'] == true;
-        _fuseTripped = fuse;
         _loading = false;
         _error = null;
       });
@@ -103,17 +92,9 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   Future<void> _refreshSilent() async {
     try {
       final bots = await widget.fetchBots();
-      final snap = await widget.api.gatewaySnapshot();
-      bool fuse = false;
-      try {
-        final fs = await widget.api.apiFuseStatus();
-        fuse = fs['tripped'] == true;
-      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _bots = bots;
-        _gatewayRunning = snap['gateway_running'] == true;
-        _fuseTripped = fuse;
       });
       
       // Fetch logs for expanded bot to keep them fresh without flickering

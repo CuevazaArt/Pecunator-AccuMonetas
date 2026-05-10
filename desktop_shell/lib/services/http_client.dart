@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'api_token.dart';
 import 'exceptions.dart';
 
 class HttpClientConfig {
@@ -39,7 +40,7 @@ class RobustHttpClient {
       _requestWithRetry(
         () => _inner.get(
           Uri.parse('$baseUrl$endpoint'),
-          headers: headers,
+          headers: _mergeHeaders(headers),
         ),
         timeout: timeout,
       );
@@ -49,8 +50,15 @@ class RobustHttpClient {
     'Accept': 'application/json',
   };
 
-  Map<String, String> _mergeHeaders(Map<String, String>? headers) =>
-      {..._jsonHeaders, ...?headers};
+  Map<String, String> _mergeHeaders(Map<String, String>? headers) {
+    final merged = <String, String>{..._jsonHeaders, ...?headers};
+    // Inject bearer token if available
+    final token = ApiTokenReader.readToken();
+    if (token != null && !merged.containsKey('Authorization')) {
+      merged['Authorization'] = 'Bearer $token';
+    }
+    return merged;
+  }
 
   /// Perform POST request with retry and error handling.
   Future<Map<String, dynamic>> post(
@@ -88,7 +96,7 @@ class RobustHttpClient {
       _requestWithRetry(
         () => _inner.delete(
           Uri.parse('$baseUrl$endpoint'),
-          headers: headers,
+          headers: _mergeHeaders(headers),
         ),
       );
 
