@@ -174,6 +174,7 @@ class ElphabaRunner(BaseStrategyRunner):
             self._emit("INFO", "elphaba:close_at_market", {
                 "symbol": symbol, "qty": str(qty), "response": order,
             })
+            self._capture_order_rate(client)
             return order
         except Exception as e:
             self._emit("ERROR", f"elphaba:close_at_market_failed: {e}")
@@ -478,6 +479,7 @@ class ElphabaRunner(BaseStrategyRunner):
         self._emit("INFO", "elphaba:create_margin_order_sell_short", {
             "symbol": symbol, "response": short_order,
         })
+        self._capture_order_rate(client)
 
         # Resolve actual fill price
         fills = short_order.get("fills") or []
@@ -561,6 +563,7 @@ class ElphabaRunner(BaseStrategyRunner):
         self._emit("INFO", "elphaba:create_margin_order_buy_limit_tp", {
             "symbol": symbol, "response": tp_order,
         })
+        self._capture_order_rate(client)
 
         report["execution"] = "LIVE"
         report["short_order_id"] = short_order.get("orderId")

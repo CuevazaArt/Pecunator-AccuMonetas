@@ -151,9 +151,19 @@ def audit_weight_from_client(
         headers = getattr(resp, "headers", None) or {}
         raw = None
         for k, v in headers.items():
-            if str(k).upper() == "X-MBX-USED-WEIGHT-1M":
+            ku = str(k).upper()
+            if ku == "X-MBX-USED-WEIGHT-1M":
                 raw = v
-                break
+            elif ku == "X-MBX-ORDER-COUNT-10S":
+                try:
+                    ctx.state.order_count_10s = int(float(v))
+                except (TypeError, ValueError):
+                    pass
+            elif ku == "X-MBX-ORDER-COUNT-1M":
+                try:
+                    ctx.state.order_count_1m = int(float(v))
+                except (TypeError, ValueError):
+                    pass
         if raw is None:
             return
         used = int(float(raw))

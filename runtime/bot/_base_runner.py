@@ -127,6 +127,34 @@ class BaseStrategyRunner:
     async def _to_thread(self, fn: Callable[[], Any]) -> Any:
         return await asyncio.to_thread(fn)
 
+    def _capture_order_rate(self, client: Client) -> None:
+        """Read X-MBX-ORDER-COUNT-* headers from the bot's last REST response
+        and feed them into the shared StateStore for dashboard telemetry."""
+        try:
+            resp = getattr(client, "response", None)
+            if resp is None:
+                return
+            headers = getattr(resp, "headers", None) or {}
+            for k, v in headers.items():
+                ku = str(k).upper()
+                if ku == "X-MBX-ORDER-COUNT-10S":
+                    try:
+                        from runtime.core.state_store import StateStore
+                        from runtime.api import deps
+                        ctx = deps.get_context()
+                        ctx.state.order_count_10s = int(float(v))
+                    except Exception:
+                        pass
+                elif ku == "X-MBX-ORDER-COUNT-1M":
+                    try:
+                        from runtime.api import deps
+                        ctx = deps.get_context()
+                        ctx.state.order_count_1m = int(float(v))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     async def _sync_time_for_signed(self, client: Client) -> None:
         """Sync local timestamp offset with Binance server time."""
         data = await self._to_thread(lambda: client.get_server_time())

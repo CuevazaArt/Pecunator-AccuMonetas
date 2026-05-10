@@ -445,6 +445,8 @@ class DorothyRunner(BaseStrategyRunner):
             get_symmetry_guard().record_order_success(self._bot_key())
         except Exception:
             pass
+        # Capture order rate from response headers
+        self._capture_order_rate(client)
 
         # T0.3: Update ledger with Binance response
         if _ledger_id:
@@ -561,6 +563,8 @@ class DorothyRunner(BaseStrategyRunner):
                 )
             except Exception as e:
                 self._emit("ERROR", f"order_ledger:update_failed:{e}")
+        # Capture order rate from response headers
+        self._capture_order_rate(client)
 
         # T0.4: Link SELL LIMIT to local hub rung
         if _hub_rung_id > 0:
