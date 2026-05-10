@@ -359,17 +359,4 @@ class EngineApi {
   Future<Map<String, dynamic>> healthV1() =>
       _client.get('/api/v1/health');
 
-  // ── Prospector endpoints ──────────────────────────────────────
-
-  Future<Map<String, dynamic>> prospectorScan({int topN = 15}) =>
-      _client.get(
-        '/prospector/scan?top_n=$topN',
-        timeout: const Duration(seconds: 120),
-      );
-
-  Future<Map<String, dynamic>> prospectorLast() =>
-      _client.get('/prospector/last');
-
-  Future<Map<String, dynamic>> prospectorScore(String symbol) =>
-      _client.get('/prospector/score/${Uri.encodeComponent(symbol)}');
 }

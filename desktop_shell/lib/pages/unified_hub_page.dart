@@ -5,7 +5,7 @@ import '../api_client.dart';
 import '../services/preferences.dart';
 import '../widgets/mini_charts.dart';
 import '../widgets/bot_hub_template.dart';
-import '../widgets/prospector_expander.dart';
+
 import '../widgets/emergency_ops_drawer.dart';
 import '../widgets/staged_symbol_panel.dart';
 import '../widgets/order_ledger_panel.dart';
@@ -14,8 +14,7 @@ import '../widgets/order_ledger_panel.dart';
 ///
 /// Layout (top → bottom):
 ///   1. Telemetry bar (weight + equity + spot balances + status lights)
-///   2. Prospector (collapsible)
-///   3. Emergency Ops (collapsible, collapsed by default)
+///   2. Emergency Ops (collapsible, collapsed by default)
 ///   4. Dorothy ↔ Elphaba side-by-side hubs
 ///   5. Order Ledger (expandable details)
 class UnifiedHubPage extends StatefulWidget {
@@ -174,16 +173,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
           ),
         ),
 
-        // ── 2. Prospector (collapsible) ────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
-            child: ProspectorExpander(
-              api: _api,
-              onSymbolSelected: _handleSymbolSelected,
-            ),
-          ),
-        ),
+
 
         // ── 2.5 Staged Symbol Panel ────────────────────────────
         if (_stagedSymbol != null)
