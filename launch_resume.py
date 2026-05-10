@@ -5,7 +5,7 @@ so bots resume their configurations and continue watching their
 open Binance orders after a crash or restart.
 
 Usage:
-    .venv\Scripts\python.exe launch_resume.py
+    .venv/Scripts/python.exe launch_resume.py
 """
 
 from __future__ import annotations

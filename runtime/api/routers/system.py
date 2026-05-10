@@ -1,4 +1,4 @@
-"""System observability router: health, fuse, governor, coordinator, api-log."""
+"""System observability router: health, fuse, governor, coordinator."""
 
 from __future__ import annotations
 
@@ -8,12 +8,9 @@ from typing import Any
 
 _LOG = logging.getLogger("pecunator.api.system")
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from runtime.api import deps
-from runtime.api._helpers import rest_weight_estimate_report
-from runtime.app import AppContext
-from runtime.core.settings import api_weight_limit_1m_display, account_poll_interval_sec
 
 router = APIRouter(tags=["system"])
 
@@ -188,11 +185,11 @@ async def bot_coordinator_status() -> dict[str, Any]:
     return coord.status()
 
 
-# ── Budget Guard ────────────────────────────────────────────────────
+# ── Budget Guard (DEPRECATED — bots no longer use it) ───────────────
 
 @router.get("/api/v1/budget-guard/status")
 async def budget_guard_status() -> dict[str, Any]:
-    """Return 24h spend tracking for the global budget guard."""
+    """Return 24h spend tracking. DEPRECATED: bots cover each other symmetrically."""
     from runtime.core.budget_guard import get_budget_guard
     return get_budget_guard().status()
 

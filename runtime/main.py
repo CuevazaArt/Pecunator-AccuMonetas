@@ -53,8 +53,8 @@ def main() -> None:
     lo = logging.getLogger("pecunator.engine")
 
     # NOTE: --autopilot mode was removed in v3.1.x.
-    # Autonomous operation is handled by the Dorothy⇄Elphaba hub loop
-    # with ApiFuse, SymmetryGuard, and BudgetGuard as active governors.
+    # Autonomous operation is handled by the Dorothy/Elphaba symmetric hub loop
+    # with ApiFuse, SymmetryGuard, and TrendSignal as active governors.
 
     if os.environ.get("PECUNATOR_ENGINE_STUB", "").strip().lower() in ("1", "true", "yes"):
         lo.info(
