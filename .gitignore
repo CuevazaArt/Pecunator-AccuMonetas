@@ -11,6 +11,7 @@ runtime/data/credential_public.json
 runtime/data/active_credential_id.txt
 runtime/data/*.sqlite
 runtime/data/*.json
+runtime/data/api.token
 runtime/data/documents/*
 !runtime/data/documents/.gitkeep
 .idea/

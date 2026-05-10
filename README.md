@@ -1,7 +1,9 @@
 # PecunatorCore
 
-PecunatorCore is a modular trading runtime with a local Python engine and a dedicated Flutter desktop UI.
-This repository is **desktop-first**: there is **no browser dashboard**.
+PecunatorCore is a modular autonomous trading runtime with a local Python engine (FastAPI) and a dedicated Flutter desktop UI.
+This repository is **desktop-first**: the Flutter shell connects to the local engine over HTTP.
+
+**Symmetric Hub Architecture:** Dorothy (bullish DCA spot) + Elphaba (bearish margin short) operate as a paired hedge on the same symbols.
 
 ## Directiva de trabajo
 
@@ -17,13 +19,22 @@ This repository is **desktop-first**: there is **no browser dashboard**.
    - Acceso rápido en el escritorio (motor + app): `powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1` crea **`PecunatorCore.lnk`**; el lanzador está en `scripts/ui/PecunatorDesktopLauncher.ps1`.
 4. Producción Windows: `flutter build windows` y ejecutar `desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe`.
 
-**Limpiar caché y recompilar la UI:** cierra la app (`pecunator_desktop.exe`) para liberar DLLs; en `desktop_shell/` ejecuta `flutter clean`, luego `flutter pub get` y `flutter build windows` (o `flutter run -d windows`). Datos del hub en SQLite: `runtime/data/dorothy_hub.sqlite` (elimínalo solo si quieres resetear logs/config del hub; haz copia antes).
+**Limpiar caché y recompilar la UI:** cierra la app (`pecunator_desktop.exe`) para liberar DLLs; en `desktop_shell/` ejecuta `flutter clean`, luego `flutter pub get` y `flutter build windows` (o `flutter run -d windows`). Datos del hub en SQLite: `runtime/data/dorothy_hub.sqlite` y `runtime/data/elphaba_hub.sqlite`.
 
 Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
 
 ## Motor Python (HTTP API)
 
 Por defecto la API se levanta en **[`http://127.0.0.1:8000`](http://127.0.0.1:8000)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de "peso REST" en la UI con el límite de referencia de `exchangeInfo`.
+
+### API Authentication
+
+The engine auto-generates a bearer token on first boot at `runtime/data/api.token`. The Flutter client reads this file directly from the filesystem. All endpoints require this token via `Authorization: Bearer <token>` header.
+
+- To disable auth for development: `PECUNATOR_API_AUTH_DISABLED=1`
+- Token auto-regenerates if the file is deleted.
+
+### Quick Start
 
 - Atajo PowerShell (venv + arranque directo): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1`**.
 - Supervisor inmortal del motor (reinicia si el proceso cae): **`powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine_immortal.ps1`**.
@@ -35,76 +46,38 @@ Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/
 
 ### Estructura modular del repo (raíz)
 
-- `bots/` contiene un folder dedicado por bot activo:
-  - `bots/dorothy/`
-  - `bots/masha/`
-  - `bots/thusnelda/`
-- `tools/` contiene un folder dedicado por herramienta operativa:
-  - `tools/ops-protocols/`
-  - `tools/sandbox-rest/`
-  - `tools/rest-weight-monitor/`
-- `runtime/modules/` consolida módulos Python de dominio para bots y herramientas.
-- `examples/` consolida referencias históricas/no funcionales (no participa del runtime productivo).
-
-- **Límites de API / WebSocket y cumplimiento (referencia actualizable):** [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md)
+- `runtime/bot/` — Dorothy (spot DCA) and Elphaba (margin short) runners
+- `runtime/core/` — Infrastructure: WeightGovernor, ApiFuse, BotCoordinator, SymmetryGuard, BudgetGuard, OrderLedger, StateWAL
+- `runtime/api/` — FastAPI routers and hub services
+- `runtime/modules/` — Prospector (SEVI-M), TrendSignal, VMO
+- `runtime/connectors/` — BinanceGateway
+- `runtime/tests/` — Official test suite
+- `desktop_shell/` — Flutter desktop UI
 
 ### Credenciales del motor
 
 El motor toma credenciales desde:
 
-1. Variables de entorno `PECUNATOR_BINANCE_API_KEY` / `PECUNATOR_BINANCE_API_SECRET`.
+1. Variables de entorno por bot: `DOROTHY_API_KEY`/`DOROTHY_API_SECRET` y `ELPHABA_API_KEY`/`ELPHABA_API_SECRET`.
 2. Cofre local cifrado (`runtime/data/credentials.enc`) gestionado desde la UI Flutter.
 
 Recomendación operativa: usar una sola fuente activa por sesión para evitar mezclar cuentas sin querer.
 
-### Mecanismo de inmortalidad (hub Dorothy)
+### Mecanismo de inmortalidad (hub Dorothy + Elphaba)
 
-- Las instancias del hub se persisten en `runtime/data/dorothy_hub.sqlite` con su **estado deseado** (`desired_running`).
+- Las instancias del hub se persisten en `runtime/data/dorothy_hub.sqlite` y `runtime/data/elphaba_hub.sqlite` con su **estado deseado** (`desired_running`).
 - Si una instancia estaba marcada para correr, el motor intenta **reanudarla automáticamente** al iniciar y también cuando detecta caídas (reintentos periódicos con credenciales disponibles).
-- Si hay desconexiones o excepciones transitorias, Dorothy aplica **reintentos con backoff** y recrea cliente para recuperar sesión de red.
-- Para retomar trabajo tras reinicio de Windows, instala autoarranque:
-  - `powershell -ExecutionPolicy Bypass -File scripts/engine/InstallImmortalStartup.ps1`
+- Si hay desconexiones o excepciones transitorias, ambos bots aplican **reintentos con backoff** y recrean cliente para recuperar sesión de red.
+- **StateWAL** persiste el estado del gateway después de cada ciclo de polling para crash-safe recovery.
 
 ### Cofre (`credentials.enc`)
 
-Las credenciales Binance se guardan en **`runtime/data/credentials.enc`** cifradas con **Fernet** usando la clave **`vault_local.key`** en la misma carpeta. Solo hacen falta **API key** y **secret** en la UI o por variables de entorno del motor.
-
-## API surface (current)
-
-- Vault + credenciales:
-  - `GET /api/v1/vault/status`
-  - `GET /api/v1/vault/credentials`
-  - `POST /api/v1/vault/credentials`
-  - `PATCH /api/v1/vault/credentials/{credential_id}`
-  - `DELETE /api/v1/vault/credentials/{credential_id}`
-  - `GET /api/v1/credentials/active`
-- Gateway Binance:
-  - `POST /api/v1/gateway/start`
-  - `POST /api/v1/gateway/stop`
-  - `GET /api/v1/gateway/snapshot`
-  - `POST /api/v1/gateway/fetch_account`
-  - `GET /api/v1/account/wallets?base_asset=USDT`
-  - `POST /api/v1/time/sync`
-- Protocolos operativos (trazabilidad):
-  - `GET /api/v1/ops/protocol/status`
-  - `POST /api/v1/ops/protocol/close?base_asset=USDT`
-  - `POST /api/v1/ops/red_button?base_asset=USDT`
-- Hub Dorothy (multi-instancia):
-  - `GET /api/v1/hub/bots`
-  - `POST /api/v1/hub/bots`
-  - `PATCH /api/v1/hub/bots/{bot_id}`
-  - `DELETE /api/v1/hub/bots/{bot_id}`
-  - `POST /api/v1/hub/bots/{bot_id}/start`
-  - `POST /api/v1/hub/bots/{bot_id}/stop`
-  - `POST /api/v1/hub/bots/{bot_id}/run_once`
-  - `GET /api/v1/hub/bots/{bot_id}/logs`
-
-Legacy single-bot endpoints remain available under `/api/v1/bot/*` for compatibility.
+Las credenciales Binance se guardan en **`runtime/data/credentials.enc`** cifradas con **Fernet** usando la clave **`vault_local.key`** en la misma carpeta.
 
 ## Política de tests
 
 ```bash
-# Run official test suite (85+ tests, ~1 second)
+# Run official test suite (195+ tests, ~1.5 seconds)
 python -m pytest runtime/tests/ -x -q --tb=short
 ```
 
@@ -112,17 +85,26 @@ python -m pytest runtime/tests/ -x -q --tb=short
 - **`tests/legacy/`** — historical integration tests (reference only, not gated).
 - Verificación automatizada en **GitHub Actions** (`.github/workflows/`).
 - Escaneo automático de secretos en CI (`secret-scan.yml`).
-- Cambios en runtime/UI/workflows **deben** actualizar `CHANGELOG.md`.
 
 ### Risk control modules (v0.11+)
 
 | Module | Purpose | Endpoint |
 |---|---|---|
+| `weight_governor` | Zone-based API weight throttling (GREEN/YELLOW/RED) | `/api/v1/governor/status` |
+| `api_fuse` | Emergency API circuit breaker with escalating backoff | `/api-fuse/status` |
+| `bot_coordinator` | Phase-shift bot launches to distribute API load | (internal) |
 | `budget_guard` | Hard daily USDT spend ceiling | `/api/v1/budget-guard/status` |
 | `order_ledger` | Forensic order audit trail | `/api/v1/order-ledger/recent` |
-| `regime_filter` | Block buys in downtrends | `/api/v1/regime-filter/status` |
-| `vol_sizer` | Adjust qty by realized vol | (used by bot runners) |
-| `trailing_tp` | ATR-based trailing take-profit | (used by bot runners) |
+| `symmetry_guard` | Symmetric hub watchdog with auto-recovery | (internal) |
+| `state_wal` | Crash-safe WAL-backed state persistence | (internal) |
+
+### Strategy modules
+
+| Module | Purpose |
+|---|---|
+| `SEVI-M` (Prospector) | 4-gate veto pipeline + 6-factor scoring for asset selection |
+| `TrendSignal` | HA MA crossover gate for entry/exit timing |
+| `EVI` | Electric Volatility Index gate for dead-market filtering |
 
 ## Documentación
 
@@ -131,13 +113,3 @@ python -m pytest runtime/tests/ -x -q --tb=short
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
 - [`docs/repo-modules-map.md`](docs/repo-modules-map.md) — mapa modular de carpetas y ownership
 - [`docs/main-runtime-boundary.md`](docs/main-runtime-boundary.md) — rol de `main` vs `runtime` y diseño escalable
-- [`bots/README.md`](bots/README.md) — índice modular de bots en raíz
-- [`tools/README.md`](tools/README.md) — índice modular de herramientas en raíz
-- [`docs/bots/Dorothy-manual.md`](docs/bots/Dorothy-manual.md) — guía operativa Dorothy + riesgo + métricas
-- [`docs/bots/Masha-manual.md`](docs/bots/Masha-manual.md) — guía operativa Masha + riesgo + métricas
-- [`docs/bots/Thusnelda-manual.md`](docs/bots/Thusnelda-manual.md) — guía operativa Thusnelda + riesgo + métricas
-- [`docs/syncfusion-charts-integration.md`](docs/syncfusion-charts-integration.md) — plan para integrar `syncfusion_flutter_charts` (equity/REST timeline)  
-- [`docs/binance-api-and-compliance.md`](docs/binance-api-and-compliance.md) — límites Binance REST/WebSocket y checklist  
-- [`docs/rest-weight-audit.md`](docs/rest-weight-audit.md) — auditoría de consumo REST por fuente/acción  
-- [`docs/binance-limits-snapshots/`](docs/binance-limits-snapshots/) — snapshots fechados de `exchangeInfo.rateLimits`  
-- [`docs/git-cursor-github.md`](docs/git-cursor-github.md) — Git / Cursor / GitHub  

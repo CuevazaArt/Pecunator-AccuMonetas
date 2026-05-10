@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from runtime.api.auth import verify_token
 from runtime.api.lifespan import lifespan
 from runtime.api.routers import system as _system_router
 from runtime.api.routers import vault as _vault_router
@@ -21,8 +22,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="PecunatorCore Engine API",
         description="Local HTTP API for the Flutter shell. Bind loopback only unless you know the risk.",
-        version="0.3.0",
+        version="0.4.0",
         lifespan=lifespan,
+        dependencies=[],  # auth injected per-router below
     )
     app.add_middleware(
         CORSMiddleware,
@@ -32,7 +34,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── Routers ──────────────────────────────────────────────────────
+    # ── Routers (all protected by bearer token) ──────────────────────
     app.include_router(_system_router.router)
     app.include_router(_vault_router.router)
     app.include_router(_ops_router.router)
@@ -43,3 +45,4 @@ def create_app() -> FastAPI:
     app.include_router(_symmetric_router.router)
 
     return app
+

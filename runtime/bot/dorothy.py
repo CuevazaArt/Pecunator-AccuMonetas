@@ -62,7 +62,8 @@ class DorothyConfig:
         self.quote_order_qty = max(_dec(self.quote_order_qty, "5.0"), Decimal("5.0"))
         # L0 floor: 3% minimum profit to ensure viability after commissions
         self.profit_factor = max(_dec(self.profit_factor), Decimal("0.03"))
-        self.margin_drop_factor = max(_dec(self.margin_drop_factor), Decimal("0"))
+        # L0 floor: 1% minimum DCA spread to prevent runaway buying on every small dip
+        self.margin_drop_factor = max(_dec(self.margin_drop_factor), Decimal("0.01"))
         self.qty_decimals = max(0, min(int(self.qty_decimals), 18))
         self.price_decimals = max(0, min(int(self.price_decimals), 18))
         self.note = (self.note or "").strip()[:20]
@@ -344,8 +345,6 @@ class DorothyRunner(BaseStrategyRunner):
             if _evi_data:
                 evi_score = _evi_data.get("evi_score", 0)
                 evi_threshold = float(c.evi_min_threshold)
-                candle_open_1h = _evi_data.get("current_price", 0)  # last close ≈ current
-
                 self._emit("INFO", "dorothy:evi_gate", {
                     "symbol": symbol,
                     "evi_score": round(evi_score, 4),

@@ -77,6 +77,8 @@ class ApiFuse:
         Returns True if fuse is (or just became) tripped.
         """
         if used_weight <= 0:
+            # Endpoint didn't return weight header — can't evaluate.
+            # Return current trip state without re-evaluating thresholds.
             return self.is_tripped()
         pct = (used_weight / self.weight_limit) * 100
         if pct >= self.threshold_pct:

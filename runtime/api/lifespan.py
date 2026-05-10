@@ -24,7 +24,6 @@ async def lifespan(app: FastAPI):
     ctx = deps.get_ctx()
     bot = deps.get_bot()
     elphaba = deps.get_elphaba()
-    credential_resolver = lambda: resolve_pair(ctx)  # noqa: E731 — master fallback
     dorothy_resolver = lambda: resolve_pair_for_bot(ctx, "dorothy")  # noqa: E731
     elphaba_resolver = lambda: resolve_pair_for_bot(ctx, "elphaba")  # noqa: E731
     bot.start_immortality(dorothy_resolver, interval_sec=5.0)

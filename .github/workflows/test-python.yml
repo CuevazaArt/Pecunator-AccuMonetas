@@ -1,4 +1,4 @@
-name: Python Tests (Dorothy Bot)
+name: Python Tests (Pecunator Runtime)
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
       - 'refactor/**'
       - 'main'
       - 'develop'
+      - 'dorothy-elphaba-exclusive'
     paths:
       - 'runtime/**'
       - 'tests/**'
@@ -56,11 +57,11 @@ jobs:
 
       - name: Type check with mypy
         run: |
-          mypy runtime/modules/bots/dorothy.py --ignore-missing-imports
+          mypy runtime/bot/dorothy.py runtime/bot/elphaba.py runtime/bot/_base_runner.py runtime/core/weight_governor.py runtime/core/api_fuse.py --ignore-missing-imports
 
       - name: Run pytest (runtime + e2e)
         run: |
-          pytest runtime/tests/ tests/ --ignore=tests/legacy -v --tb=short --cov=runtime --cov-report=xml || pytest runtime/tests/ -v --tb=short --cov=runtime --cov-report=xml
+          pytest runtime/tests/ tests/ --ignore=tests/legacy -v --tb=short --cov=runtime --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
