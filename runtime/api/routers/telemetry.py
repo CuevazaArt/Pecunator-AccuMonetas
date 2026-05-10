@@ -97,27 +97,26 @@ async def usage_rest_weight_report(ctx: AppContext = Depends(deps.get_ctx)) -> d
 async def equity_history(
     minutes: int = 60,
     limit: int = 500,
+    ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
     """Return recent equity snapshots aggregated across all bots.
 
-    The Flutter MiniEquityChart polls this on init to seed its graph
+    The Flutter MiniEquityChart calls this on init to seed its graph
     with historical data instead of starting from zero.
     """
     import datetime as _dt
     import sqlite3
-
-    from runtime.api import deps
+    from pathlib import Path
 
     points: list[dict[str, Any]] = []
     cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=minutes)).isoformat()
+    data_dir = Path(ctx.config.data_dir)
 
-    # Query Dorothy hub equity snapshots
-    for svc_getter, pfx in [(deps.get_bot, "dorothy"), (deps.get_elphaba, "elphaba")]:
+    for db_file, pfx in [("dorothy_hub.sqlite", "dorothy"), ("elphaba_hub.sqlite", "elphaba")]:
+        db_path = data_dir / db_file
+        if not db_path.exists():
+            continue
         try:
-            svc = svc_getter()
-            db_path = getattr(svc, "_db_path", None)
-            if not db_path:
-                continue
             conn = sqlite3.connect(str(db_path), timeout=2)
             try:
                 rows = conn.execute(
@@ -152,4 +151,5 @@ async def equity_history(
     result = sorted(seen.values(), key=lambda x: x["ts"])[-limit:]
 
     return {"points": result, "count": len(result), "minutes": minutes}
+
 

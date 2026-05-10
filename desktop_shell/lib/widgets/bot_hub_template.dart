@@ -164,12 +164,16 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
     final desired = bot['desired_running'] == true;
     final isExpanded = _expandedBotId == botId;
 
-    // Extract useful info
-    final loop = bot['loop_interval_sec'] ?? bot['interval_sec'] ?? '';
-    final preset = bot['preset_id'] ?? bot['tag'] ?? '';
-    final cycles = bot['cycles'] ?? bot['total_cycles'] ?? 0;
-    final lastDecision = bot['last_decision'] ?? '';
-    final equity = bot['last_equity_usdt'];
+    // Extract useful info from API response
+    final loop = bot['loop_interval_sec'] ?? '';
+    final rawPreset = '${bot['preset_id'] ?? bot['tag'] ?? ''}';
+    // Show D for Dorothy (preset B), E for Elphaba (preset E1), or raw preset
+    final preset = rawPreset == 'B' ? 'D' : rawPreset == 'E1' ? 'E' : rawPreset;
+    // Cycle count lives inside last_report from the API
+    final lastReport = bot['last_report'] as Map<String, dynamic>? ?? {};
+    final cycles = lastReport['cycle_count'] ?? bot['cycles'] ?? bot['total_cycles'] ?? 0;
+    final lastDecision = lastReport['decision'] ?? bot['last_decision'] ?? '';
+    final equity = lastReport['equity_usdt'] ?? bot['last_equity_usdt'];
 
     final statusColor = running
         ? Colors.greenAccent
