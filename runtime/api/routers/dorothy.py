@@ -114,8 +114,6 @@ async def bot_presets() -> list[dict[str, Any]]:
             "margin_drop_factor": "0.004",
             "qty_decimals": 8,
             "price_decimals": 4,
-            "simulated": True,
-            "trading_enabled": False,
         }
     ]
 
@@ -138,8 +136,6 @@ async def bot_config_set(body: BotConfigBody) -> Any:
         qty_decimals=body.qty_decimals,
         price_decimals=body.price_decimals,
         note=body.note,
-        simulated=body.simulated,
-        trading_enabled=body.trading_enabled,
     )
     return BotConfigOut(**cfg.as_json())
 
@@ -182,8 +178,6 @@ async def hub_bots_create(body: HubBotCreateBody) -> Any:
             max_drawdown_pct=body.max_drawdown_pct,
             stop_loss_pct=body.stop_loss_pct,
             metrics_interval_cycles=body.metrics_interval_cycles,
-            simulated=body.simulated,
-            trading_enabled=body.trading_enabled,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None
@@ -208,8 +202,6 @@ async def hub_bots_update(bot_id: str, body: HubBotUpdateBody) -> Any:
             max_drawdown_pct=body.max_drawdown_pct,
             stop_loss_pct=body.stop_loss_pct,
             metrics_interval_cycles=body.metrics_interval_cycles,
-            simulated=body.simulated,
-            trading_enabled=body.trading_enabled,
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Bot not found") from None

@@ -54,7 +54,6 @@ async def elphaba_bots_create(body: HubBotCreateBody) -> Any:
             note=body.note,
             max_drawdown_pct=body.max_drawdown_pct,
             metrics_interval_cycles=body.metrics_interval_cycles,
-            trading_enabled=body.trading_enabled,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=sanitize_log_message(str(e))) from None

@@ -48,12 +48,9 @@ class ElphabaConfig:
     max_rungs_per_symbol: int = 3
     # Isolated Margin settings
     margin_type: str = "ISOLATED"  # Only ISOLATED supported
-    # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
-    simulated: bool = False
-    trading_enabled: bool = True
+
 
     def normalize(self) -> None:
-        self.simulated = False
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_order_qty = max(_dec(self.quote_order_qty, "5.0"), Decimal("5.0"))
@@ -193,13 +190,7 @@ class ElphabaRunner(BaseStrategyRunner):
             return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
-        if not c.trading_enabled:
-            self._emit("INFO", f"elphaba:STANDBY trading_enabled=false for {c.symbol}")
-            return {
-                "preset_id": c.preset_id, "symbol": c.symbol,
-                "decision": "STANDBY_TRADING_DISABLED",
-                "loop_interval_sec": c.loop_interval_sec,
-            }
+
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:
@@ -425,7 +416,7 @@ class ElphabaRunner(BaseStrategyRunner):
         report: dict[str, Any] = {
             "preset_id": c.preset_id,
             "symbol": symbol,
-            "trading_enabled": c.trading_enabled,
+
             "open_orders_count": len(open_orders),
             "has_buy_limit_anchor": highest_buy is not None,
             "market_price": str(market_price),

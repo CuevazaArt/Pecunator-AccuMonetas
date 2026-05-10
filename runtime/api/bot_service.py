@@ -48,8 +48,8 @@ class BotService(BaseHubService):
             max_drawdown_pct=Decimal(str(kwargs.get("max_drawdown_pct", "0.20"))),
             stop_loss_pct=Decimal(str(kwargs.get("stop_loss_pct", "0.10"))),
             metrics_interval_cycles=int(kwargs.get("metrics_interval_cycles", 5)),
-            simulated=bool(kwargs.get("simulated", True)),
-            trading_enabled=bool(kwargs.get("trading_enabled", False)),
+            simulated=False,  # DEPRECATED: always LIVE
+            trading_enabled=True,  # DEPRECATED: always enabled, other guards handle moderation
         )
         cfg.normalize()
         return cfg
@@ -59,8 +59,6 @@ class BotService(BaseHubService):
         return {
             "preset_id": cfg.preset_id,
             "symbol": cfg.symbol,
-            "simulated": cfg.simulated,
-            "trading_enabled": cfg.trading_enabled,
             "loop_interval_sec": cfg.loop_interval_sec,
             "quote_order_qty": str(cfg.quote_order_qty),
             "profit_factor": str(cfg.profit_factor),

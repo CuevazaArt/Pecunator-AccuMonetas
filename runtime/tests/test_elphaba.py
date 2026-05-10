@@ -17,7 +17,6 @@ class TestElphabaConfig:
         assert c.quote_order_qty == Decimal("6")
         assert c.profit_factor == Decimal("0.05")
         assert c.margin_type == "ISOLATED"
-        assert c.simulated is False
         assert c.max_rungs_per_symbol == 3
 
     def test_min_quote_order_qty(self):
@@ -35,10 +34,6 @@ class TestElphabaConfig:
         c.normalize()
         assert c.margin_type == "ISOLATED"
 
-    def test_simulated_always_false(self):
-        c = ElphabaConfig(simulated=True)
-        c.normalize()
-        assert c.simulated is False
 
     def test_as_json(self):
         c = ElphabaConfig()
@@ -96,15 +91,6 @@ class TestElphabaRunner:
             result = asyncio.get_event_loop().run_until_complete(r.run_once())
             assert result["decision"] == "FUSE_TRIPPED"
 
-    def test_trading_disabled_returns_standby(self):
-        r = _make_runner()
-        r.config.trading_enabled = False
-        with patch("runtime.core.api_fuse.get_api_fuse") as mock_fuse:
-            fuse = MagicMock()
-            fuse.is_tripped.return_value = False
-            mock_fuse.return_value = fuse
-            result = asyncio.get_event_loop().run_until_complete(r.run_once())
-            assert result["decision"] == "STANDBY_TRADING_DISABLED"
 
 
 # ── Margin Logic Tests ───────────────────────────────────────────

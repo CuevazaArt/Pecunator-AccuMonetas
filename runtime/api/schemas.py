@@ -83,8 +83,6 @@ class BotConfigBody(BaseModel):
     qty_decimals: int = Field(default=8, ge=0, le=18)
     price_decimals: int = Field(default=4, ge=0, le=18)
     note: str = Field(default="", max_length=20)
-    simulated: bool = True
-    trading_enabled: bool = False
 
 
 class BotConfigOut(BaseModel):
@@ -97,8 +95,6 @@ class BotConfigOut(BaseModel):
     qty_decimals: int
     price_decimals: int
     note: str
-    simulated: bool
-    trading_enabled: bool
     mode: str
 
 
@@ -106,8 +102,6 @@ class BotStatusOut(BaseModel):
     running: bool
     preset_id: str
     symbol: str
-    simulated: bool
-    trading_enabled: bool
     loop_interval_sec: int
     last_cycle_ts: Optional[str]
     last_error: Optional[str]
@@ -152,8 +146,6 @@ class HubBotCreateBody(BaseModel):
     max_drawdown_pct: str = Field(default="0.20")
     stop_loss_pct: str = Field(default="0.10")
     metrics_interval_cycles: int = Field(default=5, ge=1, le=10000)
-    simulated: bool = True
-    trading_enabled: bool = False
 
 
 class HubBotUpdateBody(BaseModel):
@@ -170,8 +162,6 @@ class HubBotUpdateBody(BaseModel):
     max_drawdown_pct: Optional[str] = None
     stop_loss_pct: Optional[str] = None
     metrics_interval_cycles: Optional[int] = Field(default=None, ge=1, le=10000)
-    simulated: Optional[bool] = None
-    trading_enabled: Optional[bool] = None
 
 
 class HubBotOut(BaseModel):
@@ -181,8 +171,6 @@ class HubBotOut(BaseModel):
     running: bool
     preset_id: str
     symbol: str
-    simulated: bool
-    trading_enabled: bool
     loop_interval_sec: int
     quote_order_qty: str
     profit_factor: str

@@ -2,6 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Staged Symbol Panel — configures Dorothy + Elphaba symmetric deployment.
+///
+/// Layout:
+///   1. SHARED CONFIG: Single area for qty, profit, drop, loop, rungs (applies to both)
+///   2. INDIVIDUAL OVERRIDES: Per-hub override areas (collapsed by default)
+///      Opens only when user wants asymmetric config.
 class StagedSymbolPanel extends StatefulWidget {
   final String symbol;
   final Map<String, dynamic>? initialPresetDorothy;
@@ -26,49 +32,53 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
   late AnimationController _animCtrl;
   Timer? _beepTimer;
 
-  // Dorothy controllers
-  final _dQtyCtrl = TextEditingController(text: '6');
-  final _dProfitCtrl = TextEditingController(text: '0.05');
-  final _dDropCtrl = TextEditingController(text: '0.03');
-  final _dLoopCtrl = TextEditingController(text: '450');
-  final _dMaxRungsCtrl = TextEditingController(text: '3');
+  // ── Shared (symmetric) controllers ──
+  final _sharedQtyCtrl = TextEditingController(text: '6');
+  final _sharedProfitCtrl = TextEditingController(text: '0.05');
+  final _sharedDropCtrl = TextEditingController(text: '0.03');
+  final _sharedLoopCtrl = TextEditingController(text: '450');
+  final _sharedRungsCtrl = TextEditingController(text: '3');
+
+  // ── Dorothy individual overrides ──
+  final _dQtyCtrl = TextEditingController(text: '');
+  final _dProfitCtrl = TextEditingController(text: '');
+  final _dDropCtrl = TextEditingController(text: '');
+  final _dLoopCtrl = TextEditingController(text: '');
+  final _dRungsCtrl = TextEditingController(text: '');
   final _dTagCtrl = TextEditingController(text: 'dorothy');
 
-  // Elphaba controllers
-  final _eQtyCtrl = TextEditingController(text: '6');
-  final _eProfitCtrl = TextEditingController(text: '0.05');
-  final _eDropCtrl = TextEditingController(text: '0.03');
-  final _eLoopCtrl = TextEditingController(text: '450');
-  final _eMaxRungsCtrl = TextEditingController(text: '3');
+  // ── Elphaba individual overrides ──
+  final _eQtyCtrl = TextEditingController(text: '');
+  final _eProfitCtrl = TextEditingController(text: '');
+  final _eDropCtrl = TextEditingController(text: '');
+  final _eLoopCtrl = TextEditingController(text: '');
+  final _eRungsCtrl = TextEditingController(text: '');
   final _eTagCtrl = TextEditingController(text: 'elphaba');
+
+  bool _showDorothyOverride = false;
+  bool _showElphabaOverride = false;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))..repeat(reverse: true);
-    
-    // Apply initial preset if available
-    if (widget.initialPresetDorothy != null) {
-      _dQtyCtrl.text = widget.initialPresetDorothy!['quote_order_qty']?.toString() ?? '6';
-      _dProfitCtrl.text = widget.initialPresetDorothy!['profit_factor']?.toString() ?? '0.05';
-      _dDropCtrl.text = widget.initialPresetDorothy!['margin_drop_factor']?.toString() ?? '0.03';
-      _dLoopCtrl.text = widget.initialPresetDorothy!['loop_interval_sec']?.toString() ?? '450';
-      _dMaxRungsCtrl.text = widget.initialPresetDorothy!['max_rungs_per_symbol']?.toString() ?? '3';
-      _dTagCtrl.text = widget.initialPresetDorothy!['tag']?.toString() ?? 'dorothy';
+
+    // Apply initial preset to shared values
+    final dp = widget.initialPresetDorothy;
+    if (dp != null) {
+      _sharedQtyCtrl.text = dp['quote_order_qty']?.toString() ?? '6';
+      _sharedProfitCtrl.text = dp['profit_factor']?.toString() ?? '0.05';
+      _sharedDropCtrl.text = dp['margin_drop_factor']?.toString() ?? '0.03';
+      _sharedLoopCtrl.text = dp['loop_interval_sec']?.toString() ?? '450';
+      _sharedRungsCtrl.text = dp['max_rungs_per_symbol']?.toString() ?? '3';
+      _dTagCtrl.text = dp['tag']?.toString() ?? 'dorothy';
+    }
+    final ep = widget.initialPresetElphaba;
+    if (ep != null) {
+      _eTagCtrl.text = ep['tag']?.toString() ?? 'elphaba';
     }
 
-    if (widget.initialPresetElphaba != null) {
-      _eQtyCtrl.text = widget.initialPresetElphaba!['quote_order_qty']?.toString() ?? '6';
-      _eProfitCtrl.text = widget.initialPresetElphaba!['profit_factor']?.toString() ?? '0.05';
-      _eDropCtrl.text = widget.initialPresetElphaba!['margin_drop_factor']?.toString() ?? '0.03';
-      _eLoopCtrl.text = widget.initialPresetElphaba!['loop_interval_sec']?.toString() ?? '450';
-      _eMaxRungsCtrl.text = widget.initialPresetElphaba!['max_rungs_per_symbol']?.toString() ?? '3';
-      _eTagCtrl.text = widget.initialPresetElphaba!['tag']?.toString() ?? 'elphaba';
-    }
-
-    // Pulse immediately on start
     SystemSound.play(SystemSoundType.alert);
-    // Beep every 60 seconds
     _beepTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       SystemSound.play(SystemSoundType.alert);
     });
@@ -78,35 +88,33 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
   void dispose() {
     _animCtrl.dispose();
     _beepTimer?.cancel();
-    _dQtyCtrl.dispose();
-    _dProfitCtrl.dispose();
-    _dDropCtrl.dispose();
-    _dLoopCtrl.dispose();
-    _dMaxRungsCtrl.dispose();
-    _dTagCtrl.dispose();
-    _eQtyCtrl.dispose();
-    _eProfitCtrl.dispose();
-    _eDropCtrl.dispose();
-    _eLoopCtrl.dispose();
-    _eMaxRungsCtrl.dispose();
-    _eTagCtrl.dispose();
+    _sharedQtyCtrl.dispose(); _sharedProfitCtrl.dispose(); _sharedDropCtrl.dispose();
+    _sharedLoopCtrl.dispose(); _sharedRungsCtrl.dispose();
+    _dQtyCtrl.dispose(); _dProfitCtrl.dispose(); _dDropCtrl.dispose();
+    _dLoopCtrl.dispose(); _dRungsCtrl.dispose(); _dTagCtrl.dispose();
+    _eQtyCtrl.dispose(); _eProfitCtrl.dispose(); _eDropCtrl.dispose();
+    _eLoopCtrl.dispose(); _eRungsCtrl.dispose(); _eTagCtrl.dispose();
     super.dispose();
   }
 
-  void _accept() {
-    // Validate Dorothy
-    final dQty = double.tryParse(_dQtyCtrl.text) ?? 0;
-    final dProfit = double.tryParse(_dProfitCtrl.text) ?? 0;
-    final dDrop = double.tryParse(_dDropCtrl.text) ?? 0;
-    final dLoop = int.tryParse(_dLoopCtrl.text) ?? 0;
-    final dRungs = int.tryParse(_dMaxRungsCtrl.text) ?? 0;
+  /// Gets the effective value: override if set, otherwise shared.
+  String _effective(TextEditingController override, TextEditingController shared) {
+    final ov = override.text.trim();
+    return ov.isNotEmpty ? ov : shared.text.trim();
+  }
 
-    // Validate Elphaba
-    final eQty = double.tryParse(_eQtyCtrl.text) ?? 0;
-    final eProfit = double.tryParse(_eProfitCtrl.text) ?? 0;
-    final eDrop = double.tryParse(_eDropCtrl.text) ?? 0;
-    final eLoop = int.tryParse(_eLoopCtrl.text) ?? 0;
-    final eRungs = int.tryParse(_eMaxRungsCtrl.text) ?? 0;
+  void _accept() {
+    final dQty = double.tryParse(_effective(_dQtyCtrl, _sharedQtyCtrl)) ?? 0;
+    final dProfit = double.tryParse(_effective(_dProfitCtrl, _sharedProfitCtrl)) ?? 0;
+    final dDrop = double.tryParse(_effective(_dDropCtrl, _sharedDropCtrl)) ?? 0;
+    final dLoop = int.tryParse(_effective(_dLoopCtrl, _sharedLoopCtrl)) ?? 0;
+    final dRungs = int.tryParse(_effective(_dRungsCtrl, _sharedRungsCtrl)) ?? 0;
+
+    final eQty = double.tryParse(_effective(_eQtyCtrl, _sharedQtyCtrl)) ?? 0;
+    final eProfit = double.tryParse(_effective(_eProfitCtrl, _sharedProfitCtrl)) ?? 0;
+    final eDrop = double.tryParse(_effective(_eDropCtrl, _sharedDropCtrl)) ?? 0;
+    final eLoop = int.tryParse(_effective(_eLoopCtrl, _sharedLoopCtrl)) ?? 0;
+    final eRungs = int.tryParse(_effective(_eRungsCtrl, _sharedRungsCtrl)) ?? 0;
 
     if (dQty <= 0 || dProfit <= 0 || dDrop <= 0 || dLoop <= 0 || dRungs <= 0 ||
         eQty <= 0 || eProfit <= 0 || eDrop <= 0 || eLoop <= 0 || eRungs <= 0) {
@@ -124,8 +132,6 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
       'loop_interval_sec': dLoop.toString(),
       'max_rungs_per_symbol': dRungs.toString(),
       'tag': _dTagCtrl.text.trim(),
-      'trading_enabled': true,
-      'simulated': false,
     };
 
     final eConfig = {
@@ -136,8 +142,6 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
       'loop_interval_sec': eLoop.toString(),
       'max_rungs_per_symbol': eRungs.toString(),
       'tag': _eTagCtrl.text.trim(),
-      'trading_enabled': true,
-      'simulated': false,
     };
 
     widget.onAcceptSymmetric(dConfig, eConfig);
@@ -168,12 +172,13 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ── Header ──
           Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: Colors.yellowAccent, size: 24),
               const SizedBox(width: 8),
               const Text(
-                'SÍMBOLO EN STAGING (L0 REQUIERE VALIDACIÓN)',
+                'SÍMBOLO EN STAGING',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.yellowAccent, letterSpacing: 1),
               ),
               const Spacer(),
@@ -183,20 +188,35 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
               const Text('Symbol: ', style: TextStyle(fontSize: 12, color: Colors.white70)),
               Text(widget.symbol, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, fontFamily: 'monospace')),
             ],
           ),
+          const SizedBox(height: 10),
+
+          // ── SHARED SYMMETRIC CONFIG ──
+          _buildSharedSection(),
+
+          const SizedBox(height: 8),
+
+          // ── INDIVIDUAL OVERRIDES ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildOverrideSection('Dorothy (Long)', Colors.tealAccent, _showDorothyOverride, () {
+                setState(() => _showDorothyOverride = !_showDorothyOverride);
+              }, _dQtyCtrl, _dProfitCtrl, _dDropCtrl, _dLoopCtrl, _dRungsCtrl, _dTagCtrl)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildOverrideSection('Elphaba (Short)', Colors.purpleAccent, _showElphabaOverride, () {
+                setState(() => _showElphabaOverride = !_showElphabaOverride);
+              }, _eQtyCtrl, _eProfitCtrl, _eDropCtrl, _eLoopCtrl, _eRungsCtrl, _eTagCtrl)),
+            ],
+          ),
+
           const SizedBox(height: 12),
-          // Stacked forms
-          _buildHubForm('Dorothy (Long)', Colors.tealAccent, _dQtyCtrl, _dProfitCtrl, _dDropCtrl, _dLoopCtrl, _dMaxRungsCtrl, _dTagCtrl),
-          const SizedBox(height: 12),
-          _buildHubForm('Elphaba (Short)', Colors.purpleAccent, _eQtyCtrl, _eProfitCtrl, _eDropCtrl, _eLoopCtrl, _eMaxRungsCtrl, _eTagCtrl),
-          
-          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -208,7 +228,7 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
               FilledButton.icon(
                 onPressed: _accept,
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('ACEPTAR Y DESPLEGAR SIMÉTRICO', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('DESPLEGAR SIMÉTRICO', style: TextStyle(fontWeight: FontWeight.bold)),
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.greenAccent.shade700,
                   foregroundColor: Colors.white,
@@ -221,29 +241,45 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
     );
   }
 
-  Widget _buildHubForm(String title, Color accentColor, TextEditingController qty, TextEditingController profit, TextEditingController drop, TextEditingController loop, TextEditingController rungs, TextEditingController tag) {
+  /// Shared config section — applies to both hubs symmetrically.
+  Widget _buildSharedSection() {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.black26,
-        border: Border.all(color: accentColor.withAlpha(100)),
-        borderRadius: BorderRadius.circular(6)
+        color: Colors.white.withAlpha(10),
+        border: Border.all(color: Colors.cyanAccent.withAlpha(80)),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 13)),
+          Row(
+            children: [
+              Icon(Icons.link, size: 14, color: Colors.cyanAccent.withAlpha(180)),
+              const SizedBox(width: 6),
+              Text('CONFIG SIMÉTRICA', style: TextStyle(
+                color: Colors.cyanAccent.withAlpha(200),
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              )),
+              const Spacer(),
+              Text('Aplica a ambos hubs', style: TextStyle(
+                color: Colors.white.withAlpha(100),
+                fontSize: 9,
+              )),
+            ],
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildField('Qty USDT', qty),
-              _buildField('Profit %', profit),
-              _buildField('Drop %', drop),
-              _buildField('Loop (s)', loop),
-              _buildField('Max Rungs', rungs),
-              _buildField('Tag', tag, width: 120),
+              _buildField('Qty USDT', _sharedQtyCtrl),
+              _buildField('Profit %', _sharedProfitCtrl),
+              _buildField('Drop %', _sharedDropCtrl),
+              _buildField('Loop (s)', _sharedLoopCtrl),
+              _buildField('Max Rungs', _sharedRungsCtrl),
             ],
           ),
         ],
@@ -251,19 +287,83 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
     );
   }
 
-  Widget _buildField(String label, TextEditingController ctrl, {double width = 80}) {
+  /// Individual override section — collapsed by default. When expanded,
+  /// empty fields inherit from shared config, filled fields override.
+  Widget _buildOverrideSection(String title, Color accentColor, bool expanded, VoidCallback onToggle,
+      TextEditingController qty, TextEditingController profit, TextEditingController drop,
+      TextEditingController loop, TextEditingController rungs, TextEditingController tag) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        border: Border.all(color: accentColor.withAlpha(expanded ? 120 : 50)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Row(
+              children: [
+                Text(title, style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 11)),
+                const Spacer(),
+                Text(expanded ? 'override activo' : 'usar simétrico',
+                    style: TextStyle(fontSize: 8, color: accentColor.withAlpha(120))),
+                const SizedBox(width: 4),
+                Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 14, color: accentColor.withAlpha(120)),
+              ],
+            ),
+          ),
+          if (!expanded)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: 6,
+                children: [
+                  _buildField('Tag', tag, width: 100),
+                ],
+              ),
+            ),
+          if (expanded) ...[
+            const SizedBox(height: 4),
+            Text('Dejar vacío = hereda config simétrica',
+                style: TextStyle(fontSize: 8, color: Colors.white.withAlpha(80), fontStyle: FontStyle.italic)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildField('Qty USDT', qty, hint: _sharedQtyCtrl.text),
+                _buildField('Profit %', profit, hint: _sharedProfitCtrl.text),
+                _buildField('Drop %', drop, hint: _sharedDropCtrl.text),
+                _buildField('Loop (s)', loop, hint: _sharedLoopCtrl.text),
+                _buildField('Rungs', rungs, hint: _sharedRungsCtrl.text),
+                _buildField('Tag', tag, width: 100),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController ctrl, {double width = 75, String? hint}) {
     return SizedBox(
       width: width,
       child: TextField(
         controller: ctrl,
-        style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white, fontWeight: FontWeight.bold),
+        style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white, fontWeight: FontWeight.bold),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.white54, fontSize: 10),
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withAlpha(40), fontSize: 10),
+          labelStyle: const TextStyle(color: Colors.white54, fontSize: 9),
           filled: true,
           fillColor: Colors.black45,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          isDense: true,
         ),
       ),
     );

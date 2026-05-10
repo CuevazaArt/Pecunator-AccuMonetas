@@ -114,8 +114,6 @@ async def deploy_symmetric(
             max_drawdown_pct=body.dorothy.max_drawdown_pct,
             stop_loss_pct=body.dorothy.stop_loss_pct,
             metrics_interval_cycles=body.dorothy.metrics_interval_cycles,
-            simulated=body.dorothy.simulated,
-            trading_enabled=body.dorothy.trading_enabled,
         )
         dorothy_id = d_row["bot_id"]
         _LOG.info("symmetric:created dorothy=%s", dorothy_id)
@@ -140,7 +138,6 @@ async def deploy_symmetric(
             note=body.elphaba.note,
             max_drawdown_pct=body.elphaba.max_drawdown_pct,
             metrics_interval_cycles=body.elphaba.metrics_interval_cycles,
-            trading_enabled=body.elphaba.trading_enabled,
         )
         elphaba_id = e_row["bot_id"]
         _LOG.info("symmetric:created elphaba=%s", elphaba_id)

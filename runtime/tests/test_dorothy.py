@@ -20,8 +20,7 @@ class TestDorothyConfig:
         assert cfg.loop_interval_sec == 450
         assert cfg.quote_order_qty == Decimal("6")
         assert cfg.profit_factor == Decimal("0.05")
-        assert cfg.simulated is False
-        assert cfg.trading_enabled is True
+
 
     def test_normalize_symbol_uppercase(self):
         """Test symbol normalization to uppercase."""
@@ -71,8 +70,8 @@ class TestDorothyConfig:
         assert j["mode"] == "LIVE"
 
     def test_as_json_live_mode(self):
-        """Test JSON mode reflects live vs simulated."""
-        cfg = DorothyConfig(simulated=False)
+        """Test JSON mode is always LIVE."""
+        cfg = DorothyConfig()
         j = cfg.as_json()
         assert j["mode"] == "LIVE"
 

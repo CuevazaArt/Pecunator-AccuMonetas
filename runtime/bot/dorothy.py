@@ -49,14 +49,9 @@ class DorothyConfig:
     # Symbols with EVI < threshold are considered "dead markets" for DCA.
     # Grade scale: S≥0.50, A≥0.20, B≥0.10, C≥0.05, D≥0.02, F<0.02
     evi_min_threshold: Decimal = Decimal("0.02")  # Default: Grade D minimum
-    # DEPRECATED: simulated mode removed. Field kept for DB/API compat.
-    # Use trading_enabled as the sole on/off switch.
-    simulated: bool = False
-    trading_enabled: bool = True
+
 
     def normalize(self) -> None:
-        # simulated mode permanently disabled — always LIVE.
-        self.simulated = False
         self.symbol = normalize_binance_spot_symbol(self.symbol)
         self.loop_interval_sec = max(1, min(int(self.loop_interval_sec), 86_400))
         self.quote_order_qty = max(_dec(self.quote_order_qty, "5.0"), Decimal("5.0"))
@@ -82,7 +77,7 @@ class DorothyConfig:
         d["max_drawdown_pct"] = str(self.max_drawdown_pct)
         d["stop_loss_pct"] = str(self.stop_loss_pct)
         d["evi_min_threshold"] = str(self.evi_min_threshold)
-        d["mode"] = "SIMULATED" if self.simulated else "LIVE"
+        d["mode"] = "LIVE"
         return d
 
 
@@ -119,13 +114,7 @@ class DorothyRunner(BaseStrategyRunner):
             return {"decision": "FUSE_TRIPPED", "remaining_sec": remaining}
         c = self.config
         c.normalize()
-        if not c.trading_enabled:
-            self._emit("INFO", f"dorothy:STANDBY trading_enabled=false for {c.symbol}")
-            return {
-                "preset_id": c.preset_id, "symbol": c.symbol,
-                "decision": "STANDBY_TRADING_DISABLED",
-                "loop_interval_sec": c.loop_interval_sec,
-            }
+
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:
@@ -312,8 +301,8 @@ class DorothyRunner(BaseStrategyRunner):
                 stop_report = {
                     "preset_id": c.preset_id,
                     "symbol": symbol,
-                    "simulated": c.simulated,
-                    "trading_enabled": c.trading_enabled,
+
+
                     "decision": "STOP_LOSS",
                     "market_price": str(market_price),
                     "liquidated_qty": str(liquidated_qty),
@@ -359,7 +348,7 @@ class DorothyRunner(BaseStrategyRunner):
                 if evi_score < evi_threshold:
                     return {
                         "preset_id": c.preset_id, "symbol": symbol,
-                        "simulated": c.simulated, "trading_enabled": c.trading_enabled,
+
                         "decision": "WAIT_EVI_LOW",
                         "evi_score": round(evi_score, 4),
                         "evi_threshold": evi_threshold,
@@ -392,7 +381,7 @@ class DorothyRunner(BaseStrategyRunner):
             "preset_id": c.preset_id,
             "symbol": symbol,
             "simulated": c.simulated,
-            "trading_enabled": c.trading_enabled,
+
             "open_orders_count": len(open_orders),
             "has_sell_limit_anchor": lowest_sell is not None,
             "market_price": str(market_price),

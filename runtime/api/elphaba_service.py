@@ -68,8 +68,6 @@ class ElphabaService(BaseHubService):
             "metrics_interval_cycles": cfg.metrics_interval_cycles,
             "max_rungs_per_symbol": cfg.max_rungs_per_symbol,
             "margin_type": cfg.margin_type,
-            "simulated": False,
-            "trading_enabled": cfg.trading_enabled,
         }
 
     # -------------------------------------------------------------------------
