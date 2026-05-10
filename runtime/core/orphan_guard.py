@@ -63,7 +63,7 @@ class OrphanGuard:
         async def _run(fn: Any) -> Any:
             if _to_thread:
                 return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         orphans: list[dict[str, Any]] = []
 
@@ -129,7 +129,7 @@ class OrphanGuard:
         async def _run(fn: Any) -> Any:
             if _to_thread:
                 return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         orphans: list[dict[str, Any]] = []
 
@@ -206,7 +206,7 @@ class OrphanGuard:
         async def _run(fn: Any) -> Any:
             if _to_thread:
                 return await _to_thread(fn)
-            return await asyncio.get_event_loop().run_in_executor(None, fn)
+            return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         symbol = orphan["symbol"]
         asset_free = _dec(orphan["asset_free"], "0")
