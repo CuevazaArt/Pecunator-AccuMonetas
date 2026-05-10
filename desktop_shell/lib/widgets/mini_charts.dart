@@ -168,7 +168,12 @@ class _MiniWeightChartState extends State<MiniWeightChart> {
   }
 }
 
-/// Compact rolling equity chart — shows equity USDT over time.
+/// Compact rolling equity chart — shows equity USDT + capital breakdown.
+///
+/// Displays three capital tiers below the sparkline:
+///   • Free   — USDT available for new orders
+///   • Locked — USDT held in open limit orders
+///   • Margin — capital deployed in margin + other assets
 class MiniEquityChart extends StatefulWidget {
   final EngineApi api;
   final String label;
@@ -201,6 +206,11 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
   final List<_Sample> _data = [];
   double _startEquity = 0;
 
+  // Capital breakdown
+  double _free = 0;
+  double _locked = 0;
+  double _margin = 0;
+
   @override
   void initState() {
     super.initState();
@@ -225,6 +235,22 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       }
       if (equity <= 0) return;
 
+      // Extract USDT capital breakdown from balances
+      double free = 0;
+      double locked = 0;
+      final balances = snap['balances'];
+      if (balances is List && balances.isNotEmpty) {
+        for (final b in balances) {
+          if (b is Map && b['asset'] == 'USDT') {
+            free = double.tryParse('${b['free']}') ?? 0;
+            locked = double.tryParse('${b['locked']}') ?? 0;
+            break;
+          }
+        }
+      }
+      // Margin/deployed = equity minus spot USDT (other assets + margin positions)
+      final deployed = (equity - free - locked).clamp(0.0, equity);
+
       if (!mounted) return;
       final now = DateTime.now();
       final cutoff = now.subtract(widget.timeWindow);
@@ -234,6 +260,9 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
         if (_startEquity == 0 && _data.isNotEmpty) {
           _startEquity = _data.first.value.toDouble();
         }
+        _free = free;
+        _locked = locked;
+        _margin = deployed;
       });
     } catch (_) {}
   }
@@ -257,8 +286,9 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
       ),
       child: Row(
         children: [
+          // Left: equity label + delta
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.only(left: 6, right: 2),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,6 +322,7 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
               ],
             ),
           ),
+          // Center: sparkline
           Expanded(
             child: CustomPaint(
               painter: _SparklinePainter(
@@ -303,8 +334,61 @@ class _MiniEquityChartState extends State<MiniEquityChart> {
               size: Size.infinite,
             ),
           ),
+          // Right: capital breakdown
+          Padding(
+            padding: const EdgeInsets.only(left: 2, right: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _capitalRow('FREE', _free, const Color(0xFF00E676)),
+                const SizedBox(height: 1),
+                _capitalRow('LOCK', _locked, const Color(0xFFFFEA00)),
+                const SizedBox(height: 1),
+                _capitalRow('MRGN', _margin, const Color(0xFF00B0FF)),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _capitalRow(String label, double value, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 3),
+            ],
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 7,
+            color: color.withValues(alpha: 0.7),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          '\$${value.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontSize: 7,
+            color: color,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
