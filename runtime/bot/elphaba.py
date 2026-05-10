@@ -502,6 +502,15 @@ class ElphabaRunner(BaseStrategyRunner):
                 )
             except Exception:
                 pass
+            # ── Register in ExceptionZoo for forensic tracking ────
+            try:
+                from runtime.core.exception_zoo import get_exception_zoo
+                get_exception_zoo().register(
+                    order_err, module="elphaba:short_order",
+                    context=f"symbol={symbol} qty={sell_qty}",
+                )
+            except Exception:
+                pass
             self._emit("CRITICAL", "elphaba:SHORT_ORDER_FAILED", {
                 "symbol": symbol, "error": str(order_err)[:300],
                 "action": "Hub may auto-pause after 3 consecutive failures.",
