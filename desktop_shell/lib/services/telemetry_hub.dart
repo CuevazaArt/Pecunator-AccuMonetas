@@ -61,10 +61,15 @@ class TelemetrySnapshot {
 
   // Gateway
   final bool gatewayRunning;
+  final Map<String, dynamic>? gatewaySnapshot;
 
   // Bot detail lists (pushed via WS — eliminates REST polling)
   final List<Map<String, dynamic>> dorothyBots;
   final List<Map<String, dynamic>> elphabaBots;
+
+  // Order ledger (pushed via WS — eliminates REST polling)
+  final Map<String, dynamic>? orderLedgerStats;
+  final List<Map<String, dynamic>> orderLedgerRecent;
 
   const TelemetrySnapshot({
     required this.timestamp,
@@ -85,8 +90,11 @@ class TelemetrySnapshot {
     this.apiFuseOk = true,
     this.orderFuseOk = true,
     this.gatewayRunning = false,
+    this.gatewaySnapshot,
     this.dorothyBots = const [],
     this.elphabaBots = const [],
+    this.orderLedgerStats,
+    this.orderLedgerRecent = const [],
   });
 
   factory TelemetrySnapshot.fromPayload(Map<String, dynamic> payload) {
@@ -109,8 +117,11 @@ class TelemetrySnapshot {
       apiFuseOk: (payload['api_fuse_ok'] ?? 1) == 1,
       orderFuseOk: (payload['order_fuse_ok'] ?? 1) == 1,
       gatewayRunning: (payload['gateway_running'] ?? 0) == 1,
+      gatewaySnapshot: payload['gateway_snapshot'] as Map<String, dynamic>?,
       dorothyBots: _toBotList(payload['dorothy_bots']),
       elphabaBots: _toBotList(payload['elphaba_bots']),
+      orderLedgerStats: payload['order_ledger_stats'] as Map<String, dynamic>?,
+      orderLedgerRecent: _toBotList(payload['order_ledger_recent']),
     );
   }
 

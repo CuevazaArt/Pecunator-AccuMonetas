@@ -114,12 +114,17 @@ class TelemetryCollector:
 
     async def _loop(self, ctx: Any) -> None:
         """Main collection loop — runs until cancelled."""
+        cycle = 0
         while True:
             try:
                 snapshot = self._collect(ctx)
                 self._persist(snapshot)
                 # Push to WebSocket clients (zero-polling telemetry)
                 await self._broadcast(snapshot)
+                # Prune old snapshots every ~100 cycles (~16 min at 10s interval)
+                cycle += 1
+                if cycle % 100 == 0:
+                    self._prune_old_snapshots(days=7)
             except Exception as e:
                 _LOG.warning("telemetry_collector: sample failed: %s", e)
             await asyncio.sleep(self._interval)
@@ -200,39 +205,21 @@ class TelemetryCollector:
         try:
             from runtime.api import deps
             bot_svc = deps.get_bot()
-            for rec in bot_svc._bots.values():
+            dorothy_bots_list = bot_svc.list_instances()
+            for b in dorothy_bots_list:
                 d_total += 1
-                is_running = getattr(rec.runner, "running", False)
-                if is_running:
+                if b.get("running"):
                     d_running += 1
-                dorothy_bots_list.append({
-                    "bot_id": rec.bot_id,
-                    "tag": rec.tag,
-                    "running": is_running,
-                    "symbol": getattr(rec.runner.config, "symbol", ""),
-                    "preset_id": getattr(rec.runner.config, "preset_id", ""),
-                    "last_cycle_ts": rec.runner.last_cycle_ts,
-                    "last_error": rec.runner.last_error,
-                })
         except Exception:
             pass
         try:
             from runtime.api import deps
             eph_svc = deps.get_elphaba()
-            for rec in eph_svc._bots.values():
+            elphaba_bots_list = eph_svc.list_instances()
+            for b in elphaba_bots_list:
                 e_total += 1
-                is_running = getattr(rec.runner, "running", False)
-                if is_running:
+                if b.get("running"):
                     e_running += 1
-                elphaba_bots_list.append({
-                    "bot_id": rec.bot_id,
-                    "tag": rec.tag,
-                    "running": is_running,
-                    "symbol": getattr(rec.runner.config, "symbol", ""),
-                    "preset_id": getattr(rec.runner.config, "preset_id", ""),
-                    "last_cycle_ts": rec.runner.last_cycle_ts,
-                    "last_error": rec.runner.last_error,
-                })
         except Exception:
             pass
         snapshot["dorothy_running"] = d_running
@@ -259,7 +246,26 @@ class TelemetryCollector:
             pass
 
         # -- Gateway --
-        snapshot["gateway_running"] = 1 if getattr(ctx, "gateway", None) else 0
+        gw = getattr(ctx, "gateway", None)
+        snapshot["gateway_running"] = 1 if gw else 0
+
+        # -- Gateway snapshot (replaces REST polling) --
+        try:
+            from runtime.api._helpers import build_snapshot as _build_gw_snap
+            gw_snap = _build_gw_snap(ctx)
+            snapshot["gateway_snapshot"] = gw_snap.model_dump() if hasattr(gw_snap, "model_dump") else gw_snap.dict()
+        except Exception:
+            snapshot["gateway_snapshot"] = None
+
+        # -- Order ledger stats (replaces REST polling) --
+        try:
+            from runtime.core.order_ledger import get_order_ledger
+            ledger = get_order_ledger()
+            snapshot["order_ledger_stats"] = ledger.stats()
+            snapshot["order_ledger_recent"] = ledger.recent(limit=12)
+        except Exception:
+            snapshot["order_ledger_stats"] = None
+            snapshot["order_ledger_recent"] = None
 
         return snapshot
 
@@ -288,6 +294,29 @@ class TelemetryCollector:
                     values,
                 )
                 conn.commit()
+    # ── Rotation ────────────────────────────────────────────────────────
+
+    def _prune_old_snapshots(self, days: int = 7) -> None:
+        """Delete telemetry rows older than ``days`` to prevent DB bloat."""
+        cutoff = (
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+        ).isoformat()
+        try:
+            with self._lock:
+                with sqlite3.connect(str(self._db_path), timeout=3) as conn:
+                    cur = conn.execute(
+                        "DELETE FROM telemetry_snapshots WHERE ts_utc < ?",
+                        (cutoff,),
+                    )
+                    conn.commit()
+                    deleted = cur.rowcount
+            if deleted > 0:
+                _LOG.info(
+                    "telemetry_collector: pruned %d rows older than %d days",
+                    deleted, days,
+                )
+        except Exception as e:
+            _LOG.warning("telemetry_collector: prune failed: %s", e)
 
     # ── Query API ─────────────────────────────────────────────────────
 

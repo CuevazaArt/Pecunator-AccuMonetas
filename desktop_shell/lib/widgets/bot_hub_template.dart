@@ -66,8 +66,9 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
   void initState() {
     super.initState();
     _refresh();
+    // Fallback REST polling — 30s (WebSocket provides real-time updates)
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(seconds: 30),
       (_) => _refreshSilent(),
     );
   }
@@ -77,6 +78,20 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
     _refreshTimer?.cancel();
     super.dispose();
   }
+
+  /// Inject bot list from external source (e.g. WebSocket telemetry push).
+  /// Prevents the need for REST polling when WS is connected.
+  void updateBots(List<Map<String, dynamic>> bots) {
+    if (!mounted) return;
+    setState(() {
+      _bots = bots;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  /// Force an immediate REST poll (used by parent widgets).
+  void forcePoll() => _refreshSilent();
 
   Future<void> _refresh() async {
     setState(() => _loading = true);

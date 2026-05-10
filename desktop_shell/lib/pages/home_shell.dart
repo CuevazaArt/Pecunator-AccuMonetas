@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../api_client.dart';
+import '../services/telemetry_hub.dart';
 import '../widgets/credential_manager_dialog.dart';
 import 'unified_hub_page.dart';
 
@@ -20,6 +21,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   late final EngineApi _api;
   Timer? _timer;
   Timer? _clockTimer;
+  StreamSubscription<TelemetrySnapshot>? _telemetrySub;
   final GlobalKey<UnifiedHubPageState> _hubKey = GlobalKey<UnifiedHubPageState>();
 
   // AppBar state
@@ -43,15 +45,28 @@ class _PecunatorShellState extends State<PecunatorShell> {
     super.initState();
     _api = EngineApi(_engineBase);
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refreshSilent());
+    // REST polling reduced to 60s fallback — WebSocket handles real-time
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => _refreshSilent());
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+    // Subscribe to WebSocket telemetry for gateway state
+    _telemetrySub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _clockTimer?.cancel();
+    _telemetrySub?.cancel();
     super.dispose();
+  }
+
+  /// Handle WebSocket telemetry tick — update gateway state in real-time.
+  void _onTelemetryTick(TelemetrySnapshot snap) {
+    if (!mounted) return;
+    setState(() {
+      _gatewayRunning = snap.gatewayRunning;
+      _gatewayWsConnected = snap.gatewaySnapshot?['ws_connected'] == true;
+    });
   }
 
   void _updateClock() {

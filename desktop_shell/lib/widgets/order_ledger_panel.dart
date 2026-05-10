@@ -23,7 +23,7 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
   void initState() {
     super.initState();
     _poll();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => _poll());
   }
 
   @override
