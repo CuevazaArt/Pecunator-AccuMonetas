@@ -234,7 +234,17 @@ class BaseHubService(ABC):
             print(msg_formatted, flush=True)
             
             log_level = getattr(logging, log_level_str, logging.INFO)
-            _LOG.log(log_level, "[%s] %s", bot_id, msg)
+            # For CRITICAL/ERROR, include key payload fields in flat log
+            _flat_extra = ""
+            if log_level >= logging.ERROR and isinstance(payload, dict):
+                _parts = []
+                for _k in ("symbol", "error", "action"):
+                    _v = payload.get(_k)
+                    if _v:
+                        _parts.append(f"{_k}={_v}")
+                if _parts:
+                    _flat_extra = " | " + " | ".join(_parts)
+            _LOG.log(log_level, "[%s] %s%s", bot_id, msg, _flat_extra)
             
             if isinstance(payload, dict):
                 if msg == equity_msg:
