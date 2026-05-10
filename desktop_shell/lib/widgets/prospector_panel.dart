@@ -404,6 +404,7 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
               children: [
                 _headerCell('#', 24),
                 _headerCell('Symbol', 75),
+                _headerCell('', 40),  // Deploy button column
                 _headerCell('Grade', 35),
                 _headerCell('SEVI', 42),
                 _headerCell('Safety', 42),
@@ -414,7 +415,6 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                 _headerCell('CHOP', 35),
                 _headerCell('Vol(M\$)', 45),
                 _headerCell('Mgn', 30),
-                const Spacer(),
               ],
             ),
           ),
@@ -443,6 +443,33 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                     children: [
                       _dataCell('${i + 1}', 24, Colors.white30),
                       _dataCell('${r['symbol']}', 75, Colors.white70, bold: true),
+                      // Deploy button — inline next to symbol for easy access
+                      if (widget.onSymbolSelected != null)
+                        Tooltip(
+                          message: 'Desplegar ${r['symbol']} en el hub simétrico',
+                          waitDuration: const Duration(milliseconds: 200),
+                          child: InkWell(
+                            onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: widget.accentColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: widget.accentColor.withValues(alpha: 0.35)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.rocket_launch, size: 10, color: widget.accentColor.withValues(alpha: 0.9)),
+                                  const SizedBox(width: 2),
+                                  Text('GO', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w900, color: widget.accentColor, letterSpacing: 0.5)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       SizedBox(
                         width: 35,
                         child: Center(
@@ -483,20 +510,6 @@ class _ProspectorPanelState extends State<ProspectorPanel> {
                           ),
                         ),
                       ),
-                      const Spacer(),
-                      if (widget.onSymbolSelected != null)
-                        Tooltip(
-                          message: 'Usar ${r['symbol']} en el hub',
-                          waitDuration: const Duration(milliseconds: 200),
-                          child: InkWell(
-                            onTap: () => widget.onSymbolSelected!('${r['symbol']}'),
-                            borderRadius: BorderRadius.circular(4),
-                            child: Padding(
-                              padding: const EdgeInsets.all(3),
-                              child: Icon(Icons.arrow_forward, size: 12, color: widget.accentColor.withValues(alpha: 0.6)),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 );
