@@ -62,6 +62,7 @@ class BinanceGateway:
         self.api_secret = api_secret
         self.bus = bus
         self.state = state
+        self.data_dir = data_dir
         self._log = log
         self._client: Optional[Client] = None
         self._ws_task: Optional[asyncio.Task[Any]] = None
@@ -651,6 +652,15 @@ class BinanceGateway:
                 raise
             except Exception as e:
                 self._emit_log(f"poll light: {sanitize_log_message(str(e))}")
+                
+            # ── PERSIST STATE (WAL) ─────────────────────────────
+            try:
+                from runtime.core import state_wal
+                if self.data_dir:
+                    state_wal.persist(self.state, self.data_dir)
+            except Exception as e:
+                _LOG.warning("Failed to persist state_wal: %s", e)
+                
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=interval)
             except asyncio.TimeoutError:

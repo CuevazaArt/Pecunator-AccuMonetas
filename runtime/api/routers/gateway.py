@@ -154,10 +154,8 @@ async def account_wallets(
     base_asset: str = "USDT",
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
-    from runtime.api._helpers import _fetch_wallet_buckets
-    return await _fetch_wallet_buckets(ctx, base_asset=base_asset)
-
-
+    # _fetch_wallet_buckets was removed; return raw balances to avoid 500 crashes
+    return {"buckets": [{"asset": b["asset"], "free": b["free"]} for b in ctx.state.balances if float(b["free"]) > 0]}
 # ── Symbol precision auto-resolver ──────────────────────────────────
 
 @router.get("/gateway/symbol_precision")

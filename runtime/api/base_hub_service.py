@@ -214,6 +214,7 @@ class BaseHubService(ABC):
             rec = self._bots.get(bot_id)
             tag = rec.tag if rec is not None else "-"
             self._write_log(bot_id, tag, "INFO", msg)
+            _LOG.info("[%s] %s", bot_id, msg)
         return _sink
 
     def _runner_event_sink(
@@ -226,6 +227,15 @@ class BaseHubService(ABC):
             rec = self._bots.get(bot_id)
             tag = rec.tag if rec is not None else "-"
             self._write_log(bot_id, tag, level or "INFO", msg, payload)
+            
+            # Print to standard logs so execution is visible
+            log_level_str = (level or "INFO").upper()
+            msg_formatted = f"[{log_level_str}] pecunator.hub_base: [{bot_id}] {msg}"
+            print(msg_formatted, flush=True)
+            
+            log_level = getattr(logging, log_level_str, logging.INFO)
+            _LOG.log(log_level, "[%s] %s", bot_id, msg)
+            
             if isinstance(payload, dict):
                 if msg == equity_msg:
                     self._persist_equity_snapshot(bot_id, payload)

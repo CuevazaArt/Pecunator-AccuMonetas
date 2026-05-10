@@ -250,49 +250,7 @@ class EngineApi {
   Future<Map<String, dynamic>> elphabaLogs(String botId, {int limit = 120}) =>
       _client.get('/api/v1/elphaba/bots/$botId/logs?limit=$limit');
 
-  Future<Map<String, dynamic>> thusneldaBots() =>
-      _client.get('/api/v1/thusnelda/bots');
 
-  Future<Map<String, dynamic>> thusneldaCreateBot(Map<String, dynamic> body) =>
-      _client.post('/api/v1/thusnelda/bots', body: body);
-
-  Future<Map<String, dynamic>> thusneldaUpdateBot(
-    String botId,
-    Map<String, dynamic> body,
-  ) => _client.patch('/api/v1/thusnelda/bots/$botId', body: body);
-
-  Future<Map<String, dynamic>> thusneldaDeleteBot(String botId) =>
-      _client.delete('/api/v1/thusnelda/bots/$botId');
-
-  Future<Map<String, dynamic>> thusneldaStartBot(
-    String botId, {
-    String? apiKey,
-    String? apiSecret,
-  }) => _client.post(
-    '/api/v1/thusnelda/bots/$botId/start',
-    body: {
-      if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
-      if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
-    },
-  );
-
-  Future<Map<String, dynamic>> thusneldaStopBot(String botId) =>
-      _client.post('/api/v1/thusnelda/bots/$botId/stop');
-
-  Future<Map<String, dynamic>> thusneldaRunOnce(
-    String botId, {
-    String? apiKey,
-    String? apiSecret,
-  }) => _client.post(
-    '/api/v1/thusnelda/bots/$botId/run_once',
-    body: {
-      if (apiKey != null && apiKey.isNotEmpty) 'api_key': apiKey,
-      if (apiSecret != null && apiSecret.isNotEmpty) 'api_secret': apiSecret,
-    },
-  );
-
-  Future<Map<String, dynamic>> thusneldaLogs(String botId, {int limit = 120}) =>
-      _client.get('/api/v1/thusnelda/bots/$botId/logs?limit=$limit');
 
   Future<Map<String, dynamic>> sandboxRequest({
     required String method,

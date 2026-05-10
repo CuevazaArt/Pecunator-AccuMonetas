@@ -32,7 +32,7 @@ class TestOrderLedger:
 
         ledger = OrderLedger(tmp_path)
         row_id = ledger.record(
-            bot_id="test", bot_type="masha", symbol="SOLUSDT",
+            bot_id="test", bot_type="elphaba", symbol="SOLUSDT",
             side="SELL", order_type="LIMIT", qty="5", price="150.00",
             reason="TAKE_PROFIT", execution_mode="LIVE",
         )

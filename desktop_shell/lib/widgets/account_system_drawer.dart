@@ -56,7 +56,7 @@ class _AccountSystemDrawerState extends State<AccountSystemDrawer> {
       try {
         final dorothy = await widget.api.hubBots();
         final elphaba = await widget.api.elphabaBots();
-        for (final list in [(dorothy['items'] as List?) ?? [], (elphaba['items'] as List?) ?? []]) {
+        for (final list in [(dorothy['bots'] as List?) ?? [], (elphaba['bots'] as List?) ?? []]) {
           for (final bot in list) {
             if (bot is Map && bot['running'] == true && bot['last_report'] is Map) {
               final r = bot['last_report'] as Map;

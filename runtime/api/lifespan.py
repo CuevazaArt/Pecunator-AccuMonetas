@@ -29,6 +29,27 @@ async def lifespan(app: FastAPI):
     elphaba_resolver = lambda: resolve_pair_for_bot(ctx, "elphaba")  # noqa: E731
     bot.start_immortality(dorothy_resolver, interval_sec=5.0)
     elphaba.start_immortality(elphaba_resolver, interval_sec=5.0)
+    from runtime.core.bot_coordinator import get_bot_coordinator
+    coord = get_bot_coordinator()
+
+    async def _dorothy_start(bot_id: str) -> None:
+        rec = deps.get_bot()._bots.get(bot_id)
+        if rec and not rec.runner.running:
+            pair = dorothy_resolver()
+            if pair:
+                await deps.get_bot()._start_runner(rec, pair[0], pair[1])
+
+    async def _elphaba_start(bot_id: str) -> None:
+        rec = deps.get_elphaba()._bots.get(bot_id)
+        if rec and not rec.runner.running:
+            pair = elphaba_resolver()
+            if pair:
+                await deps.get_elphaba()._start_runner(rec, pair[0], pair[1])
+
+    coord.register_callback("dorothy", _dorothy_start)
+    coord.register_callback("elphaba", _elphaba_start)
+    coord.start_launcher()
+
     await autostart_gateway_if_possible(ctx)
     yield
     ctx = deps.peek_ctx()
@@ -44,6 +65,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             _LOG.warning("gateway stop on shutdown: %s", e)
         ctx.gateway = None
+        
+    try:
+        from runtime.core.bot_coordinator import get_bot_coordinator
+        await get_bot_coordinator().stop_launcher()
+    except Exception:
+        pass
 
 
 async def autostart_gateway_if_possible(ctx: AppContext) -> None:

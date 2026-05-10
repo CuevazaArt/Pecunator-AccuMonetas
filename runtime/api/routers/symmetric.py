@@ -82,6 +82,20 @@ async def deploy_symmetric(
     body.dorothy.symbol = body.symbol
     body.elphaba.symbol = body.symbol
 
+    # ── Prevent Duplicate Instances ────────────────────────────
+    existing_d = [b for b in dorothy_svc._bots.values() if b.runner.config.symbol == body.symbol]
+    if existing_d:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya existe una instancia de Dorothy para el símbolo {body.symbol}. Elimínala primero.",
+        )
+    existing_e = [b for b in elphaba_svc._bots.values() if b.runner.config.symbol == body.symbol]
+    if existing_e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya existe una instancia de Elphaba para el símbolo {body.symbol}. Elimínala primero.",
+        )
+
     # ── Step 1: Create Dorothy ──────────────────────────────────
     dorothy_id: str | None = None
     elphaba_id: str | None = None

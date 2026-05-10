@@ -73,8 +73,8 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
         _api.budgetGuardStatus().catchError((_) => <String, dynamic>{}),
       ]);
 
-      final dorBots = ((results[0]['items'] as List?) ?? []).cast<Map<String, dynamic>>();
-      final elpBots = ((results[1]['items'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final dorBots = ((results[0]['bots'] as List?) ?? []).cast<Map<String, dynamic>>();
+      final elpBots = ((results[1]['bots'] as List?) ?? []).cast<Map<String, dynamic>>();
 
       // Find a running bot to get the last report
       Map<String, dynamic> dorReport = {};
@@ -118,8 +118,11 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
 
   Future<void> _handleStagedAcceptSymmetric(Map<String, dynamic> dConfig, Map<String, dynamic> eConfig) async {
     try {
-      await _api.hubCreateBot(dConfig);
-      await _api.elphabaCreateBot(eConfig);
+      final dorBot = await _api.hubCreateBot(dConfig);
+      final elpBot = await _api.elphabaCreateBot(eConfig);
+      
+      if (dorBot['bot_id'] != null) await _api.hubStartBot(dorBot['bot_id']);
+      if (elpBot['bot_id'] != null) await _api.elphabaStartBot(elpBot['bot_id']);
       setState(() {
         _savedPresets[dConfig['symbol']] = dConfig; // You can save Dorothy's as reference, or combined
         _savedPresets[eConfig['symbol'] + '_elphaba'] = eConfig; // Save Elphaba separately if needed
@@ -260,7 +263,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     engineBase: widget.engineBase,
                     fetchBots: () async {
                       final resp = await _api.hubBots();
-                      final items = resp['items'];
+                      final items = resp['bots'];
                       if (items is List) return items.cast<Map<String, dynamic>>();
                       return [];
                     },
@@ -271,7 +274,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     fetchLogs: (id) async {
                       try {
                         final resp = await _api.hubLogs(id, limit: 50);
-                        final items = resp['items'];
+                        final items = resp['logs'];
                         if (items is List) return items.map((e) => '$e').toList();
                       } catch (_) {}
                       return [];
@@ -294,7 +297,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     engineBase: widget.engineBase,
                     fetchBots: () async {
                       final resp = await _api.elphabaBots();
-                      final items = resp['items'];
+                      final items = resp['bots'];
                       if (items is List) return items.cast<Map<String, dynamic>>();
                       return [];
                     },
@@ -305,7 +308,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
                     fetchLogs: (id) async {
                       try {
                         final resp = await _api.elphabaLogs(id, limit: 50);
-                        final items = resp['items'];
+                        final items = resp['logs'];
                         if (items is List) return items.map((e) => '$e').toList();
                       } catch (_) {}
                       return [];

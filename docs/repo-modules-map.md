@@ -6,8 +6,7 @@ Updated: 2026-05-06 (v0.3.0-infra)
 
 - `bots/`
   - `dorothy/`
-  - `masha/`
-  - `thusnelda/`
+  - `elphaba/`
 - `tools/`
   - `ops-protocols/`
   - `sandbox-rest/`
@@ -31,7 +30,6 @@ Updated: 2026-05-06 (v0.3.0-infra)
 - `runtime/core/` – shared primitives/state/settings/storage
   - `api_governor.py` – **unified multi-service rate limiter** (Binance/ChartImg/Gemini/OpenAI)
   - `api_fuse.py` – thermal circuit breaker for Binance REST
-  - `weight_governor.py` – API weight budget per bot
   - `exception_zoo.py` – **forensic exception registry** (dedup, hit counting)
   - `telemetry_vault.py` – **unified data store** (klines, captures, bot decisions)
   - `account_monitor.py` – **periodic balance snapshots, rebalance signals**

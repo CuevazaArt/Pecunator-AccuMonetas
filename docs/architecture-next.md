@@ -4,7 +4,7 @@ Human coordination in Spanish (`README` policy); technical identifiers and code 
 
 ## Current state
 
-- Python package `runtime/`: FastAPI HTTP API under `runtime/api/` (default `127.0.0.1:8000`), Binance gateway (`python-binance`), encrypted vault, and multi-instance hubs for Dorothy/Masha/Thusnelda.
+- Python package `runtime/`: FastAPI HTTP API under `runtime/api/` (default `127.0.0.1:8000`), Binance gateway (`python-binance`), encrypted vault, and multi-instance hubs for Dorothy/Elphaba.
 - Runtime now exposes a modular domain layer under `runtime/modules/`:
   - `runtime/modules/bots/`
   - `runtime/modules/tools/`
@@ -51,7 +51,7 @@ PecunatorCore/
 - `runtime/main.py`
   - Engine startup and API server lifecycle.
 - `runtime/modules/bots/`
-  - Bot strategy modules (Dorothy, Masha, Thusnelda).
+  - Bot strategy modules (Dorothy, Elphaba).
 - `runtime/modules/tools/`
   - Operational tools (ops protocols, sandbox, rest-weight telemetry boundaries).
 - `runtime/bot/`

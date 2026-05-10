@@ -14,9 +14,8 @@
 graph TB
     subgraph Flutter["🖥️ Flutter Desktop Hub"]
         D[Dorothy Hub]
-        M[Masha Hub]
-        T[Thusnelda Hub]
-        MKT[Monitor Mercado]
+        M[Elphaba Hub]
+        T[        MKT[Monitor Mercado]
         SPOT[Cuenta Spot]
         W[API Weight Monitor]
         MACRO[Macro Intelligence]
@@ -75,9 +74,8 @@ Al abrir Flutter, el gateway Binance se inicia automáticamente:
 | 1 | 📊 | **Monitor Mercado** | Gráficos velas, orderbook, tickers real-time |
 | 2 | 👛 | **Cuenta Spot** | Panel consolidado: equity, wallets, badges |
 | 3 | 📚 | **Biblioteca** | VisionScraper, gestión activos referencia |
-| 4 | 🧠 | **Masha Hub** | Bot breakout/range DCA multi-timeframe |
-| 5 | 🕸️ | **Thusnelda Hub** | Bot basket L0 volátil |
-| 6 | 💰 | **Earn** | Staking/earn history |
+| 4 | 🧠 | **Elphaba Hub** | Bot breakout/range DCA multi-timeframe |
+| 5 | 🕸️ | **| 6 | 💰 | **Earn** | Staking/earn history |
 | 7 | 💱 | **Carry** | Operaciones carry trade |
 | 8 | ⚖️ | **API Weight** | Oscilador peso API, crestas, fusible |
 | 9 | 🌍 | **Macro Intelligence** | Heatmap 24h, calendario económico, F&G, geo |
@@ -159,13 +157,12 @@ flowchart TD
 > [!NOTE]
 > `qDec` y `pDec` son **auto-resueltos** desde Binance `exchangeInfo` (LOT_SIZE/PRICE_FILTER). Ya no se setean manualmente.
 
-### 5.2 Masha (Breakout/Range DCA)
+### 5.2 Elphaba (Breakout/Range DCA)
 > **Filosofía**: DCA multi-timeframe con señal técnica de rupturas y rangos.
 
 Parámetros adicionales: `base_asset`, `quote_asset`, timeframes W/H con periods, mm, margins.
 
-### 5.3 Thusnelda (Basket Volátil L0)
-> **Filosofía**: Compra cesta de 5 activos volátiles, cosecha 6%+ por ciclo en subidas generales.
+### 5.3 > **Filosofía**: Compra cesta de 5 activos volátiles, cosecha 6%+ por ciclo en subidas generales.
 
 | Parámetro | Default L0 |
 |---|---|
@@ -175,8 +172,7 @@ Parámetros adicionales: `base_asset`, `quote_asset`, timeframes W/H con periods
 | `quote_order_qty_modulo` | 6 USDT |
 
 > [!IMPORTANT]
-> Los símbolos de Thusnelda **no deben solaparse** con Dorothy/Masha para evitar correlación sistémica.
-
+> Los símbolos de 
 ---
 
 ## 6. Páginas Dedicadas
@@ -218,8 +214,7 @@ Captura gráficos TradingView → análisis vía Gemini Flash:
 - **Bias**: bullish, bearish, neutral
 - **Confianza**: 0-100%
 - **Timeframes**: 4h, 1d
-- Símbolos: todos los de Dorothy + Masha + Thusnelda
-
+- Símbolos: todos los de Dorothy + Elphaba + 
 ---
 
 ## 8. Gestión de Credenciales
@@ -293,8 +288,7 @@ erDiagram
 ## 11. Filosofía L0
 
 - **Volumen nocional**: 5-8 USDT por operación
-- **Beneficio mínimo**: ≥3% por operación (Dorothy/Masha), ≥6% por ciclo (Thusnelda)
-- **Dispersión**: Capital repartido entre múltiples instrumentos NO correlacionados
+- **Beneficio mínimo**: ≥3% por operación (Dorothy/Elphaba), ≥6% por ciclo (- **Dispersión**: Capital repartido entre múltiples instrumentos NO correlacionados
 - **Adaptativo**: Profit target ajustable según símbolo, volatilidad y capital
 - **Fail-safe**: `simulated=true` por defecto; RED BUTTON disponible 24/7
 - **Auto-precision**: qDec/pDec auto-resueltos desde Binance (v0.10.1+)
@@ -303,8 +297,7 @@ erDiagram
 
 ## 12. ❓ FAQ — Preguntas Frecuentes
 
-### ¿Puedo correr Dorothy y Thusnelda al mismo tiempo?
-**Sí**, pero con símbolos diferentes. Nunca dupliques el mismo par en dos bots — causa conflictos de órdenes.
+### ¿Puedo correr Dorothy y **Sí**, pero con símbolos diferentes. Nunca dupliques el mismo par en dos bots — causa conflictos de órdenes.
 
 ### ¿Qué pasa si el backend se cae mientras un bot está activo?
 Los bots se detienen automáticamente. Al reiniciar el backend, sus estados se restauran desde SQLite pero deben reactivarse manualmente desde Flutter.

@@ -19,7 +19,9 @@ from runtime.core.api_governor import get_api_governor, P_DIAGNOSIS
 _LOG = logging.getLogger("pecunator.modules.vmo")
 
 # Replace with env var in production if needed, but we have a dedicated key
-CHART_IMG_API_KEY = "REDACTED-ROTATED-CHART-IMG-KEY"
+import os
+
+CHART_IMG_API_KEY = os.environ.get("CHART_IMG_API_KEY", "")
 CHART_IMG_URL = "https://api.chart-img.com/v2/tradingview/advanced-chart"
 
 class VisualMarketObserver:

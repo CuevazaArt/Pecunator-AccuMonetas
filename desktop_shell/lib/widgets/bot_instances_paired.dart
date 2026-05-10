@@ -24,14 +24,20 @@ class BotInstancesPairedList extends StatelessWidget {
       final sym = '${b['symbol'] ?? ''}';
       if (sym.isNotEmpty) {
         allSymbols.add(sym);
-        dorBySymbol[sym] = b;
+        // Only overwrite if current is not running or new is running
+        if (dorBySymbol[sym]?['running'] != true) {
+          dorBySymbol[sym] = b;
+        }
       }
     }
     for (final b in elphabaBots) {
       final sym = '${b['symbol'] ?? ''}';
       if (sym.isNotEmpty) {
         allSymbols.add(sym);
-        elpBySymbol[sym] = b;
+        // Only overwrite if current is not running or new is running
+        if (elpBySymbol[sym]?['running'] != true) {
+          elpBySymbol[sym] = b;
+        }
       }
     }
 

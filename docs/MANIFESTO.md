@@ -98,8 +98,8 @@ registro, análisis y operación en background NO se inmuta.
 
 **Doble función:**
 
-**A) Hub de bots:** Visualización del estado de N bots simultáneamente,
-cada uno con su subcuenta, estrategia, P&L, y métricas. Control de misión
+**A) Hub de bots:** Visualización del estado de los bots Dorothy y Elphaba simultáneamente,
+cada uno con su subcuenta, estrategia simétrica, P&L, y métricas. Control de misión
 estilo Bloomberg terminal para el operador.
 
 **B) Laboratorio visual:** Con datos servidos por el backend se pueden
@@ -359,16 +359,15 @@ El LLM NO debe:
 
 - [ ] WAL State Hydration en `runtime/core/state_store.py`
 - [ ] PANIC.lock watchdog implementado
-- [ ] Lógica de estrategia ejecutable para Dorothy, Masha, Thusnelda
+- [ ] Lógica de estrategia ejecutable para Dorothy y Elphaba
 - [ ] Pipeline de promoción: backtest → paper → producción
 - [ ] Primer mes de P&L registrado
 
 ### Fase 2 — Subcuentas y Aislamiento
 
-- [ ] Subcuentas de Binance (SUB-01 a SUB-05) con API keys aisladas
+- [ ] Subcuentas de Binance con API keys aisladas para Dorothy y Elphaba
 - [ ] Métricas por subcuenta activas
 - [ ] Primera rotación de capital mensual ejecutada
-- [ ] Ref: [`docs/subcuentas-architecture.md`](subcuentas-architecture.md)
 
 ### Fase 3 — Sensores y Heurísticas (VMO + Rotación Sectorial)
 

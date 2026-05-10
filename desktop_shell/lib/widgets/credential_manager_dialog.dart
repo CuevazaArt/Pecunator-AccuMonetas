@@ -5,10 +5,8 @@ import '../api_client.dart';
 const _subAccountRegistry = [
   {'account_id': 'dorothy', 'role': 'bot', 'description': 'DCA long hub', 'enabled': true},
   {'account_id': 'elphaba', 'role': 'bot', 'description': 'Short/hedge hub', 'enabled': true},
-  {'account_id': 'masha', 'role': 'bot', 'description': 'Hunter fleet', 'enabled': false},
   {'account_id': 'bluechip', 'role': 'reserve', 'description': 'Blue-chip DCA reserve', 'enabled': false},
   {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'enabled': false},
-  {'account_id': 'thusnelda', 'role': 'isolated', 'description': 'Isolated margin', 'enabled': false},
 ];
 
 /// Opens the credential vault + sub-account registry dialog.

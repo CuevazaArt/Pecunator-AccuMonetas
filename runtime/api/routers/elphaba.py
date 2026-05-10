@@ -31,6 +31,14 @@ async def elphaba_bots_list() -> Any:
 @router.post("/bots", response_model=HubBotOut)
 async def elphaba_bots_create(body: HubBotCreateBody) -> Any:
     svc = deps.get_elphaba()
+    # Prevent duplicate bots for the same symbol
+    existing = [b for b in svc._bots.values() if b.runner.config.symbol == body.symbol]
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya existe una instancia de Elphaba para el símbolo {body.symbol}. Elimínala primero.",
+        )
+
     try:
         row = svc.create_instance(
             bot_id=body.bot_id,

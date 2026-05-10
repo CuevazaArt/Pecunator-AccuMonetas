@@ -21,11 +21,11 @@
 ╚═══════╪═════════════╪════════════╪═══════════╝
         │             │            │
         ▼             ▼            ▼
-╔═══════════╗ ╔═══════════╗ ╔═══════════╗
-║  SUB-01   ║ ║  SUB-02   ║ ║  SUB-03   ║
-║  Dorothy  ║ ║  Masha    ║ ║ Thusnelda ║
-║  (Trend)  ║ ║  (DCA)    ║ ║ (Opportun)║
-╚═══════════╝ ╚═══════════╝ ╚═══════════╝
+╔═══════════╗ ╔═══════════╗
+║  SUB-01   ║ ║  SUB-02   ║
+║  Dorothy  ║ ║  Elphaba  ║
+║  (Long)   ║ ║  (Short)  ║
+╚═══════════╝ ╚═══════════╝
 ```
 
 ---
@@ -74,20 +74,18 @@ coordinator.allocate_group(
   ├── 20% → Earn Activo (staking, savings — rendimiento pasivo)
   ├── 10% → Liquidez de Emergencia (nunca tocar salvo pánico)
   └── 40% → Capital de Trabajo (repartido entre bots activos)
-        ├── Dorothy: hasta 40% del capital de trabajo
-        ├── Masha: hasta 40% del capital de trabajo
-        └── Thusnelda: hasta 20% del capital de trabajo
+        ├── Dorothy: hasta 50% del capital de trabajo
+        └── Elphaba: hasta 50% del capital de trabajo
 ```
 
 ### 3.2 Destino por Subcuenta
 
 | Subcuenta | Bot(s) | Capital Máx | Función |
 |-----------|--------|-------------|---------|
-| SUB-01 | Dorothy | 40% trabajo | Scalp con tendencia |
-| SUB-02 | Masha | 40% trabajo | DCA en rangos |
-| SUB-03 | Thusnelda | 20% trabajo | Oportunístico multi-symbol |
-| SUB-04 | (Reserva) | — | Capital rotativo, buffer |
-| SUB-05 | (Earn) | — | Savings/Staking activos |
+| SUB-01 | Dorothy | 50% trabajo | Scalp Long simétrico |
+| SUB-02 | Elphaba | 50% trabajo | Scalp Short simétrico |
+| SUB-03 | (Reserva) | — | Capital rotativo, buffer |
+| SUB-04 | (Earn) | — | Savings/Staking activos |
 
 ---
 

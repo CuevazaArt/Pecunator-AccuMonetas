@@ -50,7 +50,7 @@ _DEFAULT_REGISTRY: list[SubAccountEntry] = [
     ),
     SubAccountEntry(
         account_id="elphaba",
-        email="mashabot_virtual@js13xxewnoemail.com",
+        email="elphababot_virtual@js13xxewnoemail.com",
         role="bot",
         bot_type="elphaba",
         description="DCA short bot — symmetric counterpart to Dorothy",
