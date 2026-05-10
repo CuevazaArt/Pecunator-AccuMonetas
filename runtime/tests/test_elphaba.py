@@ -83,7 +83,7 @@ class TestElphabaRunner:
 
     def test_fuse_tripped(self):
         r = _make_runner()
-        with patch("runtime.core.api_fuse.get_api_fuse") as mock_fuse:
+        with patch("runtime.bot.elphaba.get_api_fuse") as mock_fuse:
             fuse = MagicMock()
             fuse.is_tripped.return_value = True
             fuse.remaining_cooldown_sec.return_value = 42.0

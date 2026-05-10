@@ -49,7 +49,7 @@ Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/
 - `runtime/bot/` — Dorothy (spot DCA) and Elphaba (margin short) runners
 - `runtime/core/` — Infrastructure: WeightGovernor, ApiFuse, BotCoordinator, SymmetryGuard, BudgetGuard, OrderLedger, StateWAL
 - `runtime/api/` — FastAPI routers and hub services
-- `runtime/modules/` — Prospector (SEVI-M), TrendSignal, VMO
+- `runtime/modules/` — TrendSignal, VMO
 - `runtime/connectors/` — BinanceGateway
 - `runtime/tests/` — Official test suite
 - `desktop_shell/` — Flutter desktop UI
@@ -102,7 +102,6 @@ python -m pytest runtime/tests/ -x -q --tb=short
 
 | Module | Purpose |
 |---|---|
-| `SEVI-M` (Prospector) | 4-gate veto pipeline + 6-factor scoring for asset selection |
 | `TrendSignal` | HA MA crossover gate for entry/exit timing |
 | `EVI` | Electric Volatility Index gate for dead-market filtering |
 

@@ -331,7 +331,7 @@ class SymmetryGuard:
                 return await result
             if _to_thread:
                 return await _to_thread(lambda: fn())
-            return await asyncio.get_running_loop().run_in_executor(None, fn)
+            return await asyncio.to_thread(fn)
 
         health = HubHealth(ts=time.time())
 
@@ -591,7 +591,7 @@ class SymmetryGuard:
                 return await result
             if _to_thread:
                 return await _to_thread(lambda: fn())
-            return await asyncio.get_running_loop().run_in_executor(None, fn)
+            return await asyncio.to_thread(fn)
 
         MIN = self.MIN_RESERVE_USDT
         result: dict[str, Any] = {"action": "NONE", "trend": active_trend}

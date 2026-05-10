@@ -18,6 +18,16 @@ from runtime.bot._decimal_utils import dec as _dec, quantize as _q
 
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
+# Core dependencies (moved from inline for performance/cleanliness)
+from runtime.core.api_fuse import get_api_fuse
+from runtime.core.exchange_filters import get_exchange_filters
+from runtime.core.hub_state import get_hub_state
+from runtime.core.market_cache import get_market_cache, MarketCache
+from runtime.core.order_ledger import get_order_ledger
+from runtime.core.orphan_guard import get_orphan_guard
+from runtime.core.symmetry_guard import get_symmetry_guard
+from runtime.modules.trend_signal import get_trend_signal_service
+
 
 # _dec and _q imported from runtime.bot._decimal_utils
 
@@ -107,7 +117,6 @@ class DorothyRunner(BaseStrategyRunner):
         return f"bot:{report.get('decision')} symbol={report.get('symbol')}"
 
     async def run_once(self) -> dict[str, Any]:
-        from runtime.core.api_fuse import get_api_fuse
         fuse = get_api_fuse()
         if fuse.is_tripped():
             remaining = fuse.remaining_cooldown_sec()
@@ -119,7 +128,6 @@ class DorothyRunner(BaseStrategyRunner):
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:
-            from runtime.core.symmetry_guard import get_symmetry_guard
             _guard = get_symmetry_guard()
             # Tick the watchdog — handles auto-retry cooldowns
             _tick = _guard.tick()
@@ -152,7 +160,6 @@ class DorothyRunner(BaseStrategyRunner):
         # Universal solution: fetches LOT_SIZE, PRICE_FILTER, MIN_NOTIONAL
         # once per symbol and caches. Prevents TP failures from precision.
         try:
-            from runtime.core.exchange_filters import get_exchange_filters
             _ef = get_exchange_filters()
             _sf = await _ef.ensure_loaded(symbol, client)
             c.qty_decimals = _sf.qty_decimals
@@ -178,7 +185,6 @@ class DorothyRunner(BaseStrategyRunner):
         )
 
         try:
-            from runtime.core.market_cache import get_market_cache, MarketCache
             _cache = get_market_cache()
             open_orders = await _cache.get_or_fetch(
                 MarketCache.scoped_key(f"open_orders:{symbol}", self._api_key),
@@ -211,7 +217,6 @@ class DorothyRunner(BaseStrategyRunner):
             lowest_sell = min(sell_limit, key=lambda o: _dec(o.get("price", "0"), "0"))
 
         try:
-            from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
             ticker = await _cache.get_or_fetch(
                 f"symbol_ticker:{symbol}",
@@ -228,7 +233,6 @@ class DorothyRunner(BaseStrategyRunner):
 
         # ── ORPHAN GUARD: periodic scan + auto-repair ──────────────
         try:
-            from runtime.core.orphan_guard import get_orphan_guard
             _oguard = get_orphan_guard()
             if _oguard.needs_scan():
                 _scan = await _oguard.scan_dorothy_orphans(
@@ -254,7 +258,6 @@ class DorothyRunner(BaseStrategyRunner):
         # Gate 1: HA MA(1) > MA(2) → BULLISH required for Dorothy
         # Gate 2: price < 1h candle open → buying into a dip
         try:
-            from runtime.modules.trend_signal import get_trend_signal_service
             _trend_svc = get_trend_signal_service()
 
             if _trend_svc.needs_trend_refresh(symbol):
@@ -394,7 +397,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.3: Record LIVE order in forensic ledger BEFORE sending
         _ledger_id = None
         try:
-            from runtime.core.order_ledger import get_order_ledger
             _ledger_id = get_order_ledger().record(
                 bot_id=getattr(self, '_bot_id', 'dorothy'),
                 bot_type="dorothy", symbol=symbol, side="BUY",
@@ -423,7 +425,6 @@ class DorothyRunner(BaseStrategyRunner):
         except Exception as buy_err:
             # ── Alert: BUY order failed → feed SymmetryGuard ──────
             try:
-                from runtime.core.symmetry_guard import get_symmetry_guard
                 get_symmetry_guard().record_order_failure(
                     self._bot_key(), str(buy_err)
                 )
@@ -440,7 +441,6 @@ class DorothyRunner(BaseStrategyRunner):
 
         # ── Alert: BUY succeeded → reset failure counter ──────────
         try:
-            from runtime.core.symmetry_guard import get_symmetry_guard
             get_symmetry_guard().record_order_success(self._bot_key())
         except Exception:
             pass
@@ -450,7 +450,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.3: Update ledger with Binance response
         if _ledger_id:
             try:
-                from runtime.core.order_ledger import get_order_ledger
                 get_order_ledger().update_binance_response(
                     _ledger_id,
                     str(buy.get("orderId", "")),
@@ -477,7 +476,6 @@ class DorothyRunner(BaseStrategyRunner):
 
         # ── Universal filter validation before SELL LIMIT ──────────
         try:
-            from runtime.core.exchange_filters import get_exchange_filters
             _sf = get_exchange_filters().get(symbol)
             if _sf:
                 sell_price = _sf.quantize_price(sell_price)
@@ -503,7 +501,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.4: Record OPEN RUNG in local hub state
         _hub_rung_id = 0
         try:
-            from runtime.core.hub_state import get_hub_state
             _hub_rung_id = get_hub_state().open_rung(
                 bot_id=getattr(self, '_bot_id', 'dorothy'),
                 symbol=symbol,
@@ -517,7 +514,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.3: Record SELL LIMIT in ledger
         _sell_ledger_id = None
         try:
-            from runtime.core.order_ledger import get_order_ledger
             _sell_ledger_id = get_order_ledger().record(
                 bot_id=getattr(self, '_bot_id', 'dorothy'),
                 bot_type="dorothy", symbol=symbol, side="SELL",
@@ -550,7 +546,6 @@ class DorothyRunner(BaseStrategyRunner):
                 "action": "MANUAL INTERVENTION REQUIRED — asset bought without TP.",
             })
             try:
-                from runtime.core.symmetry_guard import get_symmetry_guard
                 get_symmetry_guard().record_order_failure(
                     self._bot_key(), f"TP_ORPHAN: {tp_err}"
                 )
@@ -560,7 +555,6 @@ class DorothyRunner(BaseStrategyRunner):
             # Mark rung as ORPHANED in local state
             if _hub_rung_id > 0:
                 try:
-                    from runtime.core.hub_state import get_hub_state
                     get_hub_state().close_rung(_hub_rung_id, status="ORPHANED")
                 except Exception:
                     pass
@@ -577,7 +571,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.3: Update sell ledger
         if _sell_ledger_id:
             try:
-                from runtime.core.order_ledger import get_order_ledger
                 get_order_ledger().update_binance_response(
                     _sell_ledger_id,
                     str(sell.get("orderId", "")),
@@ -591,7 +584,6 @@ class DorothyRunner(BaseStrategyRunner):
         # T0.4: Link SELL LIMIT to local hub rung
         if _hub_rung_id > 0:
             try:
-                from runtime.core.hub_state import get_hub_state
                 get_hub_state().link_sell_to_rung(
                     rung_id=_hub_rung_id,
                     sell_order_id=str(sell.get("orderId", "")),

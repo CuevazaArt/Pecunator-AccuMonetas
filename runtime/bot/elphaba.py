@@ -25,6 +25,15 @@ from runtime.bot._base_runner import BaseStrategyRunner
 from runtime.bot._decimal_utils import dec as _dec, quantize as _q
 from runtime.connectors.binance_gateway import normalize_binance_spot_symbol
 
+# Core dependencies (moved from inline for performance/cleanliness)
+from runtime.core.api_fuse import get_api_fuse
+from runtime.core.exception_zoo import get_exception_zoo
+from runtime.core.exchange_filters import get_exchange_filters
+from runtime.core.market_cache import get_market_cache
+from runtime.core.order_ledger import get_order_ledger
+from runtime.core.symmetry_guard import get_symmetry_guard
+from runtime.modules.trend_signal import get_trend_signal_service
+
 
 @dataclass
 class ElphabaConfig:
@@ -175,7 +184,6 @@ class ElphabaRunner(BaseStrategyRunner):
     # ── Main cycle ───────────────────────────────────────────────
 
     async def run_once(self) -> dict[str, Any]:
-        from runtime.core.api_fuse import get_api_fuse
         fuse = get_api_fuse()
         if fuse.is_tripped():
             remaining = fuse.remaining_cooldown_sec()
@@ -187,7 +195,6 @@ class ElphabaRunner(BaseStrategyRunner):
 
         # ── SymmetryGuard: watchdog tick + hub pause check ──────────
         try:
-            from runtime.core.symmetry_guard import get_symmetry_guard
             _guard = get_symmetry_guard()
             _tick = _guard.tick()
             if _tick.get("action") == "AUTO_RETRY":
@@ -217,7 +224,6 @@ class ElphabaRunner(BaseStrategyRunner):
 
         # ── Auto-resolve precision from ExchangeFilterCache ─────────
         try:
-            from runtime.core.exchange_filters import get_exchange_filters
             _ef = get_exchange_filters()
             _sf = await _ef.ensure_loaded(symbol, client)
             c.qty_decimals = _sf.qty_decimals
@@ -227,7 +233,6 @@ class ElphabaRunner(BaseStrategyRunner):
 
         # ── Market price ──────────────────────────────────────────
         try:
-            from runtime.core.market_cache import get_market_cache
             _cache = get_market_cache()
             ticker = await _cache.get_or_fetch(
                 f"symbol_ticker:{symbol}",
@@ -258,7 +263,6 @@ class ElphabaRunner(BaseStrategyRunner):
         # Gate 1: HA MA crossover → BEARISH required (MA1 < MA2)
         # Gate 2: price > regular 1h candle open → shorting into a pump
         try:
-            from runtime.modules.trend_signal import get_trend_signal_service
             _trend_svc = get_trend_signal_service()
 
             if _trend_svc.needs_trend_refresh(symbol):
@@ -383,7 +387,6 @@ class ElphabaRunner(BaseStrategyRunner):
         # Forensic ledger — record BEFORE sending
         _ledger_id = None
         try:
-            from runtime.core.order_ledger import get_order_ledger
             _ledger_id = get_order_ledger().record(
                 bot_id=getattr(self, '_bot_id', 'elphaba'),
                 bot_type="elphaba", symbol=symbol, side="SELL",
@@ -414,7 +417,6 @@ class ElphabaRunner(BaseStrategyRunner):
         except Exception as order_err:
             # ── Alert: order failed → feed SymmetryGuard ──────────
             try:
-                from runtime.core.symmetry_guard import get_symmetry_guard
                 get_symmetry_guard().record_order_failure(
                     self._bot_key(), str(order_err)
                 )
@@ -422,7 +424,6 @@ class ElphabaRunner(BaseStrategyRunner):
                 pass
             # ── Register in ExceptionZoo for forensic tracking ────
             try:
-                from runtime.core.exception_zoo import get_exception_zoo
                 get_exception_zoo().register(
                     order_err, module="elphaba:short_order",
                     context=f"symbol={symbol} qty={sell_qty}",
@@ -440,14 +441,12 @@ class ElphabaRunner(BaseStrategyRunner):
 
         # ── Alert: order succeeded → reset failure counter ────────
         try:
-            from runtime.core.symmetry_guard import get_symmetry_guard
             get_symmetry_guard().record_order_success(self._bot_key())
         except Exception:
             pass
 
         if _ledger_id:
             try:
-                from runtime.core.order_ledger import get_order_ledger
                 get_order_ledger().update_binance_response(
                     _ledger_id,
                     str(short_order.get("orderId", "")),
@@ -477,7 +476,6 @@ class ElphabaRunner(BaseStrategyRunner):
 
         _tp_ledger_id = None
         try:
-            from runtime.core.order_ledger import get_order_ledger
             _tp_ledger_id = get_order_ledger().record(
                 bot_id=getattr(self, '_bot_id', 'elphaba'),
                 bot_type="elphaba", symbol=symbol, side="BUY",
@@ -512,7 +510,6 @@ class ElphabaRunner(BaseStrategyRunner):
                 "action": "MANUAL INTERVENTION REQUIRED — short open without cover.",
             })
             try:
-                from runtime.core.symmetry_guard import get_symmetry_guard
                 get_symmetry_guard().record_order_failure(
                     self._bot_key(), f"TP_ORPHAN: {tp_err}"
                 )
@@ -529,7 +526,6 @@ class ElphabaRunner(BaseStrategyRunner):
 
         if _tp_ledger_id:
             try:
-                from runtime.core.order_ledger import get_order_ledger
                 get_order_ledger().update_binance_response(
                     _tp_ledger_id,
                     str(tp_order.get("orderId", "")),

@@ -121,7 +121,7 @@ class VisualMarketObserver:
 
         results = {}
         for iv in intervals:
-            path = await loop.run_in_executor(None, self._fetch_chart_sync, symbol, iv)
+            path = await asyncio.to_thread(self._fetch_chart_sync, symbol, iv)
             results[iv] = path
 
         return results

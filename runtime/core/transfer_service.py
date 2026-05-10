@@ -21,7 +21,7 @@ import logging
 import time
 from typing import Any
 
-import requests
+import httpx
 
 from runtime.core.api_governor import get_api_governor, P_TRADING
 from runtime.core.exception_zoo import get_exception_zoo
@@ -45,10 +45,10 @@ class TransferService:
         self._vault = get_telemetry_vault()
         self._zoo = get_exception_zoo()
 
-    def _signed_request(
+    async def _signed_request(
         self, method: str, path: str, params: dict[str, Any]
-    ) -> requests.Response:
-        """Make a signed Binance SAPI request."""
+    ) -> httpx.Response:
+        """Make a signed Binance SAPI request asynchronously."""
         params["timestamp"] = int(time.time() * 1000)
         query = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         signature = hmac.new(
@@ -57,11 +57,12 @@ class TransferService:
         query += f"&signature={signature}"
         headers = {"X-MBX-APIKEY": self._key}
         url = f"{BASE_URL}{path}?{query}"
-        if method == "POST":
-            return requests.post(url, headers=headers, timeout=30)
-        return requests.get(url, headers=headers, timeout=30)
+        async with httpx.AsyncClient(timeout=30) as client:
+            if method == "POST":
+                return await client.post(url, headers=headers)
+            return await client.get(url, headers=headers)
 
-    def fund_bot(
+    async def fund_bot(
         self,
         bot_id: str,
         asset: str,
@@ -117,7 +118,7 @@ class TransferService:
         # Execute transfer: SPOT → SUB_SPOT
         t0 = time.monotonic()
         try:
-            r = self._signed_request("POST", "/sapi/v1/sub-account/universalTransfer", {
+            r = await self._signed_request("POST", "/sapi/v1/sub-account/universalTransfer", {
                 "fromAccountType": "SPOT",
                 "toAccountType": "SPOT",
                 "toEmail": acct.email,
@@ -159,7 +160,7 @@ class TransferService:
             self._zoo.register(exc, module="transfer_service", context=f"fund:{bot_id}")
             return {"ok": False, "error": str(exc)}
 
-    def withdraw_from_bot(
+    async def withdraw_from_bot(
         self,
         bot_id: str,
         asset: str,
@@ -186,7 +187,7 @@ class TransferService:
 
         t0 = time.monotonic()
         try:
-            r = self._signed_request("POST", "/sapi/v1/sub-account/universalTransfer", {
+            r = await self._signed_request("POST", "/sapi/v1/sub-account/universalTransfer", {
                 "fromAccountType": "SPOT",
                 "toAccountType": "SPOT",
                 "fromEmail": acct.email,
@@ -222,7 +223,7 @@ class TransferService:
             self._zoo.register(exc, module="transfer_service", context=f"withdraw:{bot_id}")
             return {"ok": False, "error": str(exc)}
 
-    def get_sub_balances(self, bot_id: str) -> dict[str, Any]:
+    async def get_sub_balances(self, bot_id: str) -> dict[str, Any]:
         """Get balance of a sub-account (uses master API, 1 weight)."""
         acct = self._registry.get(bot_id)
         if acct is None:
@@ -235,7 +236,7 @@ class TransferService:
             return {"ok": False, "error": "Governor denied"}
 
         try:
-            r = self._signed_request("GET", "/sapi/v1/sub-account/assets", {
+            r = await self._signed_request("GET", "/sapi/v1/sub-account/assets", {
                 "email": acct.email,
             })
             self._governor.record_usage(

@@ -147,7 +147,7 @@ class ExchangeFilterCache:
                 return await result
             if _to_thread:
                 return await _to_thread(lambda: fn())
-            return await asyncio.get_running_loop().run_in_executor(None, fn)
+            return await asyncio.to_thread(fn)
 
         try:
             info = await _run(lambda: client.get_symbol_info(key))
