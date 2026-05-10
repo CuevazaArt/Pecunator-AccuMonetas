@@ -25,7 +25,7 @@ import time
 from decimal import Decimal
 from typing import Any, Callable, Optional
 
-from binance.client import Client
+from binance import AsyncClient
 
 from runtime.bot._decimal_utils import dec as _dec
 from runtime.bot._panic import check_panic_lock
@@ -61,7 +61,7 @@ class BaseStrategyRunner:
         self._last_cycle_ts: Optional[str] = None
         self._api_key: Optional[str] = None
         self._api_secret: Optional[str] = None
-        self._client: Optional[Client] = None
+        self._client: Optional[AsyncClient] = None
         self._error_streak = 0
         # Equity tracking
         self._peak_equity_usdt: Optional[Decimal] = None
@@ -113,30 +113,27 @@ class BaseStrategyRunner:
         self._api_key = api_key.strip()
         self._api_secret = api_secret.strip()
 
-    def _ensure_client(self) -> Client:
+    async def _ensure_client(self) -> AsyncClient:
         if not self._api_key or not self._api_secret:
             raise RuntimeError("No credentials resolved for bot")
         if self._client is None:
-            self._client = Client(
+            self._client = await AsyncClient.create(
                 self._api_key,
                 self._api_secret,
                 requests_params={"timeout": 30},
             )
         return self._client
 
-    def _close_client(self) -> None:
-        """Close the Binance client session safely."""
+    async def _close_client(self) -> None:
+        """Close the async Binance client session safely."""
         if self._client is not None:
             try:
-                self._client.session.close()
+                await self._client.close_connection()
             except Exception:
                 pass
             self._client = None
 
-    async def _to_thread(self, fn: Callable[[], Any]) -> Any:
-        return await asyncio.to_thread(fn)
-
-    def _capture_order_rate(self, client: Client) -> None:
+    def _capture_order_rate(self, client: AsyncClient) -> None:
         """Read X-MBX-ORDER-COUNT-* headers from the bot's last REST response
         and feed them into the shared StateStore + OrderFuse for dashboard telemetry."""
         try:
@@ -179,9 +176,9 @@ class BaseStrategyRunner:
             pass
         return True
 
-    async def _sync_time_for_signed(self, client: Client) -> None:
+    async def _sync_time_for_signed(self, client: AsyncClient) -> None:
         """Sync local timestamp offset with Binance server time."""
-        data = await self._to_thread(lambda: client.get_server_time())
+        data = await client.get_server_time()
         server_ms = int((data or {}).get("serverTime", 0) or 0)
         local_ms = int(time.time() * 1000)
         offset_ms = server_ms - local_ms
@@ -195,15 +192,15 @@ class BaseStrategyRunner:
             {"server_time": data, "offset_ms": offset_ms},
         )
 
-    async def _signed_call(self, client: Client, fn: Callable[[], Any]) -> Any:
-        """Execute a signed Binance call, retrying on -1021 timestamp error."""
+    async def _signed_call(self, client: AsyncClient, fn: Callable[[], Any]) -> Any:
+        """Execute a signed async Binance call, retrying on -1021 timestamp error."""
         try:
-            return await self._to_thread(fn)
+            return await fn()
         except Exception as e:
             if "-1021" not in str(e):
                 raise
             await self._sync_time_for_signed(client)
-            return await self._to_thread(fn)
+            return await fn()
 
     # ── Risk state persistence ──────────────────────────────────────
 
@@ -225,7 +222,7 @@ class BaseStrategyRunner:
     # ── Equity tracking ─────────────────────────────────────────────
 
     async def _compute_equity_usdt(
-        self, client: Client, base_asset: str = "USDT",
+        self, client: AsyncClient, base_asset: str = "USDT",
         symbol: str = "",
     ) -> tuple[Decimal, Decimal]:
         """Compute equity and free capital in base_asset.
@@ -239,14 +236,14 @@ class BaseStrategyRunner:
             _cache = get_market_cache()
             account = await _cache.get_or_fetch(
                 MarketCache.scoped_key("account", self._api_key),
-                lambda: self._to_thread(client.get_account),
+                lambda: client.get_account(),
             )
             tickers = await _cache.get_or_fetch(
-                "tickers", lambda: self._to_thread(client.get_all_tickers),
+                "tickers", lambda: client.get_all_tickers(),
             )
         except Exception:
-            account = await self._to_thread(client.get_account)
-            tickers = await self._to_thread(client.get_all_tickers)
+            account = await client.get_account()
+            tickers = await client.get_all_tickers()
 
         prices: dict[str, Decimal] = {}
         if isinstance(tickers, list):
@@ -352,8 +349,8 @@ class BaseStrategyRunner:
     # ── Time sync ───────────────────────────────────────────────────
 
     async def sync_time(self) -> dict[str, Any]:
-        client = self._ensure_client()
-        data = await self._to_thread(lambda: client.get_server_time())
+        client = await self._ensure_client()
+        data = await client.get_server_time()
         server_ms = int(data.get("serverTime", 0) or 0)
         local_ms = int(time.time() * 1000)
         offset_ms = server_ms - local_ms
@@ -469,7 +466,7 @@ class BaseStrategyRunner:
                 self._last_error = sanitize_log_message(str(e))
                 self._error_streak += 1
                 # Recreate client on failures so transient socket/session faults can self-heal.
-                self._close_client()
+                await self._close_client()
                 sleep_sec = min(
                     60.0,
                     max(2.0, min(float(getattr(self.config, 'loop_interval_sec', 450)),
@@ -506,4 +503,4 @@ class BaseStrategyRunner:
             t.cancel()
             await asyncio.gather(t, return_exceptions=True)
         self._task = None
-        self._close_client()
+        await self._close_client()

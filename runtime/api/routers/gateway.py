@@ -178,7 +178,7 @@ async def symbol_precision(
     sym = symbol.upper().strip()
 
     try:
-        info = await asyncio.to_thread(client.get_symbol_info, sym)
+        info = await client.get_symbol_info(sym)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Cannot fetch symbol info for {sym}: {e}") from None
 

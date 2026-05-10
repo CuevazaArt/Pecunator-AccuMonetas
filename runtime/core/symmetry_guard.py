@@ -325,8 +325,12 @@ class SymmetryGuard:
         import asyncio
 
         async def _run(fn: Any) -> Any:
+            import inspect
+            result = fn()
+            if inspect.isawaitable(result):
+                return await result
             if _to_thread:
-                return await _to_thread(fn)
+                return await _to_thread(lambda: fn())
             return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         health = HubHealth(ts=time.time())
@@ -581,8 +585,12 @@ class SymmetryGuard:
         import asyncio
 
         async def _run(fn: Any) -> Any:
+            import inspect
+            result = fn()
+            if inspect.isawaitable(result):
+                return await result
             if _to_thread:
-                return await _to_thread(fn)
+                return await _to_thread(lambda: fn())
             return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         MIN = self.MIN_RESERVE_USDT

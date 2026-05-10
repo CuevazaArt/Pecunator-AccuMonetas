@@ -107,9 +107,7 @@ class ElphabaRunner(BaseStrategyRunner):
     ) -> bool:
         """Transfer USDT from Spot to Isolated Margin wallet if needed."""
         try:
-            iso_account = await self._to_thread(
-                lambda: client.get_isolated_margin_account(symbols=symbol)
-            )
+            iso_account = await client.get_isolated_margin_account(symbols=symbol)
             assets = iso_account.get("assets", [])
             if not assets:
                 # First time — need to transfer
@@ -125,10 +123,8 @@ class ElphabaRunner(BaseStrategyRunner):
 
         # Transfer from Spot
         try:
-            result = await self._to_thread(
-                lambda: client.transfer_spot_to_isolated_margin(
-                    asset="USDT", symbol=symbol, amount=str(amount),
-                )
+            result = await client.transfer_spot_to_isolated_margin(
+                asset="USDT", symbol=symbol, amount=str(amount),
             )
             self._emit("INFO", "elphaba:collateral_transferred", {
                 "symbol": symbol, "amount": str(amount), "response": result,
@@ -143,9 +139,7 @@ class ElphabaRunner(BaseStrategyRunner):
     ) -> list[dict[str, Any]]:
         """Get open margin orders for this symbol (isolated)."""
         try:
-            orders = await self._to_thread(
-                lambda: client.get_open_margin_orders(symbol=symbol, isIsolated="TRUE")
-            )
+            orders = await client.get_open_margin_orders(symbol=symbol, isIsolated="TRUE")
             return orders if isinstance(orders, list) else []
         except Exception as e:
             # -11001 = Isolated margin account not yet created for this symbol.
@@ -160,16 +154,14 @@ class ElphabaRunner(BaseStrategyRunner):
     ) -> Optional[dict[str, Any]]:
         """Buy-to-cover a short position at market price with auto-repay."""
         try:
-            order = await self._to_thread(
-                lambda: client.create_margin_order(
-                    symbol=symbol,
-                    side="BUY",
-                    type="MARKET",
-                    quantity=str(qty),
-                    isIsolated="TRUE",
-                    sideEffectType="AUTO_REPAY",
-                    newClientOrderId=f"{my_tag}-cover-{int(time.time())}",
-                )
+            order = await client.create_margin_order(
+                symbol=symbol,
+                side="BUY",
+                type="MARKET",
+                quantity=str(qty),
+                isIsolated="TRUE",
+                sideEffectType="AUTO_REPAY",
+                newClientOrderId=f"{my_tag}-cover-{int(time.time())}",
             )
             self._emit("INFO", "elphaba:close_at_market", {
                 "symbol": symbol, "qty": str(qty), "response": order,
@@ -220,14 +212,14 @@ class ElphabaRunner(BaseStrategyRunner):
         except Exception:
             pass
 
-        client = self._ensure_client()
+        client = await self._ensure_client()
         symbol = c.symbol
 
         # ── Auto-resolve precision from ExchangeFilterCache ─────────
         try:
             from runtime.core.exchange_filters import get_exchange_filters
             _ef = get_exchange_filters()
-            _sf = await _ef.ensure_loaded(symbol, client, _to_thread=self._to_thread)
+            _sf = await _ef.ensure_loaded(symbol, client)
             c.qty_decimals = _sf.qty_decimals
             c.price_decimals = _sf.price_decimals
         except Exception as e:
@@ -239,10 +231,10 @@ class ElphabaRunner(BaseStrategyRunner):
             _cache = get_market_cache()
             ticker = await _cache.get_or_fetch(
                 f"symbol_ticker:{symbol}",
-                lambda: self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol)),
+                lambda: client.get_symbol_ticker(symbol=symbol),
             )
         except Exception:
-            ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
+            ticker = await client.get_symbol_ticker(symbol=symbol)
         market_price = _dec(ticker.get("price", "0"), "0")
 
         # ── Fetch my open margin orders ───────────────────────────
@@ -271,18 +263,14 @@ class ElphabaRunner(BaseStrategyRunner):
 
             if _trend_svc.needs_trend_refresh(symbol):
                 try:
-                    klines_1h = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=10)
-                    )
+                    klines_1h = await client.get_klines(symbol=symbol, interval="1h", limit=10)
                     _trend_svc.update_trend(symbol, klines_1h)
                 except Exception as kl_err:
                     self._emit("WARNING", f"elphaba:trend_refresh_failed: {kl_err}")
 
             if _trend_svc.needs_entry_refresh(symbol):
                 try:
-                    kline_now = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=1)
-                    )
+                    kline_now = await client.get_klines(symbol=symbol, interval="1h", limit=1)
                     candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
                     _trend_svc.update_entry_gate(symbol, float(market_price), candle_open_1h)
                 except Exception as eg_err:
@@ -414,16 +402,14 @@ class ElphabaRunner(BaseStrategyRunner):
             return report
 
         try:
-            short_order = await self._to_thread(
-                lambda: client.create_margin_order(
-                    symbol=symbol,
-                    side="SELL",
-                    type="MARKET",
-                    quantity=str(sell_qty),
-                    isIsolated="TRUE",
-                    sideEffectType="MARGIN_BUY",  # auto-borrow the asset
-                    newClientOrderId=f"{my_tag}-short-{int(time.time())}",
-                )
+            short_order = await client.create_margin_order(
+                symbol=symbol,
+                side="SELL",
+                type="MARKET",
+                quantity=str(sell_qty),
+                isIsolated="TRUE",
+                sideEffectType="MARGIN_BUY",
+                newClientOrderId=f"{my_tag}-short-{int(time.time())}",
             )
         except Exception as order_err:
             # ── Alert: order failed → feed SymmetryGuard ──────────
@@ -502,18 +488,16 @@ class ElphabaRunner(BaseStrategyRunner):
             self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
         try:
-            tp_order = await self._to_thread(
-                lambda: client.create_margin_order(
-                    symbol=symbol,
-                    side="BUY",
-                    type="LIMIT",
-                    timeInForce="GTC",
-                    quantity=str(tp_qty),
-                    price=str(tp_price),
-                    isIsolated="TRUE",
-                    sideEffectType="AUTO_REPAY",
-                    newClientOrderId=f"{my_tag}-tp-{int(time.time())}",
-                )
+            tp_order = await client.create_margin_order(
+                symbol=symbol,
+                side="BUY",
+                type="LIMIT",
+                timeInForce="GTC",
+                quantity=str(tp_qty),
+                price=str(tp_price),
+                isIsolated="TRUE",
+                sideEffectType="AUTO_REPAY",
+                newClientOrderId=f"{my_tag}-tp-{int(time.time())}",
             )
         except Exception as tp_err:
             # ── CRITICAL: Short succeeded but COVER LIMIT failed ──

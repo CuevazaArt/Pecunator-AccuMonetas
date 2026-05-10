@@ -12,7 +12,7 @@ import time
 from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from typing import Any
 
-from binance.client import Client
+from binance import AsyncClient
 from binance.exceptions import BinanceAPIException
 from fastapi import HTTPException
 
@@ -97,9 +97,9 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
     if stop_errors:
         summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
 
-    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    client = await AsyncClient.create(pair[0], pair[1], requests_params={"timeout": 20})
     try:
-        orders = await asyncio.to_thread(client.get_open_orders)
+        orders = await client.get_open_orders()
         audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_open_orders")
         if not isinstance(orders, list):
             orders = []
@@ -114,7 +114,7 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
             if not sym or oid is None:
                 continue
             try:
-                await asyncio.to_thread(client.cancel_order, symbol=sym, orderId=oid)
+                await client.cancel_order(symbol=sym, orderId=oid)
                 audit_weight_from_client(
                     ctx, client, source="ops",
                     action=f"close_protocol:cancel_order:{sym}",
@@ -123,10 +123,10 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
             except Exception as e:
                 summary["cancel_errors"].append(f"{sym}#{oid}: {sanitize_log_message(str(e))}")
 
-        account = await asyncio.to_thread(client.get_account)
+        account = await client.get_account()
         audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_account")
         balances = account.get("balances", []) if isinstance(account, dict) else []
-        tickers = await asyncio.to_thread(client.get_all_tickers)
+        tickers = await client.get_all_tickers()
         audit_weight_from_client(ctx, client, source="ops", action="close_protocol:get_all_tickers")
         px_map = build_ticker_price_map(tickers if isinstance(tickers, list) else [])
         summary["equity_snapshot"] = compute_spot_equity_in_base(
@@ -153,7 +153,7 @@ async def _execute_close_protocol(ctx: AppContext, base_asset: str = "USDT") -> 
         summary["log_lines"].append(f"Unexpected error: {summary['error']}")
     finally:
         try:
-            await asyncio.to_thread(client.close_connection)
+            await client.close_connection()
         except Exception:
             pass
 
@@ -191,15 +191,15 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
     if stop_errors:
         summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
 
-    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    client = await AsyncClient.create(pair[0], pair[1], requests_params={"timeout": 20})
     try:
-        account = await asyncio.to_thread(client.get_account)
+        account = await client.get_account()
         audit_weight_from_client(ctx, client, source="ops", action="red_button:get_account")
         balances = account.get("balances", []) if isinstance(account, dict) else []
         if not isinstance(balances, list):
             balances = []
 
-        exch = await asyncio.to_thread(client.get_exchange_info)
+        exch = await client.get_exchange_info()
         audit_weight_from_client(ctx, client, source="ops", action="red_button:get_exchange_info")
         symbols = {}
         if isinstance(exch, dict):
@@ -230,7 +230,7 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
                 continue
 
             try:
-                open_orders = await asyncio.to_thread(client.get_open_orders, symbol=symbol)
+                open_orders = await client.get_open_orders(symbol=symbol)
                 audit_weight_from_client(
                     ctx, client, source="ops",
                     action=f"red_button:get_open_orders:{symbol}",
@@ -242,7 +242,7 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
                         oid = order.get("orderId")
                         if oid is None:
                             continue
-                        await asyncio.to_thread(client.cancel_order, symbol=symbol, orderId=oid)
+                        await client.cancel_order(symbol=symbol, orderId=oid)
                         audit_weight_from_client(
                             ctx, client, source="ops",
                             action=f"red_button:cancel_order:{symbol}",
@@ -258,7 +258,7 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
                 continue
 
             try:
-                await asyncio.to_thread(client.order_market_sell, symbol=symbol, quantity=str(qty))
+                await client.order_market_sell(symbol=symbol, quantity=str(qty))
                 audit_weight_from_client(
                     ctx, client, source="ops",
                     action=f"red_button:order_market_sell:{symbol}",
@@ -280,7 +280,7 @@ async def _execute_red_button(ctx: AppContext, base_asset: str = "USDT") -> dict
         summary["log_lines"].append(f"Unexpected error: {summary['error']}")
     finally:
         try:
-            await asyncio.to_thread(client.close_connection)
+            await client.close_connection()
         except Exception:
             pass
 
@@ -346,16 +346,16 @@ async def _execute_order_cleanup(
     if stop_errors:
         summary["log_lines"].append(f"Dorothy stop errors: {len(stop_errors)}.")
 
-    client = Client(pair[0], pair[1], requests_params={"timeout": 20})
+    client = await AsyncClient.create(pair[0], pair[1], requests_params={"timeout": 20})
     try:
         orders_to_eval: list[dict[str, Any]] = []
         if mode_norm == "all":
-            account_orders = await asyncio.to_thread(client.get_open_orders)
+            account_orders = await client.get_open_orders()
             audit_weight_from_client(ctx, client, source="ops", action="cleanup:get_open_orders")
             if isinstance(account_orders, list):
                 orders_to_eval = [o for o in account_orders if isinstance(o, dict)]
         else:
-            account = await asyncio.to_thread(client.get_account)
+            account = await client.get_account()
             audit_weight_from_client(ctx, client, source="ops", action="cleanup:get_account")
             balances = account.get("balances", []) if isinstance(account, dict) else []
             if not isinstance(balances, list):
@@ -379,7 +379,7 @@ async def _execute_order_cleanup(
             summary["symbols_scanned"] = len(dedup)
             for sym in dedup:
                 try:
-                    sym_orders = await asyncio.to_thread(client.get_open_orders, symbol=sym)
+                    sym_orders = await client.get_open_orders(symbol=sym)
                     audit_weight_from_client(
                         ctx, client, source="ops",
                         action=f"cleanup:get_open_orders:{sym}",
@@ -403,7 +403,7 @@ async def _execute_order_cleanup(
             if not sym or oid is None:
                 continue
             try:
-                await asyncio.to_thread(client.cancel_order, symbol=sym, orderId=oid)
+                await client.cancel_order(symbol=sym, orderId=oid)
                 audit_weight_from_client(
                     ctx, client, source="ops",
                     action=f"cleanup:cancel_order:{sym}",
@@ -427,7 +427,7 @@ async def _execute_order_cleanup(
         summary["log_lines"].append(f"Unexpected error: {summary['error']}")
     finally:
         try:
-            await asyncio.to_thread(client.close_connection)
+            await client.close_connection()
         except Exception:
             pass
 

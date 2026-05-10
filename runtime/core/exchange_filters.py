@@ -130,16 +130,23 @@ class ExchangeFilterCache:
     async def ensure_loaded(
         self, symbol: str, client: Any, *, _to_thread: Any = None
     ) -> SymbolFilters:
-        """Load symbol filters from Binance if not already cached."""
+        """Load symbol filters from Binance if not already cached.
+        
+        Works with both AsyncClient (direct await) and sync Client (_to_thread).
+        """
         import asyncio
+        import inspect
 
         key = symbol.upper()
         if key in self._cache:
             return self._cache[key]
 
         async def _run(fn: Any) -> Any:
+            result = fn()
+            if inspect.isawaitable(result):
+                return await result
             if _to_thread:
-                return await _to_thread(fn)
+                return await _to_thread(lambda: fn())
             return await asyncio.get_running_loop().run_in_executor(None, fn)
 
         try:

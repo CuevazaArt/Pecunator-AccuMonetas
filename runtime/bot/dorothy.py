@@ -145,7 +145,7 @@ class DorothyRunner(BaseStrategyRunner):
         except Exception:
             pass
 
-        client = self._ensure_client()
+        client = await self._ensure_client()
         symbol = c.symbol
 
         # ── Auto-resolve precision from ExchangeFilterCache ──────────
@@ -154,7 +154,7 @@ class DorothyRunner(BaseStrategyRunner):
         try:
             from runtime.core.exchange_filters import get_exchange_filters
             _ef = get_exchange_filters()
-            _sf = await _ef.ensure_loaded(symbol, client, _to_thread=self._to_thread)
+            _sf = await _ef.ensure_loaded(symbol, client)
             c.qty_decimals = _sf.qty_decimals
             c.price_decimals = _sf.price_decimals
         except Exception as e:
@@ -182,10 +182,10 @@ class DorothyRunner(BaseStrategyRunner):
             _cache = get_market_cache()
             open_orders = await _cache.get_or_fetch(
                 MarketCache.scoped_key(f"open_orders:{symbol}", self._api_key),
-                lambda: self._to_thread(lambda: client.get_open_orders(symbol=symbol)),
+                lambda: client.get_open_orders(symbol=symbol),
             )
         except Exception:
-            open_orders = await self._to_thread(lambda: client.get_open_orders(symbol=symbol))
+            open_orders = await client.get_open_orders(symbol=symbol)
         if not isinstance(open_orders, list):
             open_orders = []
         self._emit(
@@ -215,10 +215,10 @@ class DorothyRunner(BaseStrategyRunner):
             _cache = get_market_cache()
             ticker = await _cache.get_or_fetch(
                 f"symbol_ticker:{symbol}",
-                lambda: self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol)),
+                lambda: client.get_symbol_ticker(symbol=symbol),
             )
         except Exception:
-            ticker = await self._to_thread(lambda: client.get_symbol_ticker(symbol=symbol))
+            ticker = await client.get_symbol_ticker(symbol=symbol)
         self._emit(
             "INFO",
             "binance:get_symbol_ticker",
@@ -233,14 +233,12 @@ class DorothyRunner(BaseStrategyRunner):
             if _oguard.needs_scan():
                 _scan = await _oguard.scan_dorothy_orphans(
                     client, symbol, my_tag, c,
-                    _to_thread=self._to_thread,
                 )
                 if _scan:
                     for _orphan in _scan:
                         self._emit("CRITICAL", "dorothy:ORPHAN_DETECTED", _orphan)
                         _recovery = await _oguard.recover_dorothy_orphan(
                             client, _orphan, c, my_tag,
-                            _to_thread=self._to_thread,
                         )
                         self._emit(
                             "CRITICAL" if _recovery.get("action") != "RECOVERED" else "INFO",
@@ -261,18 +259,14 @@ class DorothyRunner(BaseStrategyRunner):
 
             if _trend_svc.needs_trend_refresh(symbol):
                 try:
-                    klines_1h = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=10)
-                    )
+                    klines_1h = await client.get_klines(symbol=symbol, interval="1h", limit=10)
                     _trend_svc.update_trend(symbol, klines_1h)
                 except Exception as kl_err:
                     self._emit("WARNING", f"dorothy:trend_refresh_failed: {kl_err}")
 
             if _trend_svc.needs_entry_refresh(symbol):
                 try:
-                    kline_now = await self._to_thread(
-                        lambda _s=symbol: client.get_klines(symbol=_s, interval="1h", limit=1)
-                    )
+                    kline_now = await client.get_klines(symbol=symbol, interval="1h", limit=1)
                     candle_open_1h = float(kline_now[0][1]) if kline_now else 0.0
                     _trend_svc.update_entry_gate(symbol, float(market_price), candle_open_1h)
                 except Exception as eg_err:
@@ -419,14 +413,12 @@ class DorothyRunner(BaseStrategyRunner):
             return report
 
         try:
-            buy = await self._to_thread(
-                lambda: client.create_order(
-                    symbol=symbol,
-                    side=client.SIDE_BUY,
-                    type=client.ORDER_TYPE_MARKET,
-                    quoteOrderQty=str(c.quote_order_qty),
-                    newClientOrderId=f"{my_tag}-buy-{int(time.time())}"
-                )
+            buy = await client.create_order(
+                symbol=symbol,
+                side="BUY",
+                type="MARKET",
+                quoteOrderQty=str(c.quote_order_qty),
+                newClientOrderId=f"{my_tag}-buy-{int(time.time())}"
             )
         except Exception as buy_err:
             # ── Alert: BUY order failed → feed SymmetryGuard ──────
@@ -536,16 +528,14 @@ class DorothyRunner(BaseStrategyRunner):
             self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
         try:
-            sell = await self._to_thread(
-                lambda: client.create_order(
-                    symbol=symbol,
-                    side=client.SIDE_SELL,
-                    type=client.ORDER_TYPE_LIMIT,
-                    timeInForce=client.TIME_IN_FORCE_GTC,
-                    quantity=str(sell_qty),
-                    price=str(sell_price),
-                    newClientOrderId=f"{my_tag}-sell-{int(time.time())}"
-                )
+            sell = await client.create_order(
+                symbol=symbol,
+                side="SELL",
+                type="LIMIT",
+                timeInForce="GTC",
+                quantity=str(sell_qty),
+                price=str(sell_price),
+                newClientOrderId=f"{my_tag}-sell-{int(time.time())}"
             )
         except Exception as tp_err:
             # ── CRITICAL: BUY succeeded but SELL LIMIT failed ─────

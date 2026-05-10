@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import websockets
-from binance.client import Client
+from binance import AsyncClient
 from binance.exceptions import BinanceAPIException
 
 from runtime.connectors.account_info import summarize_binance_account_rest
@@ -64,7 +64,7 @@ class BinanceGateway:
         self.state = state
         self.data_dir = data_dir
         self._log = log
-        self._client: Optional[Client] = None
+        self._client: Optional[AsyncClient] = None
         self._ws_task: Optional[asyncio.Task[Any]] = None
         self._poll_task: Optional[asyncio.Task[Any]] = None
         self._user_data_task: Optional[asyncio.Task[Any]] = None
@@ -143,7 +143,9 @@ class BinanceGateway:
         self.bus.publish(LOG_TOPIC, msg)
 
     @staticmethod
-    async def _to_thread(fn: Callable[[], T]) -> T:
+    async def _run_sync(fn: Callable[[], T]) -> T:
+        """Legacy bridge: run a sync callable in a thread.
+        Only used for test_connection() where a fresh throwaway Client is needed."""
         return await asyncio.to_thread(fn)
 
     @staticmethod
@@ -156,7 +158,8 @@ class BinanceGateway:
 
     async def test_connection(self) -> None:
         def probe() -> None:
-            client = Client(
+            from binance.client import Client as SyncClient
+            client = SyncClient(
                 self.api_key,
                 self.api_secret,
                 requests_params={"timeout": 30},
@@ -167,7 +170,7 @@ class BinanceGateway:
                 client.session.close()
 
         try:
-            await self._to_thread(probe)
+            await self._run_sync(probe)
         except BinanceAPIException as e:
             raise RuntimeError(self._api_error_summary(e)) from None
         except Exception as e:
@@ -177,7 +180,7 @@ class BinanceGateway:
         if self._client is None:
             return
         try:
-            data = await self._to_thread(lambda: self._client.get_account())
+            data = await self._client.get_account()
         except BinanceAPIException as e:
             self.state.last_error = self._api_error_summary(e)
             self._emit_log(f"account: {self.state.last_error}")
@@ -207,7 +210,7 @@ class BinanceGateway:
 
         # ── Fetch Isolated Margin Balances to reflect real equity ──
         try:
-            iso_acc = await self._to_thread(lambda: self._client.get_isolated_margin_account())
+            iso_acc = await self._client.get_isolated_margin_account()
             for pair in iso_acc.get("assets", []):
                 for ast_key in ["baseAsset", "quoteAsset"]:
                     ast_data = pair.get(ast_key, {})
@@ -262,7 +265,7 @@ class BinanceGateway:
             return
         if force_tickers or not self._ticker_prices:
             try:
-                raw_tickers = await self._to_thread(lambda: self._client.get_all_tickers())
+                raw_tickers = await self._client.get_all_tickers()
                 self._ticker_prices = build_ticker_price_map(raw_tickers)
                 self._capture_rest_weight_from_client(action="refresh_equity:get_all_tickers")
             except BinanceAPIException as e:
@@ -291,7 +294,7 @@ class BinanceGateway:
     async def sync_time(self) -> Dict[str, Any]:
         if self._client is None:
             raise RuntimeError("Gateway client not started")
-        data = await self._to_thread(lambda: self._client.get_server_time())
+        data = await self._client.get_server_time()
         server_ms = int(data.get("serverTime", 0) or 0)
         local_ms = int(time.time() * 1000)
         offset_ms = server_ms - local_ms
@@ -321,7 +324,7 @@ class BinanceGateway:
         if self._client is None:
             return
         try:
-            orders = await self._to_thread(lambda: self._client.get_open_orders())
+            orders = await self._client.get_open_orders()
         except BinanceAPIException as e:
             self.state.last_error = self._api_error_summary(e)
             self._emit_log(f"openOrders: {self.state.last_error}")
@@ -346,9 +349,7 @@ class BinanceGateway:
             self._emit_log(self.state.last_error)
             return
         try:
-            raw = await self._to_thread(
-                lambda: self._client.get_my_trades(symbol=sym, limit=limit)
-            )
+            raw = await self._client.get_my_trades(symbol=sym, limit=limit)
         except BinanceAPIException as e:
             self.state.last_error = self._api_error_summary(e)
             self._emit_log(f"myTrades: {self.state.last_error}")
@@ -371,7 +372,7 @@ class BinanceGateway:
         except ValueError:
             return None
         try:
-            out = await self._to_thread(lambda: self._client.get_orderbook_ticker(symbol=sym))
+            out = await self._client.get_orderbook_ticker(symbol=sym)
             self._capture_rest_weight_from_client(
                 action=f"fetch_book_ticker:get_orderbook_ticker:{sym}"
             )
@@ -458,7 +459,7 @@ class BinanceGateway:
         if self._client is None:
             return None
         try:
-            data = await self._to_thread(lambda: self._client.stream_get_listen_key())
+            data = await self._client.stream_get_listen_key()
             self._capture_rest_weight_from_client(action="user_data:stream_get_listen_key")
             self._emit_log("User Data Stream: listenKey obtained")
             return data
@@ -477,7 +478,7 @@ class BinanceGateway:
         if self._client is None or not self._listen_key:
             return False
         try:
-            await self._to_thread(lambda: self._client.stream_keepalive(self._listen_key))
+            await self._client.stream_keepalive(self._listen_key)
             self._capture_rest_weight_from_client(action="user_data:stream_keepalive")
             return True
         except Exception as e:
@@ -683,7 +684,7 @@ class BinanceGateway:
         self._logged_account_rest_snapshot = False
         self._ticker_prices = {}
         poll_sec = account_poll_interval_sec()
-        self._client = Client(
+        self._client = await AsyncClient.create(
             self.api_key,
             self.api_secret,
             requests_params={"timeout": 30},
@@ -731,13 +732,13 @@ class BinanceGateway:
         # Close listenKey
         if self._client and self._listen_key:
             try:
-                await self._to_thread(lambda: self._client.stream_close(self._listen_key))
+                await self._client.stream_close(self._listen_key)
             except Exception:
                 pass
         self._listen_key = None
         if self._client is not None:
             try:
-                self._client.session.close()
+                await self._client.close_connection()
             except Exception:
                 pass
             self._client = None
