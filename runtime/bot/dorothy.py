@@ -411,6 +411,12 @@ class DorothyRunner(BaseStrategyRunner):
         except Exception as e:
             self._emit("ERROR", f"order_ledger:record_failed:{e}")
 
+        # ── Order Fuse gate ──────────────────────────────────────
+        if not self._order_fuse_allows():
+            report["decision"] = "ORDER_FUSE_TRIPPED"
+            self._maybe_emit_metrics()
+            return report
+
         try:
             buy = await self._to_thread(
                 lambda: client.create_order(

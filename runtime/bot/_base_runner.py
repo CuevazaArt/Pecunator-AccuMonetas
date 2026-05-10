@@ -129,7 +129,7 @@ class BaseStrategyRunner:
 
     def _capture_order_rate(self, client: Client) -> None:
         """Read X-MBX-ORDER-COUNT-* headers from the bot's last REST response
-        and feed them into the shared StateStore for dashboard telemetry."""
+        and feed them into the shared StateStore + OrderFuse for dashboard telemetry."""
         try:
             resp = getattr(client, "response", None)
             if resp is None:
@@ -139,21 +139,38 @@ class BaseStrategyRunner:
                 ku = str(k).upper()
                 if ku == "X-MBX-ORDER-COUNT-10S":
                     try:
-                        from runtime.core.state_store import StateStore
+                        count = int(float(v))
                         from runtime.api import deps
-                        ctx = deps.get_context()
-                        ctx.state.order_count_10s = int(float(v))
+                        deps.get_context().state.order_count_10s = count
+                        # Feed Order Fuse
+                        from runtime.core.order_fuse import get_order_fuse
+                        get_order_fuse().check_order_count(count)
                     except Exception:
                         pass
                 elif ku == "X-MBX-ORDER-COUNT-1M":
                     try:
                         from runtime.api import deps
-                        ctx = deps.get_context()
-                        ctx.state.order_count_1m = int(float(v))
+                        deps.get_context().state.order_count_1m = int(float(v))
                     except Exception:
                         pass
         except Exception:
             pass
+
+    def _order_fuse_allows(self) -> bool:
+        """Check if the OrderFuse allows placing orders right now."""
+        try:
+            from runtime.core.order_fuse import get_order_fuse
+            fuse = get_order_fuse()
+            if fuse.is_tripped():
+                remaining = fuse.remaining_cooldown_sec()
+                self._emit(
+                    "WARNING",
+                    f"ORDER FUSE ACTIVO: orden bloqueada ({remaining:.0f}s restantes)",
+                )
+                return False
+        except Exception:
+            pass
+        return True
 
     async def _sync_time_for_signed(self, client: Client) -> None:
         """Sync local timestamp offset with Binance server time."""

@@ -100,6 +100,13 @@ class ApiFuse:
             reason = f"Error critico Binance: code={code_i} msg={message[:200]}"
             # Fatal errors jump straight to max cooldown regardless of streak.
             self._trip(reason, force_max=True)
+            # Cross-feed OrderFuse on order-specific errors.
+            if code_i == -1015:
+                try:
+                    from runtime.core.order_fuse import get_order_fuse
+                    get_order_fuse().on_error_code(code_i, message)
+                except Exception:
+                    pass
             return True
         return False
 
