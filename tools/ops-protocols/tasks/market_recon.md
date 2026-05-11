@@ -1,76 +1,76 @@
-# Task: Reconocimiento de Mercado Diario
+# Task: Daily Market Reconnaissance
 
-## Objetivo
-Ejecutar un barrido completo del estado del mercado usando las herramientas
-existentes de Pecunator y generar un briefing ejecutivo consolidado.
+## Objective
+Execute a complete sweep of the market state using Pecunator's existing
+tools and generate a consolidated executive briefing.
 
-## Contexto del Proyecto
-- **Clasificador de tokens:** `token_classifier.py` → genera `token_classification.txt`
-- **Monitor alpha:** `alpha_monitor.py` + `get_alpha_wallet.py`
-- **Tasas de earn:** `earn_rate_monitor.py` → logs en `earn_rates_log.csv` / `earn_rates_last.txt`
-- **Tasas de préstamo:** `loan_rate_monitor.py` → logs en `loan_rates_log.csv` / `loan_rates_last.txt`
-- **Portfolio actual:** `portfolio_table.py` → genera `portfolio_report.txt`
+## Project Context
+- **Token classifier:** `token_classifier.py` → generates `token_classification.txt`
+- **Alpha monitor:** `alpha_monitor.py` + `get_alpha_wallet.py`
+- **Earn rates:** `earn_rate_monitor.py` → logs in `earn_rates_log.csv` / `earn_rates_last.txt`
+- **Loan rates:** `loan_rate_monitor.py` → logs in `loan_rates_log.csv` / `loan_rates_last.txt`
+- **Current portfolio:** `portfolio_table.py` → generates `portfolio_report.txt`
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Snapshot de Portfolio
-Ejecutar `python portfolio_table.py` desde la raíz del proyecto.
-Capturar el reporte generado en `portfolio_report.txt`.
-Extraer: posiciones actuales, pesos porcentuales, PnL no realizado.
+### Step 1 — Portfolio Snapshot
+Run `python portfolio_table.py` from the project root.
+Capture the generated report in `portfolio_report.txt`.
+Extract: current positions, percentage weights, unrealized PnL.
 
-### Paso 2 — Clasificación de Tokens
-Revisar `token_classification.txt` (último output de `token_classifier.py`).
-Si tiene más de 24h de antigüedad, re-ejecutar `python token_classifier.py`.
-Extraer: tokens por categoría (blue-chip, mid-cap, speculative, stablecoin).
+### Step 2 — Token Classification
+Review `token_classification.txt` (latest output of `token_classifier.py`).
+If older than 24h, re-run `python token_classifier.py`.
+Extract: tokens by category (blue-chip, mid-cap, speculative, stablecoin).
 
-### Paso 3 — Oportunidades Alpha
-Ejecutar `python alpha_monitor.py` en modo consulta.
-Identificar: tokens con movimientos inusuales, volumen anómalo, o señales técnicas.
+### Step 3 — Alpha Opportunities
+Run `python alpha_monitor.py` in query mode.
+Identify: tokens with unusual movements, anomalous volume, or technical signals.
 
-### Paso 4 — Análisis de Tasas
-Parsear `earn_rates_log.csv`:
-- Calcular tendencia de tasa a 7 días por producto (subiendo/bajando/estable)
-- Identificar productos con tasa > 5% APY que estén subiendo
+### Step 4 — Rate Analysis
+Parse `earn_rates_log.csv`:
+- Calculate 7-day rate trend per product (rising/falling/stable)
+- Identify products with rate > 5% APY that are rising
 
-Parsear `loan_rates_log.csv`:
-- Calcular costo promedio de deuda
-- Detectar si algún préstamo tiene tasa creciente sostenida
+Parse `loan_rates_log.csv`:
+- Calculate average debt cost
+- Detect if any loan has a sustained rising rate
 
-### Paso 5 — Cruce de Datos
-- ¿Hay tokens en cartera con tasas de earn decrecientes? → Candidatos a rotar
-- ¿Hay tokens idle en spot que podrían estar generando yield?
-- ¿El costo de algún préstamo supera el rendimiento del earn correspondiente?
+### Step 5 — Data Cross-Reference
+- Are there portfolio tokens with declining earn rates? → Rotation candidates
+- Are there idle spot tokens that could be generating yield?
+- Does any loan cost exceed the yield of the corresponding earn?
 
-### Paso 6 — Generar Briefing
-Crear artefacto `daily_briefing_YYYY-MM-DD.md` con:
+### Step 6 — Generate Briefing
+Create artifact `daily_briefing_YYYY-MM-DD.md` with:
 
 ```
-## 📊 Briefing de Mercado — [FECHA]
+## 📊 Market Briefing — [DATE]
 
-### Estado del Portfolio
-[Resumen de posiciones principales y PnL]
+### Portfolio Status
+[Summary of main positions and PnL]
 
-### Señales Alpha
-[Oportunidades detectadas por el monitor]
+### Alpha Signals
+[Opportunities detected by the monitor]
 
-### Rendimientos (Earn)
-[Tabla de tasas actuales vs tendencia]
+### Yields (Earn)
+[Table of current rates vs trend]
 
-### Costos de Deuda (Loans)
-[Estado de préstamos y health factors]
+### Debt Costs (Loans)
+[Loan status and health factors]
 
-### ⚡ Acciones Sugeridas
-1. [Acción prioritaria 1]
-2. [Acción prioritaria 2]
-3. [Acción prioritaria 3]
+### ⚡ Suggested Actions
+1. [Priority action 1]
+2. [Priority action 2]
+3. [Priority action 3]
 
-### ⚠️ Alertas
-[Cualquier condición que requiera atención inmediata]
+### ⚠️ Alerts
+[Any condition requiring immediate attention]
 ```
 
-## Criterios de Éxito
-- [ ] Portfolio snapshot generado (< 5 min de antigüedad)
-- [ ] Clasificación de tokens actualizada
-- [ ] Tendencias de tasas calculadas con datos de últimos 7 días
-- [ ] Al menos 1 acción concreta sugerida
-- [ ] Briefing entregado como artefacto con formato legible
+## Success Criteria
+- [ ] Portfolio snapshot generated (< 5 min old)
+- [ ] Token classification updated
+- [ ] Rate trends calculated with last 7 days data
+- [ ] At least 1 concrete action suggested
+- [ ] Briefing delivered as artifact in readable format

@@ -422,13 +422,13 @@ class BotCoordinator:
     def _explain_delay(self, delay: float, interval: float) -> str:
         """Human-readable explanation of why a delay was chosen."""
         if delay == 0:
-            return "Sin delay — zona verde, primer bot o slot óptimo inmediato"
+            return "No delay — green zone, first bot or immediate optimal slot"
         parts = []
         if self._active:
-            parts.append(f"{len(self._active)} bots activos, buscando hueco libre")
+            parts.append(f"{len(self._active)} active bots, looking for a free slot")
         weight_pct = (self._current_weight / self.weight_limit) * 100
         if weight_pct > 70:
-            parts.append(f"peso API al {weight_pct:.0f}%, esperando zona verde")
+            parts.append(f"API weight at {weight_pct:.0f}%, waiting for green zone")
         parts.append(f"intervalo={interval}s, mejor slot en {delay:.1f}s")
         return " · ".join(parts) if parts else "Optimizado"
 

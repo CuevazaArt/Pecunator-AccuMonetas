@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   PECUNATOR — Monitor Horario de Tasas de Préstamo (Loans)      ║
-║   Registra cada hora el interés anual (APR) de los préstamos    ║
-║   flexibles disponibles para stablecoins en Binance Crypto Loan ║
+║   PECUNATOR — Hourly Loan Rate Monitor (Loans)                   ║
+║   Records the annual interest (APR) of flexible loans            ║
+║   available for stablecoins on Binance Crypto Loan each hour     ║
 ╚══════════════════════════════════════════════════════════════════╝
 
-Uso:
-    python loan_rate_monitor.py           # Loop continuo (cada hora)
-    python loan_rate_monitor.py --once    # Ejecutar una sola vez
-    python loan_rate_monitor.py --report  # Ver historial del CSV
+Usage:
+    python loan_rate_monitor.py           # Continuous loop (every hour)
+    python loan_rate_monitor.py --once    # Run once and exit
+    python loan_rate_monitor.py --report  # View CSV history
 
-Genera:
-    loan_rates_log.csv   — Historial acumulado hora a hora
-    loan_rates_last.txt  — Último snapshot en formato tabla legible
+Generates:
+    loan_rates_log.csv   — Accumulated hourly history
+    loan_rates_last.txt  — Latest snapshot in readable table format
 """
 
 import sys
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 import config
 from binance.client import Client
 
-# ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+# ─── CONFIGURATION ────────────────────────────────────────────────────────────
 STABLECOINS = {
     "USDT", "USDC", "BUSD", "FDUSD", "USDS",
     "DAI",  "TUSD", "USDP", "PYUSD", "USDE",
@@ -39,8 +39,8 @@ INTERVAL_S = 3600  # 1 hora
 CSV_HEADERS = [
     "timestamp", "datetime_utc",
     "loan_coin",
-    "interest_rate_hourly_pct",   # % por hora
-    "interest_rate_daily_pct",    # % por día
+    "interest_rate_hourly_pct",   # % per hour
+    "interest_rate_daily_pct",    # % per day
     "interest_rate_annual_pct",   # APR anual estimado
     "min_loan_amount",
     "max_loan_amount",
@@ -63,9 +63,9 @@ def ensure_csv_header():
 
 def interest_to_apr(hourly_rate_str):
     """
-    La API devuelve flexibleInterestRate como tasa ANUAL en decimales.
-    Ej: 0.48694107 = 48.69% APR anual
-    También calculamos daily y hourly para completar el cuadro.
+    The API returns flexibleInterestRate as ANNUAL rate in decimals.
+    E.g.: 0.48694107 = 48.69% annual APR
+    We also compute daily and hourly to complete the table.
     """
     try:
         annual = float(hourly_rate_str)       # ya es anual en decimales
@@ -77,7 +77,7 @@ def interest_to_apr(hourly_rate_str):
 
 # ─── FETCH ────────────────────────────────────────────────────────────────────
 def fetch_loan_rates(client):
-    """Obtiene todos los productos de préstamo flexible y filtra stablecoins."""
+    """Fetches all flexible loan products and filters stablecoins."""
     try:
         res  = client.margin_v2_get_loan_flexible_loanable_data()
         rows = res.get("rows", [])
@@ -111,13 +111,13 @@ def save_snapshot(records, ts_ms):
 
     lines = []
     lines.append("=" * 100)
-    lines.append("  PECUNATOR — Tasas de Préstamo Flexible (Stablecoins)  │  Crypto Loan")
+    lines.append("  PECUNATOR — Flexible Loan Rates (Stablecoins)  │  Crypto Loan")
     lines.append(f"  Snapshot: {ts_to_str(ts_ms)} UTC")
     lines.append("=" * 100)
     lines.append("")
     lines.append(
-        f"  {'Stablecoin':<12} {'APR Anual':>12} {'APR Diario':>12} {'APR Horario':>14} "
-        f"{'Mín Préstamo':>14} {'Máx Préstamo':>16}  Nivel de costo"
+        f"  {'Stablecoin':<12} {'Annual APR':>12} {'Daily APR':>12} {'Hourly APR':>14} "
+        f"{'Min Loan':>14} {'Max Loan':>16}  Cost level"
     )
     lines.append(
         f"  {'─'*12} {'─'*12} {'─'*12} {'─'*14} {'─'*14} {'─'*16}  {'─'*20}"
@@ -130,17 +130,17 @@ def save_snapshot(records, ts_ms):
         mn     = r["min_loan_amount"]
         mx     = r["max_loan_amount"]
 
-        # Nivel de costo visual
+        # Visual cost level
         if apr < 5:
-            level = "🟢 Muy barato"
+            level = "🟢 Very cheap"
         elif apr < 15:
-            level = "🟡 Moderado"
+            level = "🟡 Moderate"
         elif apr < 35:
-            level = "🟠 Caro"
+            level = "🟠 Expensive"
         else:
-            level = "🔴 Muy caro"
+            level = "🔴 Very expensive"
 
-        # Formatear máximo con separador de miles
+        # Format maximum with thousands separator
         try:
             mx_fmt = f"{int(mx):,}"
         except (ValueError, TypeError):
@@ -159,14 +159,14 @@ def save_snapshot(records, ts_ms):
         avg   = sum(aprs) / len(aprs)
 
         lines.append("─" * 100)
-        lines.append(f"  Productos rastreados:       {len(records)}")
-        lines.append(f"  💰 Más barato de pedir prestado:   {best['loan_coin']:<8} → {best['interest_rate_annual_pct']:.4f}% APR anual")
-        lines.append(f"  💸 Más caro de pedir prestado:     {worst['loan_coin']:<8} → {worst['interest_rate_annual_pct']:.4f}% APR anual")
-        lines.append(f"  📊 Promedio APR:                   {avg:.4f}%")
+        lines.append(f"  Products tracked:       {len(records)}")
+        lines.append(f"  💰 Cheapest to borrow:   {best['loan_coin']:<8} → {best['interest_rate_annual_pct']:.4f}% annual APR")
+        lines.append(f"  💸 Most expensive to borrow:     {worst['loan_coin']:<8} → {worst['interest_rate_annual_pct']:.4f}% annual APR")
+        lines.append(f"  📊 Average APR:                   {avg:.4f}%")
 
-        # Comparación earn vs loan para USDT y USDC
+        # Earn vs loan comparison for USDT and USDC
         lines.append("")
-        lines.append("  📌 REFERENCIA: Diferencial Earn vs Loan")
+        lines.append("  📌 REFERENCE: Earn vs Loan Spread")
         lines.append("  ─────────────────────────────────────────────────────────")
         earn_rates = {"USDT": 3.0, "USDC": 5.0, "FDUSD": 0.6, "FRAX": 2.92}
         for coin, earn_apr in earn_rates.items():
@@ -185,10 +185,10 @@ def save_snapshot(records, ts_ms):
     with open(SNAP_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-# ─── REPORTE HISTÓRICO ────────────────────────────────────────────────────────
+# ─── HISTORICAL REPORT ────────────────────────────────────────────────────────
 def print_history_report():
     if not os.path.exists(LOG_FILE):
-        print("No hay historial aún. Ejecuta el monitor primero.")
+        print("No history yet. Run the monitor first.")
         return
 
     history = {}
@@ -204,19 +204,19 @@ def print_history_report():
             })
 
     print("=" * 90)
-    print("  HISTORIAL TASAS LOAN — STABLECOINS")
+    print("  LOAN RATE HISTORY — STABLECOINS")
     print("=" * 90)
-    print(f"  {'Coin':<10} {'Registros':>10} {'APR Mín':>12} {'APR Máx':>12} {'APR Ult':>12}  Tendencia")
+    print(f"  {'Coin':<10} {'Records':>10} {'Min APR':>12} {'Max APR':>12} {'Last APR':>12}  Trend")
     print(f"  {'─'*10} {'─'*10} {'─'*12} {'─'*12} {'─'*12}  {'─'*10}")
 
     for coin, entries in sorted(history.items(), key=lambda x: x[1][-1]["apr"]):
         aprs  = [e["apr"] for e in entries]
         last  = aprs[-1]
-        trend = "→ Estable"
+        trend = "→ Stable"
         if len(aprs) >= 2:
             diff = aprs[-1] - aprs[-2]
-            if diff > 0.5:    trend = "📈 Subiendo"
-            elif diff < -0.5: trend = "📉 Bajando"
+            if diff > 0.5:    trend = "📈 Rising"
+            elif diff < -0.5: trend = "📉 Falling"
 
         print(
             f"  {coin:<10} {len(entries):>10} {min(aprs):>11.4f}% {max(aprs):>11.4f}% "
@@ -224,19 +224,19 @@ def print_history_report():
         )
 
     total_snapshots = len(set(e["dt"][:16] for entries in history.values() for e in entries))
-    print(f"\n  Total snapshots registrados: {total_snapshots}")
+    print(f"\n  Total snapshots recorded: {total_snapshots}")
     print("=" * 90)
 
-# ─── CICLO PRINCIPAL ──────────────────────────────────────────────────────────
+# ─── MAIN CYCLE ──────────────────────────────────────────────────────────────
 def run_cycle(client):
     ts  = now_ts()
-    sys.stderr.write(f"\n[{ts_to_str(ts)}] Descargando tasas de préstamo (stablecoins)...\n")
+    sys.stderr.write(f"\n[{ts_to_str(ts)}] Downloading loan rates (stablecoins)...\n")
 
     raw     = fetch_loan_rates(client)
     records = [parse_record(r, ts) for r in raw]
 
     if not records:
-        sys.stderr.write("  [WARN] Sin datos de préstamo en este ciclo.\n")
+        sys.stderr.write("  [WARN] No loan data in this cycle.\n")
         return 0
 
     # CSV
@@ -252,7 +252,7 @@ def run_cycle(client):
     with open(SNAP_FILE, "r", encoding="utf-8") as f:
         print(f.read())
 
-    sys.stderr.write(f"  ✅ {len(records)} stablecoins registradas en {LOG_FILE}\n")
+    sys.stderr.write(f"  ✅ {len(records)} stablecoins recorded in {LOG_FILE}\n")
     return len(records)
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -260,9 +260,9 @@ def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
 
-    parser = argparse.ArgumentParser(description="Monitor horario de tasas de préstamo para stablecoins")
-    parser.add_argument("--once",   action="store_true", help="Ejecutar una vez y salir")
-    parser.add_argument("--report", action="store_true", help="Ver historial del CSV")
+    parser = argparse.ArgumentParser(description="Hourly loan rate monitor for stablecoins")
+    parser.add_argument("--once",   action="store_true", help="Run once and exit")
+    parser.add_argument("--report", action="store_true", help="View CSV history")
     args = parser.parse_args()
 
     if args.report:
@@ -275,24 +275,24 @@ def main():
         run_cycle(client)
         return
 
-    print("🔄 Monitor de tasas de préstamo iniciado. Intervalo: 1 hora. Ctrl+C para detener.\n")
+    print("🔄 Loan rate monitor started. Interval: 1 hour. Ctrl+C to stop.\n")
     cycle = 0
     while True:
         cycle += 1
-        sys.stderr.write(f"[Ciclo #{cycle}] ")
+        sys.stderr.write(f"[Cycle #{cycle}] ")
         try:
             run_cycle(client)
         except KeyboardInterrupt:
-            print("\n⏹  Monitor detenido.")
+            print("\n⏹  Monitor stopped.")
             break
         except Exception as e:
             sys.stderr.write(f"  [ERROR] {e}\n")
 
-        sys.stderr.write(f"  Próximo ciclo en {INTERVAL_S // 60} minutos...\n")
+        sys.stderr.write(f"  Next cycle in {INTERVAL_S // 60} minutes...\n")
         try:
             time.sleep(INTERVAL_S)
         except KeyboardInterrupt:
-            print("\n⏹  Monitor detenido.")
+            print("\n⏹  Monitor stopped.")
             break
 
 if __name__ == "__main__":

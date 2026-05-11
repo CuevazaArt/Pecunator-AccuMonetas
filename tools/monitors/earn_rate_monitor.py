@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   PECUNATOR — Monitor Horario de Tasas Earn (Stablecoins)       ║
-║   Registra cada hora el APR/APY de todos los productos Earn      ║
-║   disponibles para stablecoins, con sus límites de volumen.      ║
+║   PECUNATOR — Hourly Earn Rate Monitor (Stablecoins)            ║
+║   Records the APR/APY of all Earn products every hour           ║
+║   available for stablecoins, with their volume limits.          ║
 ╚══════════════════════════════════════════════════════════════════╝
 
-Uso:
-    python earn_rate_monitor.py           # Corre indefinidamente (cada hora)
-    python earn_rate_monitor.py --once    # Ejecutar solo una vez y salir
-    python earn_rate_monitor.py --report  # Mostrar reporte del historial guardado
+Usage:
+    python earn_rate_monitor.py           # Runs indefinitely (every hour)
+    python earn_rate_monitor.py --once    # Run once and exit
+    python earn_rate_monitor.py --report  # Show saved history report
 
-Genera:
-    earn_rates_log.csv   — Registro histórico de tasas
-    earn_rates_last.txt  — Último snapshot legible en pantalla
+Generates:
+    earn_rates_log.csv   — Historical rate record
+    earn_rates_last.txt  — Latest readable snapshot on screen
 """
 
 import sys
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 import config
 from binance.client import Client
 
-# ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+# ─── CONFIGURATION ────────────────────────────────────────────────────────────
 STABLECOINS = {
     "USDT", "USDC", "BUSD", "FDUSD", "USDS",
     "DAI",  "TUSD", "USDP", "GUSD",  "FRAX",
@@ -68,7 +68,7 @@ def ensure_csv_header():
 
 # ─── FETCH ────────────────────────────────────────────────────────────────────
 def fetch_flexible(client):
-    """Devuelve lista de productos Flexible Earn para stablecoins."""
+    """Returns list of Flexible Earn products for stablecoins."""
     products = []
     page = 1
     while True:
@@ -90,7 +90,7 @@ def fetch_flexible(client):
     return products
 
 def fetch_locked(client):
-    """Devuelve lista de productos Locked Earn para stablecoins."""
+    """Returns list of Locked Earn products for stablecoins."""
     products = []
     page = 1
     while True:
@@ -116,7 +116,7 @@ def fetch_locked(client):
 def parse_flexible(row, ts_ms):
     apr      = pct(row.get("latestAnnualPercentageRate", 0))
     tiers    = row.get("tierAnnualPercentageRate", {})
-    # Si hay tiers, tomamos la tasa del primer tramo (la más alta)
+    # If there are tiers, take the rate of the first tier (the highest)
     if tiers:
         best_tier = max(float(v) for v in tiers.values())
         apr = round(best_tier * 100, 4)
@@ -166,7 +166,7 @@ def parse_locked(row, ts_ms):
 
 # ─── SNAPSHOT ─────────────────────────────────────────────────────────────────
 def save_snapshot(records, ts_ms):
-    """Guarda earn_rates_last.txt con la tabla legible del último ciclo."""
+    """Saves earn_rates_last.txt with the readable table of the last cycle."""
     flex    = [r for r in records if r["type"] == "FLEXIBLE"]
     locked  = [r for r in records if r["type"] == "LOCKED"]
 
@@ -176,16 +176,16 @@ def save_snapshot(records, ts_ms):
 
     lines = []
     lines.append("=" * 105)
-    lines.append(f"  PECUNATOR — Tasas Earn Stablecoins")
+    lines.append(f"  PECUNATOR — Earn Stablecoin Rates")
     lines.append(f"  Snapshot: {ts_to_str(ts_ms)} UTC")
     lines.append("=" * 105)
 
     # ── FLEXIBLE ──
-    lines.append(f"\n  FLEXIBLE  ({len(flex)} productos)")
-    lines.append(f"  {'Asset':<10} {'Producto':<16} {'APR%':>8} {'Min Suscr':>12} {'Disponible':>12} {'Estado':<14}")
+    lines.append(f"\n  FLEXIBLE  ({len(flex)} products)")
+    lines.append(f"  {'Asset':<10} {'Product':<16} {'APR%':>8} {'Min Subscr':>12} {'Available':>12} {'Status':<14}")
     lines.append(f"  {'─'*10} {'─'*16} {'─'*8} {'─'*12} {'─'*12} {'─'*14}")
     for r in flex:
-        avail   = "✅ Disponible" if r["can_purchase"] and not r["is_sold_out"] else "🔴 Agotado"
+        avail   = "✅ Available" if r["can_purchase"] and not r["is_sold_out"] else "🔴 Sold out"
         apr_str = f"{r['total_apr_pct']:.4f}%"
         lines.append(
             f"  {r['asset']:<10} {str(r['product_id']):<16} {apr_str:>8} "
@@ -193,10 +193,10 @@ def save_snapshot(records, ts_ms):
         )
 
     # ── LOCKED ──
-    lines.append(f"\n  BLOQUEADO  ({len(locked)} productos)")
+    lines.append(f"\n  LOCKED  ({len(locked)} products)")
     lines.append(
-        f"  {'Asset':<10} {'Producto':<14} {'Días':>5} {'APR%':>8} {'Boost%':>8} "
-        f"{'Total%':>8} {'Min':>10} {'Cuota Max':>14} {'Disponible':>12}"
+        f"  {'Asset':<10} {'Product':<14} {'Days':>5} {'APR%':>8} {'Boost%':>8} "
+        f"{'Total%':>8} {'Min':>10} {'Max Quota':>14} {'Available':>12}"
     )
     lines.append(f"  {'─'*10} {'─'*14} {'─'*5} {'─'*8} {'─'*8} {'─'*8} {'─'*10} {'─'*14} {'─'*12}")
     for r in locked:
@@ -209,23 +209,23 @@ def save_snapshot(records, ts_ms):
             f"{str(r['min_amount']):>10} {str(r['max_personal_quota']):>14} {avail:>12}"
         )
 
-    # ── RESUMEN ──
+    # ── SUMMARY ──
     all_apr = [r["total_apr_pct"] for r in records if r["total_apr_pct"] > 0]
     lines.append(f"\n{'='*105}")
-    lines.append(f"  Productos rastreados:  {len(records)}")
+    lines.append(f"  Products tracked:  {len(records)}")
     if all_apr:
-        lines.append(f"  APR más alto:          {max(all_apr):.4f}%")
-        lines.append(f"  APR promedio:          {sum(all_apr)/len(all_apr):.4f}%")
-        lines.append(f"  APR más bajo:          {min(all_apr):.4f}%")
+        lines.append(f"  Highest APR:          {max(all_apr):.4f}%")
+        lines.append(f"  Average APR:          {sum(all_apr)/len(all_apr):.4f}%")
+        lines.append(f"  Lowest APR:          {min(all_apr):.4f}%")
     lines.append(f"{'='*105}")
 
     with open(SNAP_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-# ─── REPORTE HISTÓRICO ────────────────────────────────────────────────────────
+# ─── HISTORICAL REPORT ────────────────────────────────────────────────────────
 def print_history_report():
     if not os.path.exists(LOG_FILE):
-        print("No hay historial registrado aún. Ejecuta el monitor primero.")
+        print("No history recorded yet. Run the monitor first.")
         return
 
     snapshots = {}
@@ -244,9 +244,9 @@ def print_history_report():
             })
 
     print("=" * 90)
-    print("  HISTORIAL DE TASAS EARN — STABLECOINS")
+    print("  EARN RATE HISTORY — STABLECOINS")
     print("=" * 90)
-    print(f"  {'Tipo':<10} {'Asset':<10} {'Producto':<18} {'Registros':>10} {'APR Mín':>10} {'APR Máx':>10} {'APR Ult':>10}")
+    print(f"  {'Type':<10} {'Asset':<10} {'Product':<18} {'Records':>10} {'Min APR':>10} {'Max APR':>10} {'Last APR':>10}")
     print(f"  {'─'*10} {'─'*10} {'─'*18} {'─'*10} {'─'*10} {'─'*10} {'─'*10}")
 
     for key, entries in sorted(snapshots.items(), key=lambda x: -max(e["apr"] for e in x[1])):
@@ -264,11 +264,11 @@ def print_history_report():
     print(f"\n  Último registro: {entries[-1]['dt']} UTC")
     print("=" * 90)
 
-# ─── CICLO PRINCIPAL ──────────────────────────────────────────────────────────
+# ─── MAIN CYCLE ──────────────────────────────────────────────────────────────
 def run_cycle(client):
     ts   = now_ts()
     now  = ts_to_str(ts)
-    sys.stderr.write(f"\n[{now}] Recopilando tasas Earn para stablecoins...\n")
+    sys.stderr.write(f"\n[{now}] Collecting Earn rates for stablecoins...\n")
 
     flex_raw    = fetch_flexible(client)
     locked_raw  = fetch_locked(client)
@@ -280,19 +280,19 @@ def run_cycle(client):
         records.append(parse_locked(r, ts))
 
     if not records:
-        sys.stderr.write("  [WARN] Sin datos obtenidos en este ciclo.\n")
+        sys.stderr.write("  [WARN] No data obtained in this cycle.\n")
         return 0
 
-    # Guardar en CSV
+    # Save to CSV
     ensure_csv_header()
     with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
         writer.writerows(records)
 
-    # Guardar snapshot legible
+    # Save readable snapshot
     save_snapshot(records, ts)
 
-    # Mostrar en pantalla también
+    # Display on screen as well
     with open(SNAP_FILE, "r", encoding="utf-8") as f:
         print(f.read())
 
@@ -303,9 +303,9 @@ def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
 
-    parser = argparse.ArgumentParser(description="Monitor horario de tasas Earn para stablecoins")
-    parser.add_argument("--once",   action="store_true", help="Ejecutar solo una vez y salir")
-    parser.add_argument("--report", action="store_true", help="Mostrar reporte del historial CSV")
+    parser = argparse.ArgumentParser(description="Hourly Earn rate monitor for stablecoins")
+    parser.add_argument("--once",   action="store_true", help="Run once and exit")
+    parser.add_argument("--report", action="store_true", help="Show CSV history report")
     args = parser.parse_args()
 
     if args.report:
@@ -318,25 +318,25 @@ def main():
         run_cycle(client)
         return
 
-    # Modo continuo — loop cada hora
-    print("🔄 Monitor iniciado. Intervalo: 1 hora. Ctrl+C para detener.\n")
+    # Continuous mode — loop every hour
+    print("🔄 Monitor started. Interval: 1 hour. Ctrl+C to stop.\n")
     cycle = 0
     while True:
         cycle += 1
-        sys.stderr.write(f"[Ciclo #{cycle}] ", )
+        sys.stderr.write(f"[Cycle #{cycle}] ", )
         try:
             run_cycle(client)
         except KeyboardInterrupt:
-            print("\n⏹  Monitor detenido por el usuario.")
+            print("\n⏹  Monitor stopped by user.")
             break
         except Exception as e:
             sys.stderr.write(f"  [ERROR] {e}\n")
 
-        sys.stderr.write(f"  Próximo ciclo en {INTERVAL_S//60} minutos...\n")
+        sys.stderr.write(f"  Next cycle in {INTERVAL_S//60} minutes...\n")
         try:
             time.sleep(INTERVAL_S)
         except KeyboardInterrupt:
-            print("\n⏹  Monitor detenido por el usuario.")
+            print("\n⏹  Monitor stopped by user.")
             break
 
 if __name__ == "__main__":

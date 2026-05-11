@@ -36,11 +36,11 @@ def test_activity_recommendation():
     """Recommendation text varies by activity score."""
     from runtime.api.routers.market_events import _activity_recommendation
     high = _activity_recommendation(0.95)
-    assert "Alta actividad" in high or "liquidez" in high
+    assert "High activity" in high or "liquidity" in high
     low = _activity_recommendation(0.30)
-    assert "Zona muerta" in low or "mínima" in low
+    assert "Dead zone" in low or "minimal" in low
     moderate = _activity_recommendation(0.65)
-    assert "moderada" in moderate or "Actividad" in moderate
+    assert "moderate" in moderate or "Activity" in moderate
 
 
 def test_geopolitical_factors():

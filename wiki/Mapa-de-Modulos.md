@@ -23,12 +23,12 @@ Pecunator/
 │   ├── bot/                   # Compatibility bridge (legacy imports)
 │   └── data/                  # Vault, SQLite and runtime stores
 │
-├── bots/                      # Índice raíz de módulos de bots
+├── bots/                      # Root index of bot modules
 │   ├── dorothy/MODULE.md
 │   ├── masha/MODULE.md
 │   └── thusnelda/MODULE.md
 │
-├── tools/                     # Índice raíz de herramientas operativas
+├── tools/                     # Root index of operational tools
 │   ├── ops-protocols/         # Protocolos y runbooks
 │   ├── sandbox-rest/          # Sandbox de queries Binance
 │   └── rest-weight-monitor/   # Monitor de peso REST

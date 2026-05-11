@@ -8,13 +8,13 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     client = Client(config.api_key, config.api_secret, requests_params={'timeout': 30})
-    print("Cargando portafolio...\n")
+    print("Loading portfolio...\n")
 
-    # Obtener datos base
+    # Fetch base data
     account = client.get_account()
     balances = account.get("balances", [])
 
-    # Posiciones en Earn
+    # Earn positions
     earn_positions = []
     page = 1
     while True:
@@ -46,7 +46,7 @@ def main():
         except:
             break
 
-    # Consolidar holdings
+    # Consolidate holdings
     holdings = {}
     for b in balances:
         asset = b["asset"]
@@ -67,14 +67,14 @@ def main():
         if qty > 0:
             holdings[asset] = holdings.get(asset, 0.0) + qty
 
-    # Precios
+    # Prices
     tickers = client.get_all_tickers()
     prices = {t["symbol"]: float(t["price"]) for t in tickers}
 
     exchange_info = client.get_exchange_info()
     valid_symbols = {s["symbol"] for s in exchange_info["symbols"] if s["status"] == "TRADING"}
 
-    # Analizar cada activo
+    # Analyze each asset
     rows = []
     total_count = len(holdings)
     i = 0
@@ -102,10 +102,10 @@ def main():
         if current_price == 0:
             continue
 
-        sys.stderr.write(f"\r  Procesando {i}/{total_count}: {asset}...          ")
+        sys.stderr.write(f"\r  Processing {i}/{total_count}: {asset}...          ")
         sys.stderr.flush()
 
-        # Precio promedio de compra
+        # Average buy price
         avg_buy_price = 0.0
         total_buy_qty = 0.0
         total_buy_cost = 0.0
@@ -130,7 +130,7 @@ def main():
         if avg_buy_price > 0:
             pnl_pct = ((current_price - avg_buy_price) / avg_buy_price) * 100
 
-        # Ubicación
+        # Location
         in_earn = asset in [ep["asset"] for ep in earn_positions]
         in_locked = asset in [ep.get("asset", "") for ep in locked_positions]
         if in_locked:
@@ -150,10 +150,10 @@ def main():
             "location": location
         })
 
-    sys.stderr.write(f"\r  Listo. {len(rows)} activos procesados.                    \n")
+    sys.stderr.write(f"\r  Done. {len(rows)} assets processed.                    \n")
     sys.stderr.flush()
 
-    # Ordenar por valor USDT descendente
+    # Sort by USDT value descending
     rows.sort(key=lambda x: x["value_usdt"], reverse=True)
 
     total_value = sum(r["value_usdt"] for r in rows)
@@ -161,10 +161,10 @@ def main():
     total_cost = sum(r["qty"] * r["buy_price"] for r in with_cost)
     total_current_val = sum(r["value_usdt"] for r in with_cost)
 
-    # Imprimir tabla
+    # Print table
     print()
     print("┌────────────┬──────────────────┬────────────┬────────────┬────────────┬──────────┬────────┐")
-    print("│ Asset      │ Cantidad         │ P. Compra  │ P. Actual  │ Valor USD  │   P&L %  │ Ubic.  │")
+    print("│ Asset      │ Quantity         │ Buy Price  │ Curr Price │ Value USD  │   P&L %  │ Loc.   │")
     print("├────────────┼──────────────────┼────────────┼────────────┼────────────┼──────────┼────────┤")
 
     for r in rows:
@@ -213,20 +213,20 @@ def main():
 
     print("└────────────┴──────────────────┴────────────┴────────────┴────────────┴──────────┴────────┘")
 
-    # Totales
+    # Totals
     print()
-    print(f"  💰 Valor Total del Portafolio:  ${total_value:.2f} USDT")
+    print(f"  💰 Total Portfolio Value:  ${total_value:.2f} USDT")
     if total_cost > 0:
         global_pnl = ((total_current_val - total_cost) / total_cost) * 100
-        print(f"  💵 Total Invertido (compras):   ${total_cost:.2f} USDT")
-        print(f"  📊 P&L Neto Global:            {global_pnl:+.2f}%")
-        print(f"  📉 Pérdida/Ganancia Neta:      ${total_current_val - total_cost:+.2f} USDT")
+        print(f"  💵 Total Invested (buys):   ${total_cost:.2f} USDT")
+        print(f"  📊 Net Global P&L:            {global_pnl:+.2f}%")
+        print(f"  📉 Net Profit/Loss:      ${total_current_val - total_cost:+.2f} USDT")
 
-    # Conteos rápidos
+    # Quick counts
     winners = [r for r in with_cost if r["pnl_pct"] > 0]
     losers = [r for r in with_cost if r["pnl_pct"] < 0]
-    print(f"\n  ✅ En ganancia: {len(winners)} activos")
-    print(f"  ❌ En pérdida:  {len(losers)} activos")
+    print(f"\n  ✅ In profit: {len(winners)} assets")
+    print(f"  ❌ At a loss:  {len(losers)} assets")
 
 if __name__ == "__main__":
     main()

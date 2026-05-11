@@ -10,13 +10,13 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     client = Client(config.api_key, config.api_secret, requests_params={'timeout': 30})
-    sys.stderr.write("Cargando datos de préstamos...\n")
+    sys.stderr.write("Loading loan data...\n")
 
     tickers = client.get_all_tickers()
     prices = {t["symbol"]: float(t["price"]) for t in tickers}
 
     # =========================================================================
-    # 1) PRÉSTAMOS ACTIVOS (Flexible Loans)
+    # 1) ACTIVE LOANS (Flexible Loans)
     # =========================================================================
     ongoing = []
     page = 1
@@ -31,11 +31,11 @@ def main():
                 break
             page += 1
         except Exception as e:
-            sys.stderr.write(f"Error obteniendo préstamos activos: {e}\n")
+            sys.stderr.write(f"Error fetching active loans: {e}\n")
             break
 
     # =========================================================================
-    # 2) HISTORIAL DE PRÉSTAMOS (Borrow History) - últimos 2 años
+    # 2) LOAN HISTORY (Borrow History) - last 2 years
     # =========================================================================
     two_years_ago = int((datetime.now(timezone.utc) - timedelta(days=730)).timestamp() * 1000)
 
@@ -54,11 +54,11 @@ def main():
                 break
             page += 1
         except Exception as e:
-            sys.stderr.write(f"Error obteniendo historial de préstamos: {e}\n")
+            sys.stderr.write(f"Error fetching loan history: {e}\n")
             break
 
     # =========================================================================
-    # 3) HISTORIAL DE PAGOS (Repay History) - últimos 2 años
+    # 3) REPAYMENT HISTORY (Repay History) - last 2 years
     # =========================================================================
     repays = []
     page = 1
@@ -75,11 +75,11 @@ def main():
                 break
             page += 1
         except Exception as e:
-            sys.stderr.write(f"Error obteniendo historial de pagos: {e}\n")
+            sys.stderr.write(f"Error fetching repayment history: {e}\n")
             break
 
     # =========================================================================
-    # 4) HISTORIAL DE AJUSTES LTV - últimos 2 años
+    # 4) LTV ADJUSTMENT HISTORY - last 2 years
     # =========================================================================
     ltv_adjustments = []
     page = 1
@@ -100,18 +100,18 @@ def main():
             break
 
     # =========================================================================
-    # IMPRIMIR REPORTE
+    # PRINT REPORT
     # =========================================================================
     print("=" * 110)
-    print("  PECUNATOR - Reporte de Préstamos (Crypto Loans)")
-    print(f"  Período: {datetime.fromtimestamp(two_years_ago/1000).strftime('%Y-%m-%d')} → {datetime.now().strftime('%Y-%m-%d')}")
+    print("  PECUNATOR - Loans Report (Crypto Loans)")
+    print(f"  Period: {datetime.fromtimestamp(two_years_ago/1000).strftime('%Y-%m-%d')} → {datetime.now().strftime('%Y-%m-%d')}")
     print("=" * 110)
 
-    # ------- SECCIÓN 1: PRÉSTAMOS ACTIVOS -------
+    # ------- SECTION 1: ACTIVE LOANS -------
     print("\n┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
-    print("│                              PRÉSTAMOS FLEXIBLES ACTIVOS                                                  │")
+    print("│                              ACTIVE FLEXIBLE LOANS                                                        │")
     print("├────────────┬────────────┬──────────────┬──────────────────┬──────────────┬────────┬───────────────────────┤")
-    print("│ Préstamo   │ Colateral  │ Deuda (USDT) │ Colateral (Cant) │ Valor Col.$  │  LTV%  │ Estado                │")
+    print("│ Loan       │ Collateral │ Debt (USDT)  │ Collateral (Qty) │ Col. Value$  │  LTV%  │ Status                │")
     print("├────────────┼────────────┼──────────────┼──────────────────┼──────────────┼────────┼───────────────────────┤")
 
     total_debt = 0.0
@@ -124,7 +124,7 @@ def main():
         col_amount = float(loan.get("collateralAmount", 0))
         ltv = float(loan.get("currentLTV", 0)) * 100
 
-        # Calcular valor del colateral en USDT
+        # Calculate collateral value in USDT
         col_symbol = col_coin + "USDT"
         col_price = prices.get(col_symbol, 0)
         col_value = col_amount * col_price
@@ -132,15 +132,15 @@ def main():
         total_debt += debt
         total_collateral_value += col_value
 
-        # Riesgo de liquidación
+        # Liquidation risk
         if ltv >= 85:
-            status = "🔴 PELIGRO LIQUIDACIÓN"
+            status = "🔴 LIQUIDATION RISK"
         elif ltv >= 75:
-            status = "🟠 RIESGO ALTO"
+            status = "🟠 HIGH RISK"
         elif ltv >= 65:
-            status = "🟡 MODERADO"
+            status = "🟡 MODERATE"
         else:
-            status = "🟢 SEGURO"
+            status = "🟢 SAFE"
 
         debt_str = f"${debt:.2f}"
         col_qty_str = f"{col_amount:.4f}" if col_amount < 1000 else f"{col_amount:.1f}"
@@ -154,24 +154,24 @@ def main():
     net_exposure = total_collateral_value - total_debt
     avg_ltv = (total_debt / total_collateral_value * 100) if total_collateral_value > 0 else 0
 
-    print(f"│ {'TOTALES':<23} │ {f'${total_debt:.2f}':>12} │ {'':>16} │ {f'${total_collateral_value:.2f}':>12} │ {f'{avg_ltv:.1f}%':>6} │ {'':>21} │")
+    print(f"│ {'TOTALS':<23} │ {f'${total_debt:.2f}':>12} │ {'':>16} │ {f'${total_collateral_value:.2f}':>12} │ {f'{avg_ltv:.1f}%':>6} │ {'':>21} │")
     print("└─────────────────────────┴──────────────┴──────────────────┴──────────────┴────────┴───────────────────────┘")
 
-    print(f"\n  📊 Deuda Total:              ${total_debt:.2f} USDT")
-    print(f"  🏦 Valor Total Colateral:    ${total_collateral_value:.2f} USDT")
-    print(f"  💰 Exposición Neta:          ${net_exposure:+.2f} USDT {'(En riesgo)' if net_exposure < 0 else '(Cubierto)'}")
-    print(f"  📐 LTV Promedio:             {avg_ltv:.1f}%")
+    print(f"\n  📊 Total Debt:              ${total_debt:.2f} USDT")
+    print(f"  🏦 Total Collateral Value:    ${total_collateral_value:.2f} USDT")
+    print(f"  💰 Net Exposure:          ${net_exposure:+.2f} USDT {'(At risk)' if net_exposure < 0 else '(Covered)'}")
+    print(f"  📐 Average LTV:             {avg_ltv:.1f}%")
 
     if avg_ltv >= 75:
-        print("  ⚠️  ALERTA: Tu LTV promedio está MUY ALTO. Riesgo de liquidación parcial inminente.")
+        print("  ⚠️  ALERT: Your average LTV is VERY HIGH. Partial liquidation risk imminent.")
     elif avg_ltv >= 65:
-        print("  ⚡ PRECAUCIÓN: LTV elevado. Considera repagar parte o agregar colateral.")
+        print("  ⚡ CAUTION: Elevated LTV. Consider repaying part or adding collateral.")
 
-    # ------- SECCIÓN 2: HISTORIAL DE PRÉSTAMOS TOMADOS -------
+    # ------- SECTION 2: LOAN BORROW HISTORY -------
     print("\n┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
-    print("│                              HISTORIAL DE PRÉSTAMOS TOMADOS                                               │")
+    print("│                              LOAN BORROW HISTORY                                                          │")
     print("├────────────┬────────────┬───────────────┬──────────────────┬─────────────────────┬─────────────────────────┤")
-    print("│ Préstamo   │ Colateral  │ Monto Préstam │ Colateral Dado   │ Fecha               │ Estado                  │")
+    print("│ Loan       │ Collateral │ Loan Amount   │ Collateral Given │ Date                │ Status                  │")
     print("├────────────┼────────────┼───────────────┼──────────────────┼─────────────────────┼─────────────────────────┤")
 
     total_borrowed = 0.0
@@ -196,14 +196,14 @@ def main():
         print(f"│ {loan_coin:<10} │ {col_coin:<10} │ {loan_str:>13} │ {col_str:>16} │ {date_str:>19} │ {status_icon} {status:<22} │")
 
     print("├────────────┴────────────┼───────────────┼──────────────────┼─────────────────────┼─────────────────────────┤")
-    print(f"│ {'TOTAL PRESTADO':<23} │ {f'${total_borrowed:.2f}':>13} │ {'':>16} │ {'':>19} │ {'':>23} │")
+    print(f"│ {'TOTAL BORROWED':<23} │ {f'${total_borrowed:.2f}':>13} │ {'':>16} │ {'':>19} │ {'':>23} │")
     print("└─────────────────────────┴───────────────┴──────────────────┴─────────────────────┴─────────────────────────┘")
 
-    # ------- SECCIÓN 3: HISTORIAL DE PAGOS -------
+    # ------- SECTION 3: REPAYMENT HISTORY -------
     print("\n┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
-    print("│                              HISTORIAL DE PAGOS / REPAGOS                                                 │")
+    print("│                              REPAYMENT HISTORY                                                            │")
     print("├────────────┬────────────┬───────────────┬──────────────────┬─────────────────────┬─────────────────────────┤")
-    print("│ Préstamo   │ Colateral  │ Monto Pagado  │ Col. Devuelto    │ Fecha               │ Estado                  │")
+    print("│ Loan       │ Collateral │ Amount Paid   │ Col. Returned    │ Date                │ Status                  │")
     print("├────────────┼────────────┼───────────────┼──────────────────┼─────────────────────┼─────────────────────────┤")
 
     total_repaid = 0.0
@@ -227,33 +227,33 @@ def main():
         repay_str = f"${repay_amount:.4f}" if loan_coin == "USDT" else f"{repay_amount:.4f} {loan_coin}"
         col_str = f"{col_return:.6f}" if col_return < 1 else f"{col_return:.4f}"
         if col_return == 0:
-            col_str = "0 (sin devol.)"
+            col_str = "0 (no return)"
 
         status_icon = "✅" if status == "REPAID" else "⏳"
 
         print(f"│ {loan_coin:<10} │ {col_coin:<10} │ {repay_str:>13} │ {col_str:>16} │ {date_str:>19} │ {status_icon} {status:<22} │")
 
     print("├────────────┴────────────┼───────────────┼──────────────────┼─────────────────────┼─────────────────────────┤")
-    print(f"│ {'TOTAL PAGADO':<23} │ {f'${total_repaid:.2f}':>13} │ {'':>16} │ {'':>19} │ {'':>23} │")
+    print(f"│ {'TOTAL PAID':<23} │ {f'${total_repaid:.2f}':>13} │ {'':>16} │ {'':>19} │ {'':>23} │")
     print("└─────────────────────────┴───────────────┴──────────────────┴─────────────────────┴─────────────────────────┘")
 
-    # ------- SECCIÓN 4: ANÁLISIS DE PÉRDIDAS POR INTERESES -------
+    # ------- SECTION 4: INTEREST LOSS ANALYSIS -------
     interest_paid = total_debt + total_repaid - total_borrowed
     if interest_paid < 0:
         interest_paid = total_debt - (total_borrowed - total_repaid)
 
     print("\n" + "=" * 110)
-    print("  ANÁLISIS FINANCIERO")
+    print("  FINANCIAL ANALYSIS")
     print("=" * 110)
-    print(f"  💸 Total Prestado (histórico):    ${total_borrowed:.2f} USDT")
-    print(f"  💵 Total Pagado:                  ${total_repaid:.2f} USDT")
-    print(f"  🏦 Deuda Pendiente:               ${total_debt:.2f} USDT")
-    print(f"  📈 Intereses Acumulados (aprox):  ${interest_paid:.2f} USDT")
-    print(f"  📉 Costo Neto de Préstamos:       ${total_repaid + total_debt - total_borrowed:+.2f} USDT")
+    print(f"  💸 Total Borrowed (historical):    ${total_borrowed:.2f} USDT")
+    print(f"  💵 Total Repaid:                  ${total_repaid:.2f} USDT")
+    print(f"  🏦 Outstanding Debt:               ${total_debt:.2f} USDT")
+    print(f"  📈 Accumulated Interest (approx):  ${interest_paid:.2f} USDT")
+    print(f"  📉 Net Cost of Loans:       ${total_repaid + total_debt - total_borrowed:+.2f} USDT")
 
-    # Riesgo por colateral
+    # Collateral risk
     print(f"\n  {'─'*50}")
-    print(f"  RIESGO DE LIQUIDACIÓN POR COLATERAL:")
+    print(f"  LIQUIDATION RISK BY COLLATERAL:")
     for loan in ongoing:
         col_coin = loan.get("collateralCoin", "?")
         debt = float(loan.get("totalDebt", 0))
@@ -263,7 +263,7 @@ def main():
         col_price = prices.get(col_coin + "USDT", 0)
         col_value = col_amount * col_price
 
-        # Calcular a qué precio se liquidaría (LTV = 0.90 típicamente)
+        # Calculate price at which liquidation occurs (LTV = 0.90 typically)
         liquidation_ltv = 0.90
         if col_amount > 0:
             liquidation_price = (debt * liquidation_ltv) / (col_amount * ltv) * col_price * ltv / liquidation_ltv
@@ -274,7 +274,7 @@ def main():
 
             danger = "🔴" if drop_needed < 5 else "🟠" if drop_needed < 15 else "🟡" if drop_needed < 30 else "🟢"
 
-            print(f"  {danger} {col_coin:<8} | Precio actual: ${col_price:.4f} | Liquidación: ${liquidation_price:.4f} | Caída necesaria: {drop_needed:.1f}%")
+            print(f"  {danger} {col_coin:<8} | Current price: ${col_price:.4f} | Liquidation: ${liquidation_price:.4f} | Drop needed: {drop_needed:.1f}%")
 
     print(f"\n{'=' * 110}")
 

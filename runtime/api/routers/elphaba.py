@@ -37,7 +37,7 @@ async def elphaba_bots_create(body: HubBotCreateBody) -> Any:
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe una instancia de Elphaba para el símbolo {body.symbol}. Elimínala primero.",
+            detail=f"An Elphaba instance already exists for symbol {body.symbol}. Delete it first.",
         )
 
     try:

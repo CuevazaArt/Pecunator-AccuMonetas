@@ -1,108 +1,108 @@
-# Pecunator-AccuMonetas: Resumen Ejecutivo
+# Pecunator-AccuMonetas: Executive Summary
 
-**Proyecto:** Hub de Bots Louise (DCA Downside-Only)  
-**Estado:** 🟢 Listo para comenzar desarrollo  
-**Fecha:** 2026-05-11
-
----
-
-## 🎯 Qué es Louise?
-
-**Louise** es un bot de trading autónomo que acumula progresivamente un activo mediante DCA a la baja (downside-only averaging):
-
-```
-Lógica Simple:
-1. Cada N segundos revisa el precio del símbolo
-2. Si precio actual < último precio de compra → compra su volumen configurado
-3. Si no hay compras previas → ejecuta la primera compra (referencia base)
-4. Sin stop-loss (por diseño, solo promedia a la baja)
-5. Cuando ganancia alcanza X% → vende TODO a mercado, cierra época (exitosa)
-6. Listo para nueva época
-```
-
-**Hub de múltiples Louise:** Cientos de bots Louise ejecutándose simultáneamente en diferentes símbolos/activos, cada uno con sus propios parámetros.
+**Project:** Louise Bot Hub (DCA Downside-Only)  
+**Status:** 🟢 Ready to start development  
+**Date:** 2026-05-11
 
 ---
 
-## 📦 Qué está Completado?
+## 🎯 What is Louise?
 
-### ✅ Documentación Base
+**Louise** is an autonomous trading bot that progressively accumulates an asset through downside-only DCA averaging:
 
-| Documento | Propósito | Estado |
+```
+Simple Logic:
+1. Every N seconds it checks the symbol's price
+2. If current price < last buy price → buys its configured volume
+3. If there are no previous buys → executes the first buy (base reference)
+4. No stop-loss (by design, only averages down)
+5. When profit reaches X% → sells EVERYTHING at market, closes epoch (successful)
+6. Ready for a new epoch
+```
+
+**Multi-Louise Hub:** Hundreds of Louise bots running simultaneously on different symbols/assets, each with its own parameters.
+
+---
+
+## 📦 What is Completed?
+
+### ✅ Base Documentation
+
+| Document | Purpose | Status |
 |-----------|----------|--------|
-| **CLAUDE.md** | Workflow, fases, stack técnico | ✅ Listo |
-| **BOT_SPECIFICATION.md** | Lógica detallada, parámetros, API | ✅ Listo |
-| **UI_WIREFRAMES.md** | 6 pantallas, flujos, componentes | ✅ Listo |
-| **IMPLEMENTATION_ROADMAP.md** | Plan 9 semanas, fases, hitos | ✅ Listo |
-| **ONBOARDING.md** | Checklist pre-desarrollo | ✅ Listo |
+| **CLAUDE.md** | Workflow, phases, technical stack | ✅ Ready |
+| **BOT_SPECIFICATION.md** | Detailed logic, parameters, API | ✅ Ready |
+| **UI_WIREFRAMES.md** | 6 screens, flows, components | ✅ Ready |
+| **IMPLEMENTATION_ROADMAP.md** | 9-week plan, phases, milestones | ✅ Ready |
+| **ONBOARDING.md** | Pre-development checklist | ✅ Ready |
 
-### ✅ Infraestructura Heredada (PecunatorCore v3.7.5)
+### ✅ Inherited Infrastructure (PecunatorCore v3.7.5)
 
 ```
 Backend (Python FastAPI)
-├─ API HTTP en puerto 8000
-├─ WebSocket para telemetría en tiempo real
-├─ AsyncClient (python-binance) 100% nativo
-├─ SQLite para persistencia de estado
-└─ 195+ tests (suite completa)
+├─ HTTP API on port 8000
+├─ WebSocket for real-time telemetry
+├─ AsyncClient (python-binance) 100% native
+├─ SQLite for state persistence
+└─ 195+ tests (complete suite)
 
 Frontend (Flutter Desktop)
-├─ UI Windows nativa
+├─ Native Windows UI
 ├─ State management (Provider)
 ├─ Syncfusion charts
 └─ WebSocket listeners
 
 Control Modules
-├─ WeightGovernor (rate limiting API)
+├─ WeightGovernor (API rate limiting)
 ├─ ApiFuse (circuit breaker)
-├─ BudgetGuard (caps de gasto)
-├─ OrderLedger (auditoría)
-└─ StateWAL (recuperación ante caídas)
+├─ BudgetGuard (spend caps)
+├─ OrderLedger (audit trail)
+└─ StateWAL (crash recovery)
 ```
 
 ---
 
-## 📋 Plan de Implementación (9 Semanas)
+## 📋 Implementation Plan (9 Weeks)
 
-### Fase 1: Cimientos (Semanas 1-2)
-- [ ] Crear módulo bot runner: `runtime/bot/louise.py`
-- [ ] Crear routers API: `runtime/api/routers/louise.py`
-- [ ] Extender schema SQLite con tablas Louise
-- [ ] Suite de tests (unit + integration)
-- **Deliverable:** Bot runner funcional + API lista
+### Phase 1: Foundation (Weeks 1-2)
+- [ ] Create bot runner module: `runtime/bot/louise.py`
+- [ ] Create API routers: `runtime/api/routers/louise.py`
+- [ ] Extend SQLite schema with Louise tables
+- [ ] Test suite (unit + integration)
+- **Deliverable:** Functional bot runner + ready API
 
-### Fase 2: Backend Completo (Semanas 3-4)
-- [ ] Implementar lógica completa de Louise (polling, compras, cierre)
-- [ ] Integrar con módulos de control (BudgetGuard, WeightGovernor, etc.)
-- [ ] Implementar todos los endpoints REST
-- [ ] WebSocket para métricas en tiempo real
-- **Deliverable:** Backend producción-listo + API completa
+### Phase 2: Full Backend (Weeks 3-4)
+- [ ] Implement full Louise logic (polling, buys, close)
+- [ ] Integrate with control modules (BudgetGuard, WeightGovernor, etc.)
+- [ ] Implement all REST endpoints
+- [ ] WebSocket for real-time metrics
+- **Deliverable:** Production-ready backend + complete API
 
-### Fase 3: UI Flutter (Semanas 5-6)
-- [ ] Dashboard: grid de bots con status y P&L
-- [ ] Detalle: métricas, presupuesto, historial de compras
-- [ ] Historial: épocas completadas, todas las compras
-- [ ] Configuración: creación y edición de bots
-- [ ] WebSocket real-time: métricas actualizan cada 5 segundos
-- **Deliverable:** UI completa, intuitiva, responsiva
+### Phase 3: Flutter UI (Weeks 5-6)
+- [ ] Dashboard: bot grid with status and P&L
+- [ ] Detail: metrics, budget, buy history
+- [ ] History: completed epochs, all purchases
+- [ ] Settings: bot creation and editing
+- [ ] Real-time WebSocket: metrics update every 5 seconds
+- **Deliverable:** Complete, intuitive, responsive UI
 
-### Fase 4: Testing E2E (Semana 7)
-- [ ] Tests end-to-end: crear bot → habilitar → monitorear → cierre
-- [ ] Tests de carga: 10 bots simultáneamente
-- [ ] Tests de error: desconexiones, presupuesto agotado, credenciales inválidas
-- [ ] Polish UI: responsive, dark mode, accesibilidad
-- **Deliverable:** Cero bugs conocidos, todas las pruebas pasan
+### Phase 4: E2E Testing (Week 7)
+- [ ] End-to-end tests: create bot → enable → monitor → close
+- [ ] Load tests: 10 bots simultaneously
+- [ ] Error tests: disconnections, budget exhausted, invalid credentials
+- [ ] UI polish: responsive, dark mode, accessibility
+- **Deliverable:** Zero known bugs, all tests pass
 
-### Fase 5: Hardening & Producción (Semanas 8-10)
-- [ ] Security: validación de credenciales, sanitización de inputs
-- [ ] Performance: optimización de queries, latencia WebSocket
-- [ ] Reliability: recuperación ante caídas, integridad de DB
+### Phase 5: Hardening & Production (Weeks 8-10)
+- [ ] Security: credential validation, input sanitization
+- [ ] Performance: query optimization, WebSocket latency
+- [ ] Reliability: crash recovery, DB integrity
 - [ ] Deployment: checklist, rollback procedure, monitoring
-- **Deliverable:** ✅ Listo para producción
+- **Deliverable:** ✅ Production-ready
 
 ---
 
-## 🎯 Decisiones Técnicas Clave
+## 🎯 Key Technical Decisions
 
 ### Database Schema (SQLite)
 
@@ -110,10 +110,10 @@ Control Modules
 louise_bots:
   - bot_id (PK)
   - symbol (BTC/USDT, ETH/USDT, etc.)
-  - buy_volume (cuánto comprar por ciclo)
-  - poll_interval_seconds (cada cuánto revisar mercado)
-  - target_profit_pct (% ganancia para cerrar)
-  - daily_budget_usdt (límite gasto por día)
+  - buy_volume (how much to buy per cycle)
+  - poll_interval_seconds (how often to check the market)
+  - target_profit_pct (% profit to close)
+  - daily_budget_usdt (daily spend limit)
   - status (IDLE, ACCUMULATING, PAUSED, ERROR, SHUTDOWN)
 
 louise_purchases:
@@ -151,233 +151,233 @@ Metrics & History:
   GET    /api/v1/louise/stats
 
 WebSocket:
-  WS     /ws/louise/metrics/{bot_id} (actualización cada 5 segundos)
+  WS     /ws/louise/metrics/{bot_id} (update every 5 seconds)
 ```
 
-### UI Screens (6 pantallas principales)
+### UI Screens (6 main screens)
 
-1. **Dashboard** — Grid de bots, status, P&L, botones rápidos
-2. **Bot Details** — Métricas completas, presupuesto, tabla de compras
-3. **History** — Épocas completadas, todas las compras, filtros
-4. **Settings** — Configuración API, alertas, backup
-5. **Create/Edit Bot** — Formulario para crear novo bot
-6. **Alerts** — Notificaciones de errores, confirmaciones
+1. **Dashboard** — Bot grid, status, P&L, quick action buttons
+2. **Bot Details** — Full metrics, budget, buy table
+3. **History** — Completed epochs, all purchases, filters
+4. **Settings** — API configuration, alerts, backup
+5. **Create/Edit Bot** — Form to create or edit a bot
+6. **Alerts** — Error notifications, confirmations
 
 ---
 
-## 💾 Decisiones de Infraestructura
+## 💾 Infrastructure Decisions
 
-### Credenciales
+### Credentials
 
 ```bash
-# .env para cada subacuenta
-BOT_API_KEY=<key_binance>
-BOT_API_SECRET=<secret_binance>
+# .env per subaccount
+BOT_API_KEY=<binance_key>
+BOT_API_SECRET=<binance_secret>
 
-# Vault cifrado (Fernet)
+# Encrypted vault (Fernet)
 runtime/data/credentials.enc
 ```
 
-### Rate Limiting (Herencia de PecunatorCore)
+### Rate Limiting (Inherited from PecunatorCore)
 
-- **WeightGovernor:** Zonas COLOR (GREEN/YELLOW/RED) basadas en peso REST
-- Cada Louise usa su propia asignación de peso
-- Si zona vira RED → pausa automática
+- **WeightGovernor:** COLOR zones (GREEN/YELLOW/RED) based on REST weight
+- Each Louise uses its own weight allocation
+- If zone turns RED → automatic pause
 
-### Recuperación ante Caídas
+### Crash Recovery
 
-- **StateWAL:** Persiste estado después de cada ciclo
-- **Auto-resume:** Si bot estaba habilitado, intenta reanudar al reiniciar
-- **Retry logic:** Reconexión con backoff exponencial
+- **StateWAL:** Persists state after each cycle
+- **Auto-resume:** If the bot was enabled, it attempts to resume on restart
+- **Retry logic:** Reconnection with exponential backoff
 
 ---
 
-## 🚀 Decisiones de UX/UI
+## 🚀 UX/UI Decisions
 
-### Diseño Mobile-First (pero Desktop-Optimized)
+### Mobile-First Design (but Desktop-Optimized)
 
-- **Grid responsive:** Se adapta a 1280x800, 1920x1080, etc.
-- **Colores:**
-  - ✅ Verde = RUNNING/Ganancia
-  - ⏸️ Amarillo = PAUSED/Drawdown
-  - 🔴 Rojo = ERROR/Loss
-  - 🟡 Gris = SHUTDOWN
+- **Responsive grid:** Adapts to 1280x800, 1920x1080, etc.
+- **Colors:**
+  - ✅ Green = RUNNING/Profit
+  - ⏸️ Yellow = PAUSED/Drawdown
+  - 🔴 Red = ERROR/Loss
+  - 🟡 Grey = SHUTDOWN
   
 ### Real-time Updates (WebSocket)
 
-- **Frecuencia:** Cada 5 segundos (configurable)
+- **Frequency:** Every 5 seconds (configurable)
 - **Payload:** `{price, avg_price, P&L%, budget_remaining, status}`
-- **Auto-refresh:** Sin clicks, usuario ve actualización en vivo
+- **Auto-refresh:** No clicks needed, user sees live updates
 
-### Flujos de Interacción
+### Interaction Flows
 
 ```
-Create Bot → [Form] → Crear instancia → Bot status: IDLE
+Create Bot → [Form] → Create instance → Bot status: IDLE
             ↓
-         [Enable] → Ejecuta primera compra → ACCUMULATING
+         [Enable] → Execute first buy → ACCUMULATING
             ↓
-     [Monitorear] → Cada 5s actualiza P&L
+     [Monitor] → Every 5s updates P&L
             ↓
-    P&L >= target_profit% → Auto-vende todo → SHUTDOWN (época exitosa)
+    P&L >= target_profit% → Auto-sell all → SHUTDOWN (successful epoch)
 ```
 
 ---
 
-## 📊 Métricas Clave Monitoreadas
+## 📊 Key Metrics Monitored
 
-### Por Bot
+### Per Bot
 
-| Métrica | Descripción |
+| Metric | Description |
 |---------|-------------|
-| Current Price | Precio actual del símbolo |
-| Last Buy Price | Referencia para siguiente compra |
-| Avg Buy Price | VWAP de todas las compras |
-| Position Size | Total tokens acumulados |
-| Total Cost | USDT gastados en todas compras |
+| Current Price | Current symbol price |
+| Last Buy Price | Reference for next buy |
+| Avg Buy Price | VWAP of all purchases |
+| Position Size | Total accumulated tokens |
+| Total Cost | USDT spent on all purchases |
 | Current Value | `position_size * current_price` |
 | Unrealized P&L | `current_value - total_cost` |
 | Unrealized P&L % | `(current_value - total_cost) / total_cost * 100` |
-| Budget Used Today | USDT gastados hoy (se reinicia mañana) |
-| Budget Remaining | Límite diario - usado |
+| Budget Used Today | USDT spent today (resets tomorrow) |
+| Budget Remaining | Daily limit - used |
 
 ### Hub-Wide
 
-| Métrica | Descripción |
+| Metric | Description |
 |---------|-----------|
-| Total Bots Activos | Cantidad de Louise en ACCUMULATING |
-| Épocas Completadas | Total de ciclos exitosos históricos |
-| Portfolio Total | Suma de valores actuales de todas posiciones |
-| Ganancia Histórica | Suma de ganancias de todas épocas cerradas |
-| Win Rate | 100% (por diseño, siempre cierra a ganancia) |
-| Ganancia Promedio | Ganancia promedio por época |
+| Total Active Bots | Number of Louise bots in ACCUMULATING |
+| Completed Epochs | Total historical successful cycles |
+| Portfolio Total | Sum of current values of all positions |
+| Historical Profit | Sum of profits from all closed epochs |
+| Win Rate | 100% (by design, always closes at profit) |
+| Average Profit | Average profit per epoch |
 
 ---
 
-## 🛡️ Controles de Riesgo
+## 🛡️ Risk Controls
 
 ### Budget Guard
 
 ```
-Si daily_budget_usdt = $1,000:
-  ├─ Bot puede gastar máximo $1,000/día
-  ├─ Si alcanza límite → pausa (sin error)
-  ├─ Presupuesto se reinicia mañana 00:00 UTC
-  └─ Operador ve "Budget exhausted" en UI
+If daily_budget_usdt = $1,000:
+  ├─ Bot can spend maximum $1,000/day
+  ├─ If limit reached → pause (no error)
+  ├─ Budget resets tomorrow at 00:00 UTC
+  └─ Operator sees "Budget exhausted" in UI
 ```
 
 ### Weight Governor
 
 ```
-Si API weight zone → RED (>80% del límite diario):
-  ├─ Todos los bots entran en pausa automática
-  ├─ Esperan hasta que peso vuelva a YELLOW
-  ├─ Operador alertado en UI
-  └─ Previene rate-limits de Binance
+If API weight zone → RED (>80% of daily limit):
+  ├─ All bots enter automatic pause
+  ├─ Wait until weight returns to YELLOW
+  ├─ Operator alerted in UI
+  └─ Prevents Binance rate-limits
 ```
 
 ### Error Handling
 
 ```
-Network Error → Retry con backoff exponencial (3 intentos)
-Exchange Error → Log + Alert + Pausa bot (requiere intervención manual)
-Invalid Credentials → Critical alert + Pausa todos los bots
-Insufficient Balance → Pausa (sin error), esperando depósito
+Network Error → Retry with exponential backoff (3 attempts)
+Exchange Error → Log + Alert + Pause bot (requires manual intervention)
+Invalid Credentials → Critical alert + Pause all bots
+Insufficient Balance → Pause (no error), waiting for deposit
 ```
 
 ---
 
-## 📈 Caso de Uso Ejemplo
+## 📈 Example Use Case
 
-**Setup:** Louise en BTC, $100/compra, cada 5 min, 5% ganancia objetivo, $1000/día
+**Setup:** Louise on BTC, $100/buy, every 5 min, 5% profit target, $1000/day
 
 ```
-T0: Bot habilitado
-    └─ Primera compra: 0.0025 BTC a $40,000 → cost $100
+T0: Bot enabled
+    └─ First buy: 0.0025 BTC at $40,000 → cost $100
 
-T5min: Poll market → Precio $39,500 < $40,000 ✓
-    └─ Segunda compra: 0.00253 BTC a $39,500 → cost $100
+T5min: Poll market → Price $39,500 < $40,000 ✓
+    └─ Second buy: 0.00253 BTC at $39,500 → cost $100
        Pos: 0.00503 BTC, Cost: $200, Avg: $39,750
 
-T10min: Poll market → Precio $40,500 > $39,750 ✗
-    └─ No compra, solo espera
+T10min: Poll market → Price $40,500 > $39,750 ✗
+    └─ No buy, just wait
 
-T15min: Poll market → Precio $40,100 < $40,500 ✓
-    └─ Tercera compra: 0.00249 BTC a $40,100 → cost $100
+T15min: Poll market → Price $40,100 < $40,500 ✓
+    └─ Third buy: 0.00249 BTC at $40,100 → cost $100
        Pos: 0.00752 BTC, Cost: $300, Avg: $39,892
 
-T20min: Poll market → Precio $41,900 > $39,892 ✓
+T20min: Poll market → Price $41,900 > $39,892 ✓
     └─ P&L % = (0.00752 * $41,900 - $300) / $300 = +5.16% ✅
-    └─ TARGET PROFIT ALCANZADO
-    └─ Vende TODO: 0.00752 BTC a $41,900 = $314.87
-    └─ Ganancia: $314.87 - $300 = $14.87
-    └─ Época CERRADA (exitosa)
+    └─ TARGET PROFIT REACHED
+    └─ Sell ALL: 0.00752 BTC at $41,900 = $314.87
+    └─ Profit: $314.87 - $300 = $14.87
+    └─ Epoch CLOSED (successful)
     └─ Bot status: SHUTDOWN
-    └─ Época registrada en DB (histórico)
+    └─ Epoch recorded in DB (history)
 ```
 
 ---
 
-## 🎯 Checklist Antes de Comenzar Fase 1
+## 🎯 Checklist Before Starting Phase 1
 
-- [ ] **Subacuenta Binance:** Especificar cuál usaremos
-  - Nombre: ___________________
-  - API Key: ✓ Creada
-  - Límite diario: $_________/día
+- [ ] **Binance Subaccount:** Specify which one to use
+  - Name: ___________________
+  - API Key: ✓ Created
+  - Daily limit: $_________/day
   
-- [ ] **Símbolos iniciales:** ¿Cuáles Louise monitoreará primero?
+- [ ] **Initial symbols:** Which ones will Louise monitor first?
   - [ ] BTC/USDT
   - [ ] ETH/USDT
   - [ ] SOL/USDT
-  - [ ] Otros: __________________
+  - [ ] Others: __________________
 
-- [ ] **Parámetros default de Louise:**
-  - Buy volume: $_________/compra
-  - Poll interval: _________segundos
+- [ ] **Louise default parameters:**
+  - Buy volume: $_________/buy
+  - Poll interval: _________seconds
   - Target profit: _________%
-  - Daily budget: $_________/día
+  - Daily budget: $_________/day
 
-- [ ] **Preferencias UI:**
-  - [ ] Dark mode por defecto
-  - [ ] Alertas Telegram
-  - [ ] Alertas email
-  - [ ] Autosave de sesión
+- [ ] **UI preferences:**
+  - [ ] Dark mode by default
+  - [ ] Telegram alerts
+  - [ ] Email alerts
+  - [ ] Session autosave
 
 ---
 
-## 🚀 Próximo Paso Inmediato
+## 🚀 Immediate Next Step
 
-**Hacer commit y push del repositorio:**
+**Commit and push the repository:**
 
 ```bash
-git status  # Verificar cambios
-git log --oneline -5  # Ver commits
-git push origin claude/naughty-shaw-b40d27  # Push a rama actual
+git status  # Check changes
+git log --oneline -5  # View commits
+git push origin claude/naughty-shaw-b40d27  # Push to current branch
 ```
 
-**Luego:**
-1. Llenar checklist de subacuenta Binance
-2. Crear rama `feature/louise-backend`
-3. Comenzar Fase 1 (bot runner module)
+**Then:**
+1. Fill in the Binance subaccount checklist
+2. Create branch `feature/louise-backend`
+3. Start Phase 1 (bot runner module)
 
 ---
 
-## 📚 Documentos Clave para Referencia
+## 📚 Key Documents for Reference
 
-| Documento | Cuándo Leer |
+| Document | When to Read |
 |-----------|----------|
-| **CLAUDE.md** | Antes de empezar (workflow general) |
-| **BOT_SPECIFICATION.md** | Para entender lógica de Louise |
-| **UI_WIREFRAMES.md** | Para entender flujos de UI |
-| **IMPLEMENTATION_ROADMAP.md** | Para cronograma detallado |
-| **README.md** | Quick start de proyecto |
+| **CLAUDE.md** | Before starting (general workflow) |
+| **BOT_SPECIFICATION.md** | To understand Louise logic |
+| **UI_WIREFRAMES.md** | To understand UI flows |
+| **IMPLEMENTATION_ROADMAP.md** | For detailed schedule |
+| **README.md** | Project quick start |
 
 ---
 
-## 💬 Resumen en Una Frase
+## 💬 One-Line Summary
 
-**Louise es un hub de bots DCA downside-only que acumula progresivamente activos, cierra automáticamente a ganancia, y la UI Flutter monitorea múltiples instancias en tiempo real — listo para comenzar desarrollo en ~9 semanas.**
+**Louise is a downside-only DCA bot hub that progressively accumulates assets, automatically closes at profit, and the Flutter UI monitors multiple instances in real time — ready to start development in ~9 weeks.**
 
 ---
 
-**Estado:** ✅ Listo para Fase 1  
-**Decisión:** ¿Confirmamos subacuenta Binance y comenzamos?
+**Status:** ✅ Ready for Phase 1  
+**Decision:** Confirm Binance subaccount and start?

@@ -1,91 +1,91 @@
-# Task: Optimización de Rendimiento Earn/Loans
+# Task: Earn/Loans Yield Optimization
 
-## Objetivo
-Analizar tasas de rendimiento (earn) vs costos de deuda (loans) en tiempo real,
-detectar oportunidades de carry trade, identificar capital ocioso, y proponer
-movimientos para maximizar el yield neto del portfolio.
+## Objective
+Analyze yield rates (earn) vs debt costs (loans) in real time,
+detect carry trade opportunities, identify idle capital, and propose
+moves to maximize the portfolio's net yield.
 
-## Contexto del Proyecto
-- **Earn rates log:** `earn_rates_log.csv` — histórico de tasas de earn
-- **Earn rates último:** `earn_rates_last.txt` — snapshot más reciente
-- **Loan rates log:** `loan_rates_log.csv` — histórico de tasas de préstamo
-- **Loan rates último:** `loan_rates_last.txt` — snapshot más reciente
-- **Suscribir a earn:** `subscribe_to_earn.py` — tool para depositar en earn
-- **Redimir de earn:** `redeem_to_spot.py` — tool para sacar de earn a spot
+## Project Context
+- **Earn rates log:** `earn_rates_log.csv` — historical earn rates
+- **Earn rates latest:** `earn_rates_last.txt` — most recent snapshot
+- **Loan rates log:** `loan_rates_log.csv` — historical loan rates
+- **Loan rates latest:** `loan_rates_last.txt` — most recent snapshot
+- **Subscribe to earn:** `subscribe_to_earn.py` — tool to deposit into earn
+- **Redeem from earn:** `redeem_to_spot.py` — tool to move from earn to spot
 - **Portfolio:** `portfolio_table.py` → `portfolio_report.txt`
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Capturar Estado Actual
-Parsear `earn_rates_last.txt` y `loan_rates_last.txt`:
-- Extraer: producto, token, tasa actual (APY/APR), tipo (flexible/locked)
+### Step 1 — Capture Current State
+Parse `earn_rates_last.txt` and `loan_rates_last.txt`:
+- Extract: product, token, current rate (APY/APR), type (flexible/locked)
 
-### Paso 2 — Análisis de Tendencia
-Parsear `earn_rates_log.csv` (últimos 7 días mínimo):
-- Calcular tasa promedio 7d por producto
-- Calcular tendencia: ↑ subiendo / → estable / ↓ bajando
-- Detectar caídas > 30% respecto a la semana anterior
+### Step 2 — Trend Analysis
+Parse `earn_rates_log.csv` (at least last 7 days):
+- Calculate 7d average rate per product
+- Calculate trend: ↑ rising / → stable / ↓ falling
+- Detect drops > 30% vs the previous week
 
-Parsear `loan_rates_log.csv` (últimos 7 días mínimo):
-- Calcular costo promedio 7d por token prestado
-- Detectar incrementos sostenidos en costo de deuda
+Parse `loan_rates_log.csv` (at least last 7 days):
+- Calculate 7d average cost per borrowed token
+- Detect sustained increases in debt cost
 
-### Paso 3 — Detección de Oportunidades
+### Step 3 — Opportunity Detection
 
-#### A) Carry Trade Positivo
-Buscar tokens donde:
+#### A) Positive Carry Trade
+Look for tokens where:
 ```
 earn_rate[token] > loan_rate[token]
 ```
-Esto significa que puedes pedir prestado un token y simultáneamente
-ponerlo en earn, ganando el diferencial (spread positivo).
+This means you can borrow a token and simultaneously
+put it in earn, earning the differential (positive spread).
 
-#### B) Earn con Tasa Decreciente
-Tokens actualmente en earn cuya tasa ha caído > 30% en 7 días.
-→ Candidatos a `redeem_to_spot.py` y rotar a mejor producto.
+#### B) Earn with Declining Rate
+Tokens currently in earn whose rate has fallen > 30% in 7 days.
+→ Candidates for `redeem_to_spot.py` and rotation to a better product.
 
-#### C) Capital Ocioso
-Tokens en spot wallet que NO están en earn ni en posiciones activas.
-→ Candidatos a `subscribe_to_earn.py` si la tasa justifica.
+#### C) Idle Capital
+Tokens in spot wallet that are NOT in earn or active positions.
+→ Candidates for `subscribe_to_earn.py` if the rate justifies it.
 
-#### D) Deuda Cara
-Préstamos cuyo costo ha subido > 20% en 7 días sin que el earn
-correspondiente haya subido proporcionalmente.
-→ Evaluar cierre parcial del préstamo.
+#### D) Expensive Debt
+Loans whose cost has risen > 20% in 7 days without the corresponding
+earn rising proportionally.
+→ Evaluate partial loan closure.
 
-### Paso 4 — Cálculo de Impacto
-Para cada oportunidad detectada, calcular:
-- **Impacto estimado** — USD/día o USD/mes de rendimiento adicional
-- **Riesgo** — Volatilidad del token, riesgo de liquidación
-- **Esfuerzo** — ¿Requiere múltiples transacciones? ¿Hay lock period?
+### Step 4 — Impact Calculation
+For each detected opportunity, calculate:
+- **Estimated impact** — USD/day or USD/month of additional yield
+- **Risk** — Token volatility, liquidation risk
+- **Effort** — Does it require multiple transactions? Is there a lock period?
 
-### Paso 5 — Generar Tabla de Acciones
+### Step 5 — Generate Action Table
 
 ```
-## 💰 Oportunidades de Optimización — [FECHA]
+## 💰 Optimization Opportunities — [DATE]
 
-### Rendimientos Actuales
-| Token | Earn Rate | Tendencia 7d | En Portfolio | Estado |
-|-------|-----------|-------------|-------------|--------|
-| ...   | X.XX%     | ↑/→/↓       | Sí/No       | Earn/Spot/Loan |
+### Current Yields
+| Token | Earn Rate | 7d Trend | In Portfolio | Status |
+|-------|-----------|----------|-------------|--------|
+| ...   | X.XX%     | ↑/→/↓    | Yes/No      | Earn/Spot/Loan |
 
-### Costos de Deuda
-| Token | Loan Rate | Tendencia 7d | Monto | Health Factor |
-|-------|-----------|-------------|-------|---------------|
-| ...   | X.XX%     | ↑/→/↓       | $XXX  | X.XX          |
+### Debt Costs
+| Token | Loan Rate | 7d Trend | Amount | Health Factor |
+|-------|-----------|----------|--------|---------------|
+| ...   | X.XX%     | ↑/→/↓   | $XXX   | X.XX          |
 
-### Acciones Recomendadas (por impacto)
-| # | Acción | Token | Impacto Est. | Riesgo | Herramienta |
-|---|--------|-------|-------------|--------|-------------|
-| 1 | Suscribir a earn | XXX | +$X/día | Bajo | subscribe_to_earn.py |
-| 2 | Redimir y rotar  | YYY | +$X/día | Bajo | redeem_to_spot.py |
-| 3 | Carry trade      | ZZZ | +$X/día | Medio | Manual |
-| 4 | Cerrar préstamo  | AAA | -$X/día ahorro | Bajo | Manual |
+### Recommended Actions (by impact)
+| # | Action | Token | Est. Impact | Risk | Tool |
+|---|--------|-------|-------------|------|------|
+| 1 | Subscribe to earn | XXX | +$X/day | Low  | subscribe_to_earn.py |
+| 2 | Redeem and rotate  | YYY | +$X/day | Low  | redeem_to_spot.py |
+| 3 | Carry trade        | ZZZ | +$X/day | Med  | Manual |
+| 4 | Close loan         | AAA | -$X/day savings | Low | Manual |
 ```
 
-## Criterios de Éxito
-- [ ] Tasas de earn y loan parseadas correctamente
-- [ ] Tendencias de 7 días calculadas
-- [ ] Al menos 1 oportunidad identificada (o confirmación de que no hay)
-- [ ] Impacto estimado en USD para cada oportunidad
-- [ ] Tabla de acciones generada y priorizada
+## Success Criteria
+- [ ] Earn and loan rates parsed correctly
+- [ ] 7-day trends calculated
+- [ ] At least 1 opportunity identified (or confirmation there are none)
+- [ ] Estimated USD impact for each opportunity
+- [ ] Action table generated and prioritized

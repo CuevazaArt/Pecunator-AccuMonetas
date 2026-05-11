@@ -160,7 +160,7 @@ async def hub_bots_create(body: HubBotCreateBody) -> Any:
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe una instancia de Dorothy para el símbolo {body.symbol}. Elimínala primero.",
+            detail=f"A Dorothy instance already exists for symbol {body.symbol}. Delete it first.",
         )
 
     try:

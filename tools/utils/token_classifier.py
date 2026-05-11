@@ -3,8 +3,8 @@ import time
 from binance.client import Client
 import config
 
-# ─── CLASIFICACIÓN MANUAL POR CATEGORÍA ───────────────────────────────────────
-# Basado en conocimiento del mercado cripto
+# ─── MANUAL CLASSIFICATION BY CATEGORY ───────────────────────────────────────
+# Based on crypto market knowledge
 MEME_TOKENS = {
     "DOGE","SHIB","PEPE","FLOKI","BONK","WIF","MEME","NEIRO","DOGS",
     "1000CAT","HMSTR","PENGU","BABY","LUNC","BOME","CHEEMS","MOG",
@@ -62,28 +62,28 @@ def get_category(asset):
     if asset in LAYER1_TOKENS: return "L1/BlockChain"
     if asset in DEFI_TOKENS: return "DeFi"
     if asset in GAMING_NFT_TOKENS: return "Gaming/NFT"
-    if asset in INFRA_TOKENS: return "Infraestructura"
+    if asset in INFRA_TOKENS: return "Infrastructure"
     if asset in EXCHANGE_TOKENS: return "Exchange Token"
-    return "Alpha/Otro"
+    return "Alpha/Other"
 
 def get_recovery_score(asset, price, volume_24h, price_change_24h, market_cap_rank=None):
-    """Score de 0-10 basado en señales disponibles."""
+    """Score from 0-10 based on available signals."""
     score = 5  # base
 
-    # Volumen alto = más probabilidad de sobrevivir
+    # High volume = higher probability of survival
     if volume_24h > 10_000_000: score += 2
     elif volume_24h > 1_000_000: score += 1
     elif volume_24h < 100_000: score -= 2
     elif volume_24h < 10_000: score -= 3
 
-    # Si es L1 o L2 conocido, bonus
+    # If it's a known L1 or L2, bonus
     if asset in LAYER1_TOKENS or asset in LAYER2_TOKENS: score += 1
     if asset in DEFI_TOKENS or asset in INFRA_TOKENS: score += 1
 
-    # Memes: más volatiles, pueden explotar pero también morir
-    if asset in MEME_TOKENS: score += 0  # neutral, son especulativos
+    # Memes: more volatile, can explode but also die
+    if asset in MEME_TOKENS: score += 0  # neutral, speculative
 
-    # Precio: si es muy bajo puede ser señal de muerte
+    # Price: if very low it can be a death signal
     if price > 0 and price < 0.000001: score -= 3
 
     return max(0, min(10, score))
@@ -93,9 +93,9 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     client = Client(config.api_key, config.api_secret, requests_params={'timeout': 30})
-    sys.stderr.write("Cargando datos...\n")
+    sys.stderr.write("Loading data...\n")
 
-    # Datos del exchange (para detectar delistados)
+    # Exchange data (to detect delisted tokens)
     exchange_info = client.get_exchange_info()
     symbol_status = {}
     for s in exchange_info["symbols"]:
@@ -103,7 +103,7 @@ def main():
             asset = s["symbol"].replace("USDT", "")
             symbol_status[asset] = s["status"]  # TRADING, BREAK, END_OF_DAY, etc.
 
-    # Todos los tickers con volumen y precio
+    # All tickers with volume and price
     tickers_24h = client.get_ticker()
     ticker_map = {}
     for t in tickers_24h:
@@ -158,7 +158,7 @@ def main():
             page += 1
         except: break
 
-    sys.stderr.write(f"  {len(holdings)} activos en portfolio\n")
+    sys.stderr.write(f"  {len(holdings)} assets in portfolio\n")
 
     # ─── CLASIFICAR ───────────────────────────────────────────────────────────
     categories = {}
@@ -176,9 +176,9 @@ def main():
 
         value_usdt = qty * price
 
-        # Detectar delistados o sin par
+        # Detect delisted or missing pairs
         if status is None and price == 0:
-            no_pair.append({"asset": asset, "qty": qty, "reason": "Sin par USDT en Binance"})
+            no_pair.append({"asset": asset, "qty": qty, "reason": "No USDT pair on Binance"})
             continue
         if status and status != "TRADING":
             delisted.append({"asset": asset, "qty": qty, "price": price, "value": value_usdt, "status": status})
@@ -202,14 +202,14 @@ def main():
             categories[category] = []
         categories[category].append(entry)
 
-    # ─── IMPRIMIR REPORTE ─────────────────────────────────────────────────────
+    # ─── PRINT REPORT ─────────────────────────────────────────────────────────
     print("=" * 115)
-    print("  PECUNATOR — CLASIFICACIÓN DE PORTAFOLIO POR CATEGORÍA Y PROBABILIDAD DE RECUPERACIÓN")
+    print("  PECUNATOR — PORTFOLIO CLASSIFICATION BY CATEGORY AND RECOVERY PROBABILITY")
     print("=" * 115)
     print()
 
-    # Ordenar categorías por valor total descendente
-    cat_order = ["L1/BlockChain", "DeFi", "IA/AI", "RWA", "Infraestructura", "L2", "Gaming/NFT", "Exchange Token", "MEME", "Alpha/Otro"]
+    # Sort categories by total value descending
+    cat_order = ["L1/BlockChain", "DeFi", "IA/AI", "RWA", "Infrastructure", "L2", "Gaming/NFT", "Exchange Token", "MEME", "Alpha/Other"]
 
     total_portfolio = 0
 
@@ -217,45 +217,45 @@ def main():
         tokens = categories.get(cat, [])
         if not tokens: continue
 
-        # Ordenar por score desc, luego por valor desc
+        # Sort by score desc, then by value desc
         tokens.sort(key=lambda x: (x["score"], x["value_usdt"]), reverse=True)
         cat_value = sum(t["value_usdt"] for t in tokens)
         total_portfolio += cat_value
 
-        # Etiqueta de categoría
+        # Category label
         cat_icons = {
             "L1/BlockChain": "⛓️  L1 / BLOCKCHAIN",
             "DeFi": "💱 DeFi",
-            "IA/AI": "🤖 Inteligencia Artificial",
+            "IA/AI": "🤖 Artificial Intelligence",
             "RWA": "🏦 Real World Assets",
-            "Infraestructura": "🔧 Infraestructura Web3",
+            "Infrastructure": "🔧 Web3 Infrastructure",
             "L2": "⚡ Layer 2",
             "Gaming/NFT": "🎮 Gaming / NFT",
             "Exchange Token": "🏛️  Exchange Tokens",
             "MEME": "🐸 MEME Coins",
-            "Alpha/Otro": "🔮 Alpha / Proyectos Nuevos",
+            "Alpha/Other": "🔮 Alpha / New Projects",
         }
 
         print(f"\n{'─'*115}")
-        print(f"  {cat_icons.get(cat, cat)}   |   {len(tokens)} tokens   |   Valor total: ${cat_value:,.2f} USDT")
+        print(f"  {cat_icons.get(cat, cat)}   |   {len(tokens)} tokens   |   Total value: ${cat_value:,.2f} USDT")
         print(f"{'─'*115}")
-        print(f"  {'SCORE':>5}  {'Asset':<10} {'Cantidad':>14} {'Precio':>12} {'Val.USD':>10} {'Vol.24h':>14} {'Δ24h':>8}  Análisis")
+        print(f"  {'SCORE':>5}  {'Asset':<10} {'Quantity':>14} {'Price':>12} {'Val.USD':>10} {'Vol.24h':>14} {'Δ24h':>8}  Analysis")
         print(f"  {'─'*5}  {'─'*10} {'─'*14} {'─'*12} {'─'*10} {'─'*14} {'─'*8}  {'─'*30}")
 
         for t in tokens:
             score = t["score"]
             if score >= 8:
                 score_icon = f"🟢 {score}/10"
-                analysis = "Alta prob. de pump en bull run"
+                analysis = "High prob. of pump in bull run"
             elif score >= 6:
                 score_icon = f"🟡 {score}/10"
-                analysis = "Posibilidad moderada de subida"
+                analysis = "Moderate chance of rise"
             elif score >= 4:
                 score_icon = f"🟠 {score}/10"
-                analysis = "Incierto, bajo volumen"
+                analysis = "Uncertain, low volume"
             else:
                 score_icon = f"🔴 {score}/10"
-                analysis = "Riesgo alto / posible muerte"
+                analysis = "High risk / possible death"
 
             price = t["price"]
             if price < 0.0001:
@@ -279,33 +279,33 @@ def main():
 
             print(f"  {score_icon}  {t['asset']:<10} {qty_str:>14} {price_str:>12} ${t['value_usdt']:>9.2f} {vol_str:>14} {chg_str:>8}  {analysis}")
 
-    # ─── SIN PAR USDT (posibles delistados o tokens exóticos) ─────────────────
+    # ─── NO USDT PAIR (possibly delisted or exotic tokens) ─────────────────────
     if no_pair:
         print(f"\n{'─'*115}")
-        print(f"  ❓ SIN PAR USDT EN BINANCE   |   {len(no_pair)} tokens   |   Posibles delistados o tokens solo en DEX")
+        print(f"  ❓ NO USDT PAIR ON BINANCE   |   {len(no_pair)} tokens   |   Possibly delisted or DEX-only tokens")
         print(f"{'─'*115}")
-        print(f"  {'Asset':<12} {'Cantidad':>16}  Acción recomendada")
+        print(f"  {'Asset':<12} {'Quantity':>16}  Recommended action")
         print(f"  {'─'*12} {'─'*16}  {'─'*50}")
         for t in no_pair:
             qty_str = f"{t['qty']:.4f}" if t["qty"] < 10000 else f"{t['qty']:.1f}"
-            print(f"  {t['asset']:<12} {qty_str:>16}  ⚠️  Buscar en DEX (Uniswap/PancakeSwap) o retiro a wallet propia")
+            print(f"  {t['asset']:<12} {qty_str:>16}  ⚠️  Search on DEX (Uniswap/PancakeSwap) or withdraw to own wallet")
 
-    # ─── DELISTADOS CON STATUS CONOCIDO ───────────────────────────────────────
+    # ─── DELISTED WITH KNOWN STATUS ───────────────────────────────────────────
     if delisted:
         print(f"\n{'─'*115}")
-        print(f"  🚫 DELISTADOS / SUSPENDIDOS EN BINANCE   |   {len(delisted)} tokens")
+        print(f"  🚫 DELISTED / SUSPENDED ON BINANCE   |   {len(delisted)} tokens")
         print(f"{'─'*115}")
-        print(f"  {'Asset':<12} {'Cantidad':>16} {'Precio':>12} {'Valor':>10} {'Status':>15}  Acción")
+        print(f"  {'Asset':<12} {'Quantity':>16} {'Price':>12} {'Value':>10} {'Status':>15}  Action")
         print(f"  {'─'*12} {'─'*16} {'─'*12} {'─'*10} {'─'*15}  {'─'*40}")
         for t in delisted:
             qty_str = f"{t['qty']:.4f}" if t["qty"] < 10000 else f"{t['qty']:.1f}"
             price_str = f"${t['price']:.6f}" if t["price"] > 0 else "N/D"
-            action = "Retirar a wallet + vender en DEX" if t["price"] > 0 else "Verificar si aún existe el proyecto"
+            action = "Withdraw to wallet + sell on DEX" if t["price"] > 0 else "Verify if the project still exists"
             print(f"  {t['asset']:<12} {qty_str:>16} {price_str:>12} ${t['value']:>9.4f} {t['status']:>15}  {action}")
 
-    # ─── RESUMEN FINAL ─────────────────────────────────────────────────────────
+    # ─── FINAL SUMMARY ─────────────────────────────────────────────────────────
     print(f"\n{'='*115}")
-    print(f"  RESUMEN GLOBAL")
+    print(f"  GLOBAL SUMMARY")
     print(f"{'='*115}")
 
     all_tokens = []
@@ -317,13 +317,13 @@ def main():
     low_prob = [t for t in all_tokens if 4 <= t["score"] < 6]
     risky = [t for t in all_tokens if t["score"] < 4]
 
-    print(f"  🟢 Alta probabilidad (score 8-10): {len(high_prob):>3} tokens | ${sum(t['value_usdt'] for t in high_prob):>8,.2f} USDT")
-    print(f"  🟡 Probabilidad moderada (6-7):    {len(med_prob):>3} tokens | ${sum(t['value_usdt'] for t in med_prob):>8,.2f} USDT")
-    print(f"  🟠 Incierto (4-5):                 {len(low_prob):>3} tokens | ${sum(t['value_usdt'] for t in low_prob):>8,.2f} USDT")
-    print(f"  🔴 Alto riesgo / posible muerte:   {len(risky):>3} tokens | ${sum(t['value_usdt'] for t in risky):>8,.2f} USDT")
-    print(f"  ❓ Sin par USDT (DEX/delistados):  {len(no_pair)+len(delisted):>3} tokens")
+    print(f"  🟢 High probability (score 8-10): {len(high_prob):>3} tokens | ${sum(t['value_usdt'] for t in high_prob):>8,.2f} USDT")
+    print(f"  🟡 Moderate probability (6-7):    {len(med_prob):>3} tokens | ${sum(t['value_usdt'] for t in med_prob):>8,.2f} USDT")
+    print(f"  🟠 Uncertain (4-5):                 {len(low_prob):>3} tokens | ${sum(t['value_usdt'] for t in low_prob):>8,.2f} USDT")
+    print(f"  🔴 High risk / possible death:   {len(risky):>3} tokens | ${sum(t['value_usdt'] for t in risky):>8,.2f} USDT")
+    print(f"  ❓ No USDT pair (DEX/delisted):  {len(no_pair)+len(delisted):>3} tokens")
     print(f"  {'─'*60}")
-    print(f"  💰 Valor total clasificado:                  ${total_portfolio:>8,.2f} USDT")
+    print(f"  💰 Total classified value:                  ${total_portfolio:>8,.2f} USDT")
     print(f"{'='*115}")
 
 if __name__ == "__main__":

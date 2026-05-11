@@ -91,7 +91,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         weightPerMinute: snap.usedWeight,
         weightLimit: snap.weightLimit,
         weightZone: snap.weightPct < 0.5 ? 'GREEN' : snap.weightPct < 0.8 ? 'YELLOW' : 'RED',
-        statusMessage: '${(snap.weightPct * 100).toStringAsFixed(1)}% del límite usado.',
+        statusMessage: '${(snap.weightPct * 100).toStringAsFixed(1)}% of limit used.',
       );
     });
   }
@@ -188,19 +188,19 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Crear Bot Louise'),
+        title: const Text('Create Louise Bot'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: symbolCtrl, decoration: const InputDecoration(labelText: 'Símbolo (ej. ETH/USDT)')),
+            TextField(controller: symbolCtrl, decoration: const InputDecoration(labelText: 'Symbol (e.g. ETH/USDT)')),
             const SizedBox(height: 12),
-            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT')),
+            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Daily budget USDT')),
             const SizedBox(height: 12),
-            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% per cycle')),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               final sym = symbolCtrl.text.trim().toUpperCase();
@@ -209,7 +209,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
               Navigator.pop(ctx);
               _createBot(sym, budget, target);
             },
-            child: const Text('Crear'),
+            child: const Text('Create'),
           ),
         ],
       ),
@@ -222,17 +222,17 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Editar ${bot.symbol}'),
+        title: Text('Edit ${bot.symbol}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT')),
+            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Daily budget USDT')),
             const SizedBox(height: 12),
-            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% per cycle')),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               final budget = double.tryParse(budgetCtrl.text) ?? bot.dailyBudget;
@@ -240,7 +240,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
               Navigator.pop(ctx);
               _editBot(bot.id, budget, target);
             },
-            child: const Text('Guardar'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -251,14 +251,14 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar Bot'),
-        content: Text('¿Eliminar ${bot.symbol} (${bot.id})?\nEsta acción no se puede deshacer.'),
+        title: const Text('Delete Bot'),
+        content: Text('Delete ${bot.symbol} (${bot.id})?\nThis action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () { Navigator.pop(ctx); _deleteBot(bot.id); },
-            child: const Text('Eliminar'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -558,13 +558,13 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             // Pause / Resume
             _iconBtn(
               icon: isRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
-              tooltip: isRunning ? 'Pausar bot' : 'Reanudar bot',
+              tooltip: isRunning ? 'Pause bot' : 'Resume bot',
               color: isRunning ? Colors.orangeAccent : Colors.greenAccent,
               onTap: () => isRunning ? _pauseBot(bot.id) : _resumeBot(bot.id),
             ),
-            _iconBtn(icon: Icons.edit_outlined, tooltip: 'Editar configuración',
+            _iconBtn(icon: Icons.edit_outlined, tooltip: 'Edit configuration',
                 color: Colors.white70, onTap: () => _showEditDialog(bot)),
-            _iconBtn(icon: Icons.delete_outline, tooltip: 'Eliminar bot',
+            _iconBtn(icon: Icons.delete_outline, tooltip: 'Delete bot',
                 color: Colors.redAccent.withAlpha(200), onTap: () => _showDeleteDialog(bot)),
           ]),
         ),
@@ -572,10 +572,10 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           child: Row(children: [
-            _metricCell('Precio', '\$${bot.currentPrice.toStringAsFixed(2)}'),
-            _metricCell('Posición', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
-            _metricCell('Libre', '\$${bot.freeBalance.toStringAsFixed(2)}'),
-            _metricCell('Presupuesto', '\$${bot.dailyBudget.toStringAsFixed(0)}/día'),
+            _metricCell('Price', '\$${bot.currentPrice.toStringAsFixed(2)}'),
+            _metricCell('Position', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
+            _metricCell('Free', '\$${bot.freeBalance.toStringAsFixed(2)}'),
+            _metricCell('Budget', '\$${bot.dailyBudget.toStringAsFixed(0)}/day'),
             _metricCell('Trades', '${bot.tradesToday}'),
             _metricCell('PNL \$', (bot.unrealizedPnl >= 0 ? '+' : '') + '\$${bot.unrealizedPnl.toStringAsFixed(2)}',
                 color: pnlColor),
@@ -586,7 +586,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Progreso ciclo: ${bot.progressPercent.toStringAsFixed(1)}%',
+              Text('Cycle progress: ${bot.progressPercent.toStringAsFixed(1)}%',
                   style: const TextStyle(fontSize: 9, color: Colors.white54)),
               Text('Target: ${bot.targetProfitPct.toStringAsFixed(1)}%',
                   style: const TextStyle(fontSize: 9, color: Colors.white54)),

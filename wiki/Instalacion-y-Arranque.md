@@ -102,7 +102,7 @@ Install [Flutter SDK for Windows](https://docs.flutter.dev/get-started/install/w
 ### 3.2 Initialize Flutter Desktop
 
 ```powershell
-# Desde la raíz del repo
+# From the repo root
 powershell -ExecutionPolicy Bypass -File scripts/ui/init_flutter_desktop.ps1
 ```
 
@@ -125,7 +125,7 @@ scripts/ui/run_dashboard.cmd
 ### 3.4 Create desktop shortcut
 
 ```powershell
-# Crea PecunatorCore.lnk en el escritorio (motor + app)
+# Creates PecunatorCore.lnk on the desktop (engine + app)
 powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1
 ```
 
@@ -136,7 +136,7 @@ The launcher is located in `scripts/ui/PecunatorDesktopLauncher.ps1`.
 ```bash
 cd desktop_shell
 flutter build windows
-# Ejecutable: desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe
+# Executable: desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe
 ```
 
 ### 3.6 Clear cache and recompile
@@ -147,7 +147,7 @@ flutter build windows
 cd desktop_shell
 flutter clean
 flutter pub get
-flutter build windows     # o flutter run -d windows
+flutter build windows     # or flutter run -d windows
 ```
 
 **Hub data in SQLite:** `runtime/data/dorothy_hub.sqlite`  

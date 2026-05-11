@@ -65,11 +65,11 @@ $env:PECUNATOR_BINANCE_API_SECRET = "tu_api_secret"
 > ⛔ If there is **suspicion of compromise**, revoke **IMMEDIATELY** from the Binance website **BEFORE** any technical diagnosis.
 
 ```
-1. Ir a: https://www.binance.com/en/my/settings/api-management
-2. Revocar la key comprometida
-3. SOLO ENTONCES diagnosticar qué pasó
-4. Crear nueva key con permisos mínimos
-5. Actualizar el vault
+1. Go to: https://www.binance.com/en/my/settings/api-management
+2. Revoke the compromised key
+3. ONLY THEN diagnose what happened
+4. Create a new key with minimum permissions
+5. Update the vault
 ```
 
 ---

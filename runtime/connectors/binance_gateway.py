@@ -630,7 +630,7 @@ class BinanceGateway:
             if fuse.is_tripped():
                 remaining = fuse.remaining_cooldown_sec()
                 self._emit_log(
-                    f"🚨 API FUSE ACTIVO: REST bloqueado por {remaining:.0f}s más"
+                    f"🚨 API FUSE ACTIVE: REST blocked for {remaining:.0f}s more"
                 )
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=min(30.0, remaining))

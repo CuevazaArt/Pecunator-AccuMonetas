@@ -134,11 +134,11 @@ async def get_weight_status() -> dict[str, Any]:
         weight = 1050  # fallback demo value
     pct = round(weight / limit * 100, 1)
     if pct < 50:
-        zone, msg = "GREEN", f"API weight normal. {pct}% del límite usado."
+        zone, msg = "GREEN", f"API weight normal. {pct}% of limit used."
     elif pct < 80:
-        zone, msg = "YELLOW", f"API weight elevado. {pct}% del límite usado."
+        zone, msg = "YELLOW", f"API weight elevated. {pct}% of limit used."
     else:
-        zone, msg = "RED", f"API weight crítico. {pct}% del límite usado."
+        zone, msg = "RED", f"API weight critical. {pct}% of limit used."
     return {
         "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
         "current_weight": weight,

@@ -128,7 +128,7 @@ class UnifiedHubPageState extends State<UnifiedHubPage> {
       forcePoll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Símbolo desplegado simétricamente con éxito'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Symbol deployed symmetrically with success'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
