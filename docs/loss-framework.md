@@ -1,116 +1,116 @@
-# Marco de Pérdidas y Promoción de Bots
+# Loss and Bot Promotion Framework
 
-> Filosofía operativa: cuándo una pérdida es justa, cuándo es injusta,
-> y cómo un bot pasa de idea a producción con capital real.
-> Fecha: 2026-05-05
+> Operational philosophy: when a loss is fair, when it is unfair,
+> and how a bot moves from idea to production with real capital.
+> Date: 2026-05-05
 
 ---
 
-## 1. Definición de Pérdida Justa
+## 1. Definition of a Fair Loss
 
-> Una pérdida es **justa** cuando es el resultado de seguir un sistema
-> con esperanza matemática positiva, dentro de los parámetros definidos,
-> en un entorno compatible con la estrategia.
+> A loss is **fair** when it is the result of following a system
+> with positive mathematical expectation, within defined parameters,
+> in an environment compatible with the strategy.
 >
-> Todo lo demás es ruido, error, o mala arquitectura.
+> Everything else is noise, error, or poor architecture.
 
-### Pérdidas JUSTAS (aceptables)
+### FAIR Losses (acceptable)
 
-- Dentro del drawdown máximo permitido del bot.
-- Stop-loss ejecutado correctamente.
-- Ocurre en un entorno donde la estrategia estadísticamente pierde
-  (Dorothy en tendencia fuerte, Masha en lateral).
-- No rompe la esperanza matemática del sistema.
-- Es el costo de participar en un sistema incierto.
+- Within the bot's maximum allowed drawdown.
+- Stop-loss executed correctly.
+- Occurs in an environment where the strategy statistically loses
+  (Dorothy in a strong trend, Masha in sideways).
+- Does not break the mathematical expectation of the system.
+- It is the cost of participating in an uncertain system.
 
-### Pérdidas INJUSTAS (errores del sistema)
+### UNFAIR Losses (system errors)
 
-- Sin stop-loss definido.
-- Bot operando fuera de su entorno ideal.
-- Capital insuficiente para la estrategia.
-- Parámetros incorrectos o no validados.
-- Operando con loans o apalancamiento no autorizado.
-- Operando en sector muerto sin señales macro.
-- Operando sin segmentación de subcuentas.
-- Error de código o configuración.
+- No stop-loss defined.
+- Bot operating outside its ideal environment.
+- Insufficient capital for the strategy.
+- Incorrect or unvalidated parameters.
+- Operating with unauthorized loans or leverage.
+- Operating in a dead sector with no macro signals.
+- Operating without sub-account segmentation.
+- Code or configuration error.
 
-### Principio operativo
+### Operational principle
 
-**El objetivo no es evitar pérdidas. Es evitar pérdidas injustas.**
-
----
-
-## 2. Límites por Subcuenta
-
-| Subcuenta | Max Drawdown | Stop Loss por Trade | Capital Máximo |
-|-----------|-------------|---------------------|----------------|
-| SUB-01 (CORE_L1_DCA) | 15% | N/A (DCA, no aplica) | 40% del total |
-| SUB-02 (SCALP_RANGE) | 20% | Definido por Dorothy | 25% del total |
-| SUB-03 (MULTI_ASSET) | 20% | Por activo individual | 25% del total |
-| SUB-04 (SECTOR_BETA) | 25% | Por sector | 15% del total |
-| SUB-05 (SANDBOX) | 50% (aceptado) | Libre | 5% del total |
-
-> **Nota:** Estos son **topes máximos**, no asignaciones fijas. La suma
-> intencionalmente excede 100% porque MASTER actúa como reserva flotante
-> que absorbe la diferencia. En cualquier momento:
-> `capital_subcuentas + capital_MASTER = 100%`.
+**The goal is not to avoid losses. It is to avoid unfair losses.**
 
 ---
 
-## 3. Pipeline de Promoción de Bots
+## 2. Limits per Sub-account
 
-Ningún bot toca capital real sin pasar por las tres etapas:
+| Sub-account | Max Drawdown | Stop Loss per Trade | Maximum Capital |
+|-------------|-------------|---------------------|-----------------|
+| SUB-01 (CORE_L1_DCA) | 15% | N/A (DCA, does not apply) | 40% of total |
+| SUB-02 (SCALP_RANGE) | 20% | Defined by Dorothy | 25% of total |
+| SUB-03 (MULTI_ASSET) | 20% | Per individual asset | 25% of total |
+| SUB-04 (SECTOR_BETA) | 25% | Per sector | 15% of total |
+| SUB-05 (SANDBOX) | 50% (accepted) | Free | 5% of total |
 
-### Etapa A — Backtest Histórico
+> **Note:** These are **maximum caps**, not fixed allocations. The sum
+> intentionally exceeds 100% because MASTER acts as a floating reserve
+> that absorbs the difference. At any time:
+> `subaccount_capital + MASTER_capital = 100%`.
 
-| Requisito | Criterio mínimo |
-|-----------|----------------|
-| Período | ≥ 6 meses de datos |
-| Trades | ≥ 100 trades simulados |
+---
+
+## 3. Bot Promotion Pipeline
+
+No bot touches real capital without passing through all three stages:
+
+### Stage A — Historical Backtest
+
+| Requirement | Minimum criterion |
+|-------------|-------------------|
+| Period | >= 6 months of data |
+| Trades | >= 100 simulated trades |
 | Win rate | > 40% |
 | Sharpe | > 0.5 |
-| Max drawdown | < umbral de su subcuenta |
-| Resultado | Documentado en `docs/bots/{bot}/backtest_report.md` |
+| Max drawdown | < sub-account threshold |
+| Result | Documented in `docs/bots/{bot}/backtest_report.md` |
 
-### Etapa B — Paper Trading en Vivo
+### Stage B — Live Paper Trading
 
-| Requisito | Criterio mínimo |
-|-----------|----------------|
-| Período | ≥ 2 semanas |
-| Ejecución | Bot real contra datos reales, sin capital |
-| Validación | Comparar resultados paper vs backtest |
-| Desviación aceptable | ≤ 20% de discrepancia |
-| Resultado | Log en `runtime/data/{bot}_paper_log.sqlite` |
+| Requirement | Minimum criterion |
+|-------------|-------------------|
+| Period | >= 2 weeks |
+| Execution | Real bot against real data, no capital |
+| Validation | Compare paper results vs backtest |
+| Acceptable deviation | <= 20% discrepancy |
+| Result | Log in `runtime/data/{bot}_paper_log.sqlite` |
 
-### Etapa C — Producción con Capital Real
+### Stage C — Production with Real Capital
 
-| Requisito | Criterio mínimo |
-|-----------|----------------|
-| Capital inicial | Mínimo viable (ej. $50-100 USDT) |
-| Subcuenta | Asignada y aislada |
-| Drawdown guard | Configurado y activo |
-| Monitoreo | Primer mes con revisión semanal |
-| Escalado | Solo después de 1 mes con PnL positivo |
+| Requirement | Minimum criterion |
+|-------------|-------------------|
+| Initial capital | Minimum viable (e.g. $50-100 USDT) |
+| Sub-account | Assigned and isolated |
+| Drawdown guard | Configured and active |
+| Monitoring | First month with weekly review |
+| Scaling | Only after 1 month with positive PnL |
 
-### Flujo visual
+### Visual flow
 
 ```
-IDEA → Backtest (≥6 meses) → Paper Trading (≥2 sem) → Producción (capital mínimo)
-                                                              ↓
-                                                     1 mes PnL+ → Escalar capital
-                                                     3 meses PnL- → Revisión/Apagado
+IDEA -> Backtest (>=6 months) -> Paper Trading (>=2 weeks) -> Production (minimum capital)
+                                                                    |
+                                                           1 month PnL+ -> Scale capital
+                                                           3 months PnL- -> Review/Shutdown
 ```
 
 ---
 
-## 4. Protocolo de Apagado por Pérdida Injusta
+## 4. Shutdown Protocol for Unfair Losses
 
-Si se detecta una pérdida injusta:
+If an unfair loss is detected:
 
-1. **Detener** el bot inmediatamente (vía BotCoordinator o PANIC.lock).
-2. **Registrar** el evento en `runtime/data/incident_log.csv`.
-3. **Diagnosticar** la causa raíz.
-4. **Corregir** el parámetro, código, o configuración.
-5. **Regresar** al bot a Etapa B (paper trading) antes de reactivar.
+1. **Stop** the bot immediately (via BotCoordinator or PANIC.lock).
+2. **Record** the event in `runtime/data/incident_log.csv`.
+3. **Diagnose** the root cause.
+4. **Fix** the parameter, code, or configuration.
+5. **Return** the bot to Stage B (paper trading) before reactivating.
 
-Nunca reactivar un bot después de una pérdida injusta sin corrección.
+Never reactivate a bot after an unfair loss without a fix.

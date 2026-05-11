@@ -104,17 +104,17 @@ SELECT * FROM dorothy_instances;
 ## Life cycle of an instance
 
 ```
-Crear instancia (POST /api/v1/hub/bots)
+Create instance (POST /api/v1/hub/bots)
        ↓
-Configurar parámetros (symbol, qty, profit_factor, riesgo)
+Configure parameters (symbol, qty, profit_factor, risk)
        ↓
-[Opcional] Arrancar en modo simulated=true para calibrar
+[Optional] Start in simulated=true mode to calibrate
        ↓
-Validar estabilidad de drawdown y métricas
+Validate drawdown stability and metrics
        ↓
-Activar trading_enabled=true + simulated=false
+Enable trading_enabled=true + simulated=false
        ↓
-Monitor continuo desde Dorothy Hub en la UI
+Continuous monitoring from Dorothy Hub in the UI
 ```
 
 ---
