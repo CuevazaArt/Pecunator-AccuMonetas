@@ -1,9 +1,14 @@
-# PecunatorCore
+# Pecunator-AccuMonetas
 
-PecunatorCore is a modular autonomous trading runtime with a local Python engine (FastAPI) and a dedicated Flutter desktop UI.
-This repository is **desktop-first**: the Flutter shell connects to the local engine over HTTP.
+**A specialized autonomous trading bot built on PecunatorCore infrastructure.**
 
-**Symmetric Hub Architecture:** Dorothy (bullish DCA spot) + Elphaba (bearish margin short) operate as a paired hedge on the same symbols.
+Pecunator-AccuMonetas is a dedicated bot hub featuring a modular Python engine (FastAPI) and customized Flutter desktop UI. This repository is **desktop-first**: the Flutter shell connects to the local engine over HTTP, inheriting the proven architecture from PecunatorCore (v3.7.5 stable).
+
+**Key Features:**
+- Specialized trading bot strategy (AccuMonetas — *in development*)
+- Full infrastructure: REST API, WebSocket, metrics, telemetry, DB persistence
+- Risk control modules: rate-limiting, budget guards, auto-recovery
+- Production-hardened: tests, monitoring, explicit deployment policy
 
 ## Directiva de trabajo
 
