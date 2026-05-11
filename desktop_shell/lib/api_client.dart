@@ -371,10 +371,11 @@ class EngineApi {
 
   Future<List<Map<String, dynamic>>> louiseBots() async {
     final resp = await _client.get('/api/louise/bots');
-    if (resp is List) {
-      return (resp as List<dynamic>).cast<Map<String, dynamic>>();
-    }
-    return ((resp['bots'] as List<dynamic>?) ?? []).cast<Map<String, dynamic>>();
+    // _parseResponse wraps JSON arrays as {'items': [...]}
+    final raw = resp['items'] as List<dynamic>?
+        ?? resp['bots'] as List<dynamic>?
+        ?? [];
+    return raw.cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> louiseMetrics() =>
@@ -385,10 +386,10 @@ class EngineApi {
 
   Future<List<Map<String, dynamic>>> louiseWeightHistory() async {
     final resp = await _client.get('/api/louise/weight-governor/history');
-    if (resp is List) {
-      return (resp as List<dynamic>).cast<Map<String, dynamic>>();
-    }
-    return ((resp['history'] as List<dynamic>?) ?? []).cast<Map<String, dynamic>>();
+    final raw = resp['items'] as List<dynamic>?
+        ?? resp['history'] as List<dynamic>?
+        ?? [];
+    return raw.cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> louiseRequestsStats() =>
