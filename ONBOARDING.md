@@ -8,23 +8,23 @@
 
 ## ✅ Pre-Development Checklist
 
-Before starting Phase 1 (Structure & Setup), define the following:
+**Bot Definition: COMPLETE** ✅
 
-### 1. Trading Bot Strategy
+### 1. Trading Bot Strategy — LOUISE
 
-- [ ] **Bot Name:** What will this bot be called?
-- [ ] **Trading Logic:** What is the core strategy? Examples:
-  - DCA (Dollar Cost Averaging) — regular buy intervals
-  - Grid Trading — automated buy/sell grid on a range
-  - Momentum Trading — trend-following with signal gates
-  - Yield Optimization — optimal order routing + fee minimization
-  - Custom Hybrid — combination of above
-- [ ] **Time Horizon:** Scalping (minutes), day trading, swing (days), long-term (weeks+)?
-- [ ] **Asset Classes:** Spot only? Margin? Derivatives?
-- [ ] **Entry/Exit Signals:**
-  - Manual (operator decision) ?
-  - Automatic (algorithm triggers)?
-  - Hybrid (algorithm suggests, operator approves)?
+- [x] **Bot Name:** Louise
+- [x] **Trading Logic:** DCA (Dollar Cost Averaging) — Downside-Only Averaging
+  - No technical indicators
+  - No stop-loss
+  - Market-driven: poll every N seconds, buy if price < last buy price
+  - Target exit: close position at X% profit vs. cost basis
+  - Hub supports multiple Louise instances (one per symbol)
+- [x] **Time Horizon:** Medium-term (days to weeks per epoch/cycle)
+- [x] **Asset Classes:** Spot only (no margin, no leverage)
+- [x] **Entry/Exit Signals:**
+  - **Entry (automatic):** Price < last buy price → market buy
+  - **First entry:** On bot start, execute first buy immediately
+  - **Exit (automatic):** Unrealized P&L >= target profit % → market sell all, close epoch
 
 ### 2. Binance Subaccount
 
