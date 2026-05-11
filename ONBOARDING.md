@@ -28,15 +28,20 @@
 
 ### 2. Binance Subaccount
 
-- [ ] **Subaccount Name:** Which subaccount will this bot use?
-- [ ] **API Keys Created?** (need API Key + Secret)
-- [ ] **Daily Spend Limit:** What's the max USDT per day budget?
-- [ ] **IP Whitelist:** Is 127.0.0.1 / localhost whitelisted?
-- [ ] **Permissions:**
-  - [ ] Read: Account, Orders, Trades
-  - [ ] Write: Orders, Cancel Orders
-  - [ ] Is margin enabled? (if needed)
-- [ ] **Sub-account restrictions:** (futures, spot, testnet?)
+- [x] **Subaccount Name:** bluechip ✅ CONFIRMED
+- [x] **API Keys:** Available (to be loaded from secure vault)
+- [x] **Daily Spend Limit:** $3,000/day total hub budget ✅ CONFIRMED
+  - louise_btc_001: $1,000/day
+  - louise_eth_001: $800/day
+  - louise_sol_001: $500/day
+  - louise_ada_001: $400/day (future)
+  - louise_bnb_001: $300/day (future)
+- [ ] **IP Whitelist:** 127.0.0.1 verified
+- [x] **Permissions:** ✅ CONFIRMED
+  - [x] Read: Account, Orders, Trades
+  - [x] Write: Orders, Cancel Orders
+  - [ ] Margin: Not needed (spot only)
+- [x] **Type:** Spot trading (no derivatives)
 
 ### 3. UI Requirements
 
