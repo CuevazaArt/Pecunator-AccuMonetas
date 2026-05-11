@@ -23,7 +23,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   Timer? _timer;
   Timer? _clockTimer;
   StreamSubscription<TelemetrySnapshot>? _telemetrySub;
-  final GlobalKey<_LouiseHubPageState> _hubKey = GlobalKey<_LouiseHubPageState>();
+  final GlobalKey<State<LouiseHubPage>> _hubKey = GlobalKey<State<LouiseHubPage>>();
 
   // AppBar state
   bool _loading = false;
@@ -88,7 +88,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   }
 
   Future<void> _fetchState() async {
-    _hubKey.currentState?._loadData();
+    // Louise page refreshes automatically every 5 seconds
     try {
       final snap = await _api.louiseHealth();
       if (!mounted) return;
