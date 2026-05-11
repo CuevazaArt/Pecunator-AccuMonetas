@@ -401,4 +401,34 @@ class EngineApi {
   Future<Map<String, dynamic>> louiseHealth() =>
       _client.get('/api/louise/health');
 
+  Future<Map<String, dynamic>> louisePauseBot(String botId) =>
+      _client.post('/api/louise/bots/$botId/pause');
+
+  Future<Map<String, dynamic>> louiseResumeBot(String botId) =>
+      _client.post('/api/louise/bots/$botId/resume');
+
+  Future<Map<String, dynamic>> louiseDeleteBot(String botId) =>
+      _client.delete('/api/louise/bots/$botId');
+
+  Future<Map<String, dynamic>> louiseCreateBot({
+    required String symbol,
+    double dailyBudget = 500.0,
+    double targetProfitPct = 5.0,
+  }) => _client.post('/api/louise/bots', body: {
+    'symbol': symbol,
+    'daily_budget': dailyBudget,
+    'target_profit_pct': targetProfitPct,
+  });
+
+  Future<Map<String, dynamic>> louiseUpdateBot(
+    String botId, {
+    double? dailyBudget,
+    double? targetProfitPct,
+    String? symbol,
+  }) => _client.patch('/api/louise/bots/$botId', body: {
+    if (dailyBudget != null) 'daily_budget': dailyBudget,
+    if (targetProfitPct != null) 'target_profit_pct': targetProfitPct,
+    if (symbol != null) 'symbol': symbol,
+  });
+
 }
