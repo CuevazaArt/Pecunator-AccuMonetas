@@ -4,11 +4,11 @@ import '../api_client.dart';
 import '../services/telemetry_hub.dart';
 import '../widgets/credential_manager_dialog.dart';
 import '../config/app_config.dart';
-import 'unified_hub_page.dart';
+import 'louise_hub_page.dart';
 
-/// Root scaffold — thin AppBar orchestrator.
+/// Root scaffold — thin AppBar orchestrator for Louise Hub.
 ///
-/// All page content lives in [UnifiedHubPage].
+/// All page content lives in [LouiseHubPage].
 /// Credential management is delegated to [showCredentialManagerDialog].
 class PecunatorShell extends StatefulWidget {
   const PecunatorShell({super.key});
@@ -23,7 +23,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   Timer? _timer;
   Timer? _clockTimer;
   StreamSubscription<TelemetrySnapshot>? _telemetrySub;
-  final GlobalKey<UnifiedHubPageState> _hubKey = GlobalKey<UnifiedHubPageState>();
+  final GlobalKey<_LouiseHubPageState> _hubKey = GlobalKey<_LouiseHubPageState>();
 
   // AppBar state
   bool _loading = false;
@@ -88,13 +88,12 @@ class _PecunatorShellState extends State<PecunatorShell> {
   }
 
   Future<void> _fetchState() async {
-    _hubKey.currentState?.forcePoll();
+    _hubKey.currentState?._loadData();
     try {
-      final snap = await _api.gatewaySnapshot();
+      final snap = await _api.louiseHealth();
       if (!mounted) return;
       setState(() {
-        _gatewayRunning = snap['gateway_running'] == true;
-        _gatewayWsConnected = snap['ws_connected'] == true;
+        // Louise health check (no gateway concept)
       });
     } catch (_) {}
 
@@ -117,19 +116,11 @@ class _PecunatorShellState extends State<PecunatorShell> {
   }
 
   Future<void> _toggleGateway() async {
-    try {
-      if (_gatewayRunning) {
-        await _api.gatewayStop();
-      } else {
-        await _api.gatewayStart();
-      }
-      await _refresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
-        );
-      }
+    // Louise doesn't have gateway toggle (it's always connected to Binance via credentials)
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Louise opera continuamente con el API de Binance')),
+      );
     }
   }
 
@@ -178,9 +169,9 @@ class _PecunatorShellState extends State<PecunatorShell> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.memory, size: 14, color: Theme.of(context).colorScheme.primary),
+                  Icon(Icons.trending_up, size: 14, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: 4),
-                  const Text('PecunatorCore',
+                  const Text('Louise Hub',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
                 ],
               ),
@@ -202,20 +193,18 @@ class _PecunatorShellState extends State<PecunatorShell> {
               icon: const Icon(Icons.key, size: 18),
             ),
           ),
-          // Gateway toggle
+          // Health status
           Tooltip(
-            message: _gatewayRunning
-                ? 'Gateway ON${_gatewayWsConnected ? " + WS" : " (sin WS)"}\nClick para APAGAR conexión Binance'
-                : 'Gateway OFF\nClick para INICIAR conexión REST+WS',
+            message: 'Estado de Louise Hub — Bots operando continuamente',
             waitDuration: const Duration(milliseconds: 300),
             textStyle: _tooltipStyle,
             decoration: _tooltipDecoration,
             child: IconButton(
               onPressed: _toggleGateway,
-              icon: Icon(
-                _gatewayRunning ? Icons.power_settings_new : Icons.power_off,
+              icon: const Icon(
+                Icons.favorite,
                 size: 18,
-                color: _gatewayRunning ? Colors.greenAccent : Colors.grey,
+                color: Colors.greenAccent,
               ),
             ),
           ),
@@ -255,9 +244,9 @@ class _PecunatorShellState extends State<PecunatorShell> {
       ),
       body: Column(
         children: [
-          // ── Main unified page ──────────────────────────
+          // ── Louise Hub page ──────────────────────────
           Expanded(
-            child: UnifiedHubPage(key: _hubKey, engineBase: _engineBase),
+            child: LouiseHubPage(key: _hubKey, engineBase: _engineBase),
           ),
         ],
       ),

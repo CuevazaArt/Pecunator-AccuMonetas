@@ -367,4 +367,35 @@ class EngineApi {
   Future<Map<String, dynamic>> healthV1() =>
       _client.get('/api/v1/health');
 
+  // ── Louise Bot Hub endpoints ─────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> louiseBots() async {
+    final resp = await _client.get('/api/louise/bots');
+    return (resp is List)
+        ? resp.cast<Map<String, dynamic>>()
+        : ((resp['bots'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> louiseMetrics() =>
+      _client.get('/api/louise/metrics');
+
+  Future<Map<String, dynamic>> louiseWeightStatus() =>
+      _client.get('/api/louise/weight-governor/status');
+
+  Future<List<Map<String, dynamic>>> louiseWeightHistory() async {
+    final resp = await _client.get('/api/louise/weight-governor/history');
+    return (resp is List)
+        ? resp.cast<Map<String, dynamic>>()
+        : ((resp['history'] as List?) ?? []).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> louiseRequestsStats() =>
+      _client.get('/api/louise/telemetry/requests');
+
+  Future<Map<String, dynamic>> louiseBandwidthStats() =>
+      _client.get('/api/louise/telemetry/bandwidth');
+
+  Future<Map<String, dynamic>> louiseHealth() =>
+      _client.get('/api/louise/health');
+
 }
