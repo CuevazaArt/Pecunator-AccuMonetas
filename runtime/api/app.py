@@ -17,6 +17,7 @@ from runtime.api.routers import elphaba as _elphaba_router
 from runtime.api.routers import symmetric as _symmetric_router
 from runtime.api.routers import telemetry as _telemetry_router
 from runtime.api.routers import stream as _stream_router
+from runtime.api.routers import louise as _louise_router
 
 from runtime.core.settings import api_bind_host_for_cors_regex
 
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(_symmetric_router.router)
     app.include_router(_telemetry_router.router)
     app.include_router(_stream_router.router)
+    app.include_router(_louise_router.router)
 
     return app
 

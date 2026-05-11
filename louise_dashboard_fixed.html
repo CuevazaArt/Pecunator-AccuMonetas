@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Louise Bot Hub - Dashboard Profesional</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #ffffff;
+            --bg-secondary: #f9fafb;
+            --text: #333333;
+            --text-secondary: #666666;
+            --border: #e5e7eb;
+            --shadow: rgba(0,0,0,0.1);
+        }
+
+        body.dark-mode {
+            --bg: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text: #f0f0f0;
+            --text-secondary: #b0b0b0;
+            --border: #384857;
+            --shadow: rgba(0,0,0,0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            min-height: 100vh;
+            color: var(--text);
+            transition: all 0.3s;
+        }
+
+        .wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--bg);
+            padding: 20px;
+            box-shadow: 2px 0 8px var(--shadow);
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 50;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .nav-section {
+            margin-bottom: 30px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--text);
+            margin-bottom: 5px;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-secondary);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border-left-color: white;
+        }
+
+        .main {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        header h1 {
+            font-size: 32px;
+            flex: 1;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-indicator.connected {
+            color: var(--success);
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            background: var(--success);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--secondary);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 18px;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 11px;
+        }
+
+        /* Hub Summary */
+        .hub-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px var(--shadow);
+            border-left: 4px solid var(--primary);
+        }
+
+        .summary-card .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .summary-card.pnl {
+            border-left-color: var(--warning);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-secondary);
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Bots Grid */
+        .bots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .bot-card {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px var(--shadow);
+            border-top: 4px solid var(--primary);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .bot-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 12px var(--shadow);
+        }
+
+        .bot-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .bot-info h2 {
+            font-size: 20px;
+            color: var(--text);
+            margin-bottom: 5px;
+        }
+
+        .bot-info .symbol {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .bot-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+
+        .bot-status.running {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+        }
+
+        .bot-status.paused {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .bot-status.shutdown {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        .pnl-box {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(253, 230, 138, 0.1) 100%);
+            padding: 18px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 15px;
+            border: 2px solid var(--warning);
+        }
+
+        .pnl-box.red {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(254, 202, 202, 0.1) 100%);
+            border-color: var(--danger);
+        }
+
+        .pnl-box.green {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(187, 247, 208, 0.1) 100%);
+            border-color: var(--success);
+        }
+
+        .pnl-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .pnl-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .pnl-value.red {
+            color: var(--danger);
+        }
+
+        .pnl-value.green {
+            color: var(--success);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            transition: width 0.3s;
+        }
+
+        .bot-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .metric {
+            background: var(--bg-secondary);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .bot-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .bot-actions .btn {
+            flex: 1;
+            min-width: 80px;
+            font-size: 11px;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px var(--shadow);
+            position: relative;
+            height: 350px;
+        }
+
+        .chart-container h3 {
+            margin-bottom: 20px;
+            color: var(--text);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal.show {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: var(--bg);
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            color: var(--text);
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Settings */
+        .settings-section {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        .settings-section h3 {
+            margin-bottom: 15px;
+            color: var(--text);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            background: var(--border);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle.active {
+            background: var(--success);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle.active::after {
+            left: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 250px;
+            }
+
+            .main {
+                margin-left: 250px;
+            }
+
+            .bots-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -280px;
+                z-index: 100;
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+
+            .main {
+                margin-left: 0;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            header h1 {
+                font-size: 24px;
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--bg);
+            border-radius: 12px;
+            color: var(--text-secondary);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s;
+            z-index: 2000;
+        }
+
+        .toast.error {
+            background: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">🤖 Louise</div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Principal</div>
+                <div class="nav-item active" data-page="dashboard">📊 Dashboard</div>
+                <div class="nav-item" data-page="bots">🤖 Mis Bots</div>
+                <div class="nav-item" data-page="charts">📈 Gráficos</div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Gestión</div>
+                <div class="nav-item" data-page="credentials">🔐 Credenciales</div>
+                <div class="nav-item" data-page="settings">⚙️ Configuración</div>
+                <div class="nav-item" data-page="alerts">🔔 Alertas</div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Cuenta</div>
+                <div class="nav-item" data-page="profile">👤 Perfil</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Header -->
+            <header>
+                <h1>Louise Bot Hub</h1>
+                <div class="header-controls">
+                    <div class="status-indicator connected" id="statusIndicator">
+                        <div class="dot"></div>
+                        <span>Conectado</span>
+                    </div>
+                    <button class="btn btn-icon btn-secondary" id="darkModeBtn" title="Modo Nocturno">🌙</button>
+                    <button class="btn btn-primary" id="createBotBtn">+ Nuevo Bot</button>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page">
+                <div class="hub-summary" id="hubSummary">
+                    <div class="summary-card">
+                        <div class="label">Bots Activos</div>
+                        <div class="value" id="activeBots">3</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Portfolio Total</div>
+                        <div class="value" id="totalPortfolio">$4,850.90</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Balance Libre</div>
+                        <div class="value" id="freeBalance">$1,655.50</div>
+                    </div>
+                    <div class="summary-card pnl">
+                        <div class="label">Hub %PNL</div>
+                        <div class="value" id="hubPnl">1.82%</div>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" data-tab="overview">Vista General</button>
+                    <button class="tab" data-tab="performance">Rendimiento</button>
+                </div>
+
+                <div id="tab-overview" class="tab-content active">
+                    <div class="bots-grid" id="botsContainer"></div>
+                </div>
+
+                <div id="tab-performance" class="tab-content">
+                    <div class="chart-container">
+                        <h3>PNL Histórico (24h)</h3>
+                        <canvas id="pnlChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Distribución de Portfolio</h3>
+                        <canvas id="portfolioChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bots Page -->
+            <div id="page-bots" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Gestión de Bots</h2>
+                <div class="bots-grid" id="botsContainerMgmt"></div>
+            </div>
+
+            <!-- Charts Page -->
+            <div id="page-charts" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Análisis de Gráficos</h2>
+                <div class="chart-container">
+                    <h3>Rendimiento por Bot (Profit USD)</h3>
+                    <canvas id="performanceChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>PNL % Individual por Bot</h3>
+                    <canvas id="pnlPercentChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Consumo de API Weight (REST)</h3>
+                    <canvas id="weightChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Solicitudes HTTP por Bot</h3>
+                    <canvas id="requestsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Histórico de Trades</h3>
+                    <canvas id="tradesChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Uso de Banda Ancha (Bytes)</h3>
+                    <canvas id="bandwidthChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Credentials Page -->
+            <div id="page-credentials" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Gestión de Credenciales</h2>
+                <div class="settings-section">
+                    <h3>
+                        Subacuenta Activa
+                        <button class="btn btn-sm btn-primary">Cambiar</button>
+                    </h3>
+                    <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <strong>bluechip</strong>
+                            <span style="color: var(--success); font-weight: bold;">✓ Conectado</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Permiso: Read + Write | Balance: $2,450.00
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Agregar Nueva Subacuenta</h3>
+                    <div class="form-group">
+                        <label>Nombre de Subacuenta</label>
+                        <input type="text" placeholder="ej: trading-bot-prod">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key (Binance)</label>
+                        <input type="password" placeholder="Ingresa tu API Key">
+                    </div>
+                    <div class="form-group">
+                        <label>API Secret</label>
+                        <input type="password" placeholder="Ingresa tu API Secret">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveCredentials()">Guardar Credenciales (Encriptadas)</button>
+                </div>
+
+                <div class="settings-section" style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger);">
+                    <h3 style="color: var(--danger);">⚠️ Seguridad</h3>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin: 10px 0;">
+                        • Las credenciales se almacenan encriptadas con Fernet<br>
+                        • Nunca se envían a internet (solo a localhost)<br>
+                        • Usa API Keys con permisos limitados (Read + Write Orders)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Configuración General</h2>
+
+                <div class="settings-section">
+                    <h3>Preferencias de Interfaz</h3>
+                    <div class="settings-item">
+                        <span>Modo Oscuro</span>
+                        <div class="toggle" id="darkModeToggle" onclick="toggleDarkMode()"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Notificaciones Sonoras</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Actualización en Vivo (WebSocket)</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Parámetros de Bots</h3>
+                    <div class="form-group">
+                        <label>Balance Mínimo para Operar (USDT)</label>
+                        <input type="number" value="8" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Intervalo de Monitoreo (segundos)</label>
+                        <input type="number" value="300" min="60">
+                    </div>
+                    <div class="form-group">
+                        <label>Presupuesto Máximo Diario (USDT)</label>
+                        <input type="number" value="3000" min="100">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSettings()">Guardar Configuración</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Alertas</h3>
+                    <div class="settings-item">
+                        <span>Balance Bajo (&lt; $500)</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Presupuesto Exhausto</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Bot con Error</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Page -->
+            <div id="page-alerts" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Alertas y Notificaciones</h2>
+                <div class="settings-section">
+                    <h3>Canales de Notificación</h3>
+                    <div class="settings-item">
+                        <span>Email</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Telegram</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="settings-item">
+                        <span>Discord</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Alertas Recientes</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <div style="padding: 12px; border-bottom: 1px solid var(--border); font-size: 12px;">
+                            <div style="color: var(--success); font-weight: bold;">✓ louise_btc_001</div>
+                            <div style="color: var(--text-secondary); margin: 5px 0;">Ganancia: +2.81% - Posición en profit</div>
+                            <div style="color: var(--text-secondary); font-size: 11px;">Hace 5 minutos</div>
+                        </div>
+                        <div style="padding: 12px; border-bottom: 1px solid var(--border); font-size: 12px;">
+                            <div style="color: var(--warning); font-weight: bold;">⚠️ Balance Bajo</div>
+                            <div style="color: var(--text-secondary); margin: 5px 0;">Balance disponible: $450 USDT</div>
+                            <div style="color: var(--text-secondary); font-size: 11px;">Hace 15 minutos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Page -->
+            <div id="page-profile" class="page" style="display: none;">
+                <h2 style="margin-bottom: 20px;">Mi Perfil</h2>
+                <div class="settings-section">
+                    <h3>Información de Usuario</h3>
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <input type="text" value="Operador Louise" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" value="operador@louise.local" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Subacuenta Principal</label>
+                        <input type="text" value="bluechip" readonly>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Estadísticas Generales</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">Bots Creados</div>
+                            <div style="font-size: 24px; font-weight: bold;">3</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">Ciclos Completados</div>
+                            <div style="font-size: 24px; font-weight: bold;">12</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">Profit Total</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--success);">+$2,340</div>
+                        </div>
+                        <div style="padding: 15px; background: var(--bg-secondary); border-radius: 8px; text-align: center;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">Win Rate</div>
+                            <div style="font-size: 24px; font-weight: bold; color: var(--success);">100%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="editBotModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Editar Bot</h2>
+                <button class="close-btn" onclick="closeModal('editBotModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Nombre del Bot</label>
+                <input type="text" id="botName" placeholder="louise_btc_001">
+            </div>
+            <div class="form-group">
+                <label>Símbolo</label>
+                <input type="text" id="botSymbol" placeholder="BTC/USDT" disabled>
+            </div>
+            <div class="form-group">
+                <label>Volumen por Compra (USDT)</label>
+                <input type="number" id="buyVolume" placeholder="100" min="1">
+            </div>
+            <div class="form-group">
+                <label>Presupuesto Diario (USDT)</label>
+                <input type="number" id="dailyBudget" placeholder="1000" min="10">
+            </div>
+            <div class="form-group">
+                <label>Profit Target (%)</label>
+                <input type="number" id="profitTarget" placeholder="5" min="0.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Intervalo de Monitoreo (segundos)</label>
+                <input type="number" id="monitorInterval" placeholder="300" min="60">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="saveBotChanges()">Guardar Cambios</button>
+                <button class="btn btn-secondary" onclick="closeModal('editBotModal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="createBotModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Crear Nuevo Bot</h2>
+                <button class="close-btn" onclick="closeModal('createBotModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Nombre del Bot</label>
+                <input type="text" id="newBotName" placeholder="louise_btc_001">
+            </div>
+            <div class="form-group">
+                <label>Símbolo (Binance Spot)</label>
+                <select id="newBotSymbol">
+                    <option>BTC/USDT</option>
+                    <option>ETH/USDT</option>
+                    <option>SOL/USDT</option>
+                    <option>ADA/USDT</option>
+                    <option>BNB/USDT</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Volumen por Compra (USDT)</label>
+                <input type="number" id="newBuyVolume" placeholder="100" min="1">
+            </div>
+            <div class="form-group">
+                <label>Presupuesto Diario (USDT)</label>
+                <input type="number" id="newDailyBudget" placeholder="1000" min="10">
+            </div>
+            <div class="form-group">
+                <label>Profit Target (%)</label>
+                <input type="number" id="newProfitTarget" placeholder="5" min="0.1" step="0.1">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="createNewBot()">Crear Bot</button>
+                <button class="btn btn-secondary" onclick="closeModal('createBotModal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Mock Data
+        const botsData = {
+            'louise_btc_001': {
+                id: 'louise_btc_001',
+                name: 'louise_btc_001',
+                symbol: 'BTC/USDT',
+                status: 'running',
+                current_price: 42500.00,
+                position_size: 0.05,
+                cost_basis: 1200.00,
+                unrealized_pnl: 127.50,
+                unrealized_pct: 2.81,
+                free_balance: 450.00,
+                target_profit_pct: 5.0,
+                progress_percent: 56,
+                daily_budget: 1000
+            },
+            'louise_eth_001': {
+                id: 'louise_eth_001',
+                name: 'louise_eth_001',
+                symbol: 'ETH/USDT',
+                status: 'paused',
+                current_price: 2150.00,
+                position_size: 2.3,
+                cost_basis: 1850.00,
+                unrealized_pnl: -22.10,
+                unrealized_pct: -1.2,
+                free_balance: 320.00,
+                target_profit_pct: 5.0,
+                progress_percent: 0,
+                daily_budget: 800
+            },
+            'louise_sol_001': {
+                id: 'louise_sol_001',
+                name: 'louise_sol_001',
+                symbol: 'SOL/USDT',
+                status: 'shutdown',
+                current_price: 142.00,
+                position_size: 0,
+                cost_basis: 800.00,
+                unrealized_pnl: 85.50,
+                unrealized_pct: 10.69,
+                free_balance: 885.50,
+                target_profit_pct: 5.0,
+                progress_percent: 100,
+                daily_budget: 500,
+                epoch_closed: true,
+                profit: 85.50
+            }
+        };
+
+        let selectedBotId = null;
+
+        // Dark Mode (Always ON by default)
+        const darkModeBtn = document.getElementById('darkModeBtn');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+
+        // Always start in dark mode
+        document.body.classList.add('dark-mode');
+        if (darkModeToggle) darkModeToggle.classList.add('active');
+        darkModeBtn.textContent = '☀️';
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('darkMode', isDark);
+            if (darkModeToggle) darkModeToggle.classList.toggle('active');
+            darkModeBtn.textContent = isDark ? '☀️' : '🌙';
+            showToast(isDark ? 'Modo oscuro activado' : 'Modo claro activado');
+        }
+
+        darkModeBtn.addEventListener('click', toggleDarkMode);
+        if (darkModeToggle) {
+            darkModeToggle.addEventListener('click', toggleDarkMode);
+        }
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const page = this.dataset.page;
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
+                document.getElementById(`page-${page}`).style.display = 'block';
+
+                if (page === 'charts') {
+                    setTimeout(initCharts, 100);
+                } else if (page === 'bots') {
+                    renderBots('botsContainerMgmt');
+                }
+            });
+        });
+
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabName = this.dataset.tab;
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+
+                if (tabName === 'performance') {
+                    setTimeout(initDashboardCharts, 100);
+                }
+            });
+        });
+
+        // Utility Functions
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(value);
+        }
+
+        function getPnlColor(pnl) {
+            if (pnl < -1) return 'red';
+            if (pnl >= 5) return 'green';
+            if (pnl >= 0) return 'gray';
+            return 'red';
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${isError ? 'error' : ''}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Modal Functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        // Bot Management
+        function renderBots(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = Object.values(botsData).map(bot => {
+                const pnlColor = getPnlColor(bot.unrealized_pct);
+                const pnlIcon = bot.unrealized_pct >= 0 ? '📈' : '📉';
+
+                return `
+                    <div class="bot-card">
+                        <div class="bot-card-header">
+                            <div class="bot-info">
+                                <h2>${bot.name}</h2>
+                                <div class="symbol">${bot.symbol}</div>
+                            </div>
+                            <span class="bot-status ${bot.status}">
+                                ${bot.status === 'running' ? '✅' : bot.status === 'paused' ? '⏸️' : '🔴'}
+                                ${bot.status.toUpperCase()}
+                            </span>
+                        </div>
+
+                        <div class="pnl-box ${pnlColor}">
+                            <div class="pnl-label">%PNL EN VIVO</div>
+                            <div class="pnl-value ${pnlColor}">${pnlIcon} ${bot.unrealized_pct.toFixed(2)}%</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${Math.min(bot.progress_percent, 100)}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="bot-metrics">
+                            <div class="metric">
+                                <div class="metric-label">Precio</div>
+                                <div class="metric-value">${formatCurrency(bot.current_price)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Posición</div>
+                                <div class="metric-value">${bot.position_size.toFixed(4)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Costo Base</div>
+                                <div class="metric-value">${formatCurrency(bot.cost_basis)}</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">Balance Libre</div>
+                                <div class="metric-value">${formatCurrency(bot.free_balance)}</div>
+                            </div>
+                        </div>
+
+                        <div class="bot-actions">
+                            <button class="btn btn-primary btn-sm" onclick="editBot('${bot.id}')">✏️ Editar</button>
+                            <button class="btn btn-secondary btn-sm" onclick="toggleBotStatus('${bot.id}')">${bot.status === 'running' ? '⏸ Pausar' : '▶ Reanudar'}</button>
+                            <button class="btn btn-secondary btn-sm" onclick="showBotDetails('${bot.id}')">📊 Detalles</button>
+                            <button class="btn btn-secondary btn-sm" onclick="deleteBot('${bot.id}')">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function editBot(botId) {
+            selectedBotId = botId;
+            const bot = botsData[botId];
+            document.getElementById('botName').value = bot.name;
+            document.getElementById('botSymbol').value = bot.symbol;
+            document.getElementById('buyVolume').value = '100';
+            document.getElementById('dailyBudget').value = bot.daily_budget;
+            document.getElementById('profitTarget').value = bot.target_profit_pct;
+            document.getElementById('monitorInterval').value = '300';
+            openModal('editBotModal');
+        }
+
+        function saveBotChanges() {
+            showToast('✓ Cambios guardados correctamente');
+            closeModal('editBotModal');
+            renderBots('botsContainer');
+            renderBots('botsContainerMgmt');
+        }
+
+        function toggleBotStatus(botId) {
+            const bot = botsData[botId];
+            if (bot.status === 'running') {
+                bot.status = 'paused';
+                showToast('Bot pausado');
+            } else if (bot.status === 'paused') {
+                bot.status = 'running';
+                showToast('Bot reanudado');
+            }
+            renderBots('botsContainer');
+            renderBots('botsContainerMgmt');
+        }
+
+        function showBotDetails(botId) {
+            const bot = botsData[botId];
+            showToast(`${bot.name}: ${bot.unrealized_pct.toFixed(2)}% PNL | Posición: ${bot.position_size.toFixed(4)} ${bot.symbol.split('/')[0]}`);
+        }
+
+        function deleteBot(botId) {
+            if (confirm('¿Estás seguro de que deseas eliminar este bot?')) {
+                delete botsData[botId];
+                showToast('Bot eliminado', false);
+                renderBots('botsContainer');
+                renderBots('botsContainerMgmt');
+            }
+        }
+
+        function createNewBot() {
+            const name = document.getElementById('newBotName').value;
+            const symbol = document.getElementById('newBotSymbol').value;
+            const buyVolume = document.getElementById('newBuyVolume').value;
+            const dailyBudget = document.getElementById('newDailyBudget').value;
+            const profitTarget = document.getElementById('newProfitTarget').value;
+
+            if (!name || !symbol || !buyVolume || !dailyBudget || !profitTarget) {
+                showToast('Por favor completa todos los campos', true);
+                return;
+            }
+
+            const newBot = {
+                id: name.toLowerCase().replace(/\s+/g, '_'),
+                name: name,
+                symbol: symbol,
+                status: 'running',
+                current_price: 100.00,
+                position_size: 0,
+                cost_basis: 0,
+                unrealized_pnl: 0,
+                unrealized_pct: 0,
+                free_balance: parseFloat(dailyBudget),
+                target_profit_pct: parseFloat(profitTarget),
+                progress_percent: 0,
+                daily_budget: parseFloat(dailyBudget)
+            };
+
+            botsData[newBot.id] = newBot;
+            showToast('✓ Bot creado exitosamente');
+            closeModal('createBotModal');
+            renderBots('botsContainer');
+            renderBots('botsContainerMgmt');
+        }
+
+        function saveCredentials() {
+            showToast('✓ Credenciales guardadas (encriptadas)');
+        }
+
+        function saveSettings() {
+            showToast('✓ Configuración guardada');
+        }
+
+        // Chart Functions
+        function initDashboardCharts() {
+            const ctxPnl = document.getElementById('pnlChart');
+            if (ctxPnl && !window.pnlChartInstance) {
+                window.pnlChartInstance = new Chart(ctxPnl, {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                        datasets: [
+                            {
+                                label: 'BTC (%)',
+                                data: [0, 0.5, 1.2, 2.1, 2.5, 2.8, 2.81],
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'ETH (%)',
+                                data: [0, -0.3, -0.8, -1.2, -1, -1.2, -1.2],
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                tension: 0.4
+                            },
+                            {
+                                label: 'SOL (%)',
+                                data: [0, 2, 5, 8, 9.5, 10.2, 10.69],
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top' } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            const ctxPortfolio = document.getElementById('portfolioChart');
+            if (ctxPortfolio && !window.portfolioChartInstance) {
+                window.portfolioChartInstance = new Chart(ctxPortfolio, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['BTC', 'ETH', 'SOL'],
+                        datasets: [{
+                            data: [1327.5, 1827.9, 885.5],
+                            backgroundColor: ['#f59e0b', '#667eea', '#22c55e']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+        }
+
+        function initCharts() {
+            // Rendimiento por Bot (Profit USD)
+            const ctxPerformance = document.getElementById('performanceChart');
+            if (ctxPerformance && !window.performanceChartInstance) {
+                window.performanceChartInstance = new Chart(ctxPerformance, {
+                    type: 'bar',
+                    data: {
+                        labels: ['louise_btc_001', 'louise_eth_001', 'louise_sol_001'],
+                        datasets: [{
+                            label: 'Profit USD',
+                            data: [127.50, -22.10, 85.50],
+                            backgroundColor: ['#22c55e', '#ef4444', '#22c55e']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // PNL % Individual por Bot
+            const ctxPnlPercent = document.getElementById('pnlPercentChart');
+            if (ctxPnlPercent && !window.pnlPercentChartInstance) {
+                window.pnlPercentChartInstance = new Chart(ctxPnlPercent, {
+                    type: 'bar',
+                    data: {
+                        labels: ['louise_btc_001', 'louise_eth_001', 'louise_sol_001'],
+                        datasets: [{
+                            label: 'PNL %',
+                            data: [2.81, -1.2, 10.69],
+                            backgroundColor: ['#f59e0b', '#ef4444', '#22c55e']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // Consumo de API Weight (REST)
+            const ctxWeight = document.getElementById('weightChart');
+            if (ctxWeight && !window.weightChartInstance) {
+                window.weightChartInstance = new Chart(ctxWeight, {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                        datasets: [
+                            {
+                                label: 'louise_btc_001',
+                                data: [150, 280, 450, 520, 680, 890, 1050],
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'louise_eth_001',
+                                data: [100, 200, 320, 420, 550, 720, 850],
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'louise_sol_001',
+                                data: [80, 150, 280, 380, 490, 620, 750],
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top' } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 6000,
+                                title: { display: true, text: 'Weight (Límite: 6000/min)' }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Solicitudes HTTP por Bot
+            const ctxRequests = document.getElementById('requestsChart');
+            if (ctxRequests && !window.requestsChartInstance) {
+                window.requestsChartInstance = new Chart(ctxRequests, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['louise_btc_001', 'louise_eth_001', 'louise_sol_001'],
+                        datasets: [{
+                            label: 'Solicitudes HTTP',
+                            data: [245, 189, 156],
+                            backgroundColor: ['#f59e0b', '#667eea', '#22c55e']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Histórico de Trades
+            const ctxTrades = document.getElementById('tradesChart');
+            if (ctxTrades && !window.tradesChartInstance) {
+                window.tradesChartInstance = new Chart(ctxTrades, {
+                    type: 'line',
+                    data: {
+                        labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'],
+                        datasets: [{
+                            label: 'Trades Ejecutados (Total)',
+                            data: [12, 19, 15, 21],
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Uso de Banda Ancha (Bytes)
+            const ctxBandwidth = document.getElementById('bandwidthChart');
+            if (ctxBandwidth && !window.bandwidthChartInstance) {
+                window.bandwidthChartInstance = new Chart(ctxBandwidth, {
+                    type: 'bar',
+                    data: {
+                        labels: ['louise_btc_001', 'louise_eth_001', 'louise_sol_001'],
+                        datasets: [{
+                            label: 'Bytes Transferidos',
+                            data: [245000, 189000, 156000],
+                            backgroundColor: ['#f59e0b', '#667eea', '#22c55e']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('createBotBtn').addEventListener('click', () => openModal('createBotModal'));
+
+        // Initial Render
+        renderBots('botsContainer');
+        renderBots('botsContainerMgmt');
+
+        // Simulate live updates
+        setInterval(() => {
+            Object.keys(botsData).forEach(botId => {
+                const bot = botsData[botId];
+                if (bot.status === 'running') {
+                    bot.current_price += (Math.random() - 0.5) * 100;
+                    bot.unrealized_pnl = (bot.position_size * bot.current_price) - bot.cost_basis;
+                    bot.unrealized_pct = (bot.unrealized_pnl / bot.cost_basis) * 100;
+                    bot.progress_percent = Math.min((Math.abs(bot.unrealized_pct) / bot.target_profit_pct) * 100, 100);
+                }
+            });
+            renderBots('botsContainer');
+        }, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Louise Bot Hub - Compact</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text: #f0f0f0;
+            --text-secondary: #b0b0b0;
+            --border: #384857;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 13px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 10px;
+            padding: 10px;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .header {
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            padding: 10px;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .stat-box {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid var(--primary);
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .stat-box.success {
+            border-left-color: var(--success);
+        }
+
+        .stat-box.warning {
+            border-left-color: var(--warning);
+        }
+
+        /* Bots List */
+        .bots-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .bot-row {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--primary);
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .bot-row.running {
+            border-left-color: var(--success);
+        }
+
+        .bot-row.paused {
+            border-left-color: var(--warning);
+        }
+
+        .bot-row.shutdown {
+            border-left-color: var(--danger);
+        }
+
+        .bot-name {
+            font-weight: bold;
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .bot-symbol {
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+
+        .bot-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .bot-metric {
+            text-align: center;
+        }
+
+        .bot-metric-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+        }
+
+        .bot-metric-value {
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .pnl-indicator {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .pnl-indicator.red {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .pnl-indicator.yellow {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .pnl-indicator.green {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+        }
+
+        .chart-box {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .chart-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        .mini-charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .mini-chart {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .mini-chart-title {
+            font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .mini-chart-container {
+            position: relative;
+            height: 150px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--secondary);
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .action-buttons .btn {
+            flex: 1;
+            padding: 4px 6px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .status-badge.running {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+
+        .status-badge.paused {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .status-badge.shutdown {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .mini-charts {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2000;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="header">🤖 Louise Bot Hub</div>
+
+            <div class="stats-grid">
+                <div class="stat-box success">
+                    <div class="stat-label">Activos</div>
+                    <div class="stat-value" id="activeBots">2</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Portfolio</div>
+                    <div class="stat-value" id="totalPortfolio">$4,850</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Balance Libre</div>
+                    <div class="stat-value" id="freeBalance">$1,655</div>
+                </div>
+                <div class="stat-box warning">
+                    <div class="stat-label">Hub PNL</div>
+                    <div class="stat-value" id="hubPnl">+1.82%</div>
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border); margin: 10px 0; padding-top: 10px;">
+                <div style="font-weight: bold; font-size: 11px; margin-bottom: 8px; text-transform: uppercase; color: var(--text-secondary);">Instancias</div>
+                <div class="bots-list" id="botsList"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="chart-box">
+                <div class="chart-title">📈 PNL Histórico (24h)</div>
+                <div class="chart-container">
+                    <canvas id="pnlChart"></canvas>
+                </div>
+            </div>
+
+            <div class="mini-charts">
+                <div class="mini-chart">
+                    <div class="mini-chart-title">%PNL Individual</div>
+                    <div class="mini-chart-container">
+                        <canvas id="pnlPercentChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="mini-chart">
+                    <div class="mini-chart-title">API Weight (REST)</div>
+                    <div class="mini-chart-container">
+                        <canvas id="weightChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="mini-chart">
+                    <div class="mini-chart-title">Solicitudes HTTP</div>
+                    <div class="mini-chart-container">
+                        <canvas id="requestsChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="mini-chart">
+                    <div class="mini-chart-title">Trades por Semana</div>
+                    <div class="mini-chart-container">
+                        <canvas id="tradesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const botsData = {
+            'louise_btc_001': {
+                id: 'louise_btc_001',
+                name: 'louise_btc_001',
+                symbol: 'BTC/USDT',
+                status: 'running',
+                current_price: 42500.00,
+                position_size: 0.05,
+                cost_basis: 1200.00,
+                unrealized_pnl: 127.50,
+                unrealized_pct: 2.81,
+                free_balance: 450.00,
+                target_profit_pct: 5.0,
+                daily_budget: 1000
+            },
+            'louise_eth_001': {
+                id: 'louise_eth_001',
+                name: 'louise_eth_001',
+                symbol: 'ETH/USDT',
+                status: 'paused',
+                current_price: 2150.00,
+                position_size: 2.3,
+                cost_basis: 1850.00,
+                unrealized_pnl: -22.10,
+                unrealized_pct: -1.2,
+                free_balance: 320.00,
+                target_profit_pct: 5.0,
+                daily_budget: 800
+            },
+            'louise_sol_001': {
+                id: 'louise_sol_001',
+                name: 'louise_sol_001',
+                symbol: 'SOL/USDT',
+                status: 'shutdown',
+                current_price: 142.00,
+                position_size: 0,
+                cost_basis: 800.00,
+                unrealized_pnl: 85.50,
+                unrealized_pct: 10.69,
+                free_balance: 885.50,
+                target_profit_pct: 5.0,
+                daily_budget: 500
+            }
+        };
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(val);
+        }
+
+        function getPnlColor(pnl) {
+            if (pnl < -1) return 'red';
+            if (pnl >= 5) return 'green';
+            if (pnl >= 0) return 'yellow';
+            return 'red';
+        }
+
+        function renderBots() {
+            const list = document.getElementById('botsList');
+            list.innerHTML = Object.values(botsData).map(bot => `
+                <div class="bot-row ${bot.status}">
+                    <div>
+                        <div class="bot-name">${bot.name}</div>
+                        <div class="bot-symbol">${bot.symbol}</div>
+                        <span class="status-badge ${bot.status}">${bot.status.toUpperCase()}</span>
+                    </div>
+                    <div>
+                        <div class="bot-metrics">
+                            <div class="bot-metric">
+                                <div class="bot-metric-label">Precio</div>
+                                <div class="bot-metric-value">$${bot.current_price.toFixed(0)}</div>
+                            </div>
+                            <div class="bot-metric">
+                                <div class="bot-metric-label">Posición</div>
+                                <div class="bot-metric-value">${bot.position_size.toFixed(4)}</div>
+                            </div>
+                            <div class="bot-metric">
+                                <div class="bot-metric-label">Costo</div>
+                                <div class="bot-metric-value">${formatCurrency(bot.cost_basis)}</div>
+                            </div>
+                            <div class="pnl-indicator ${getPnlColor(bot.unrealized_pct)}">${bot.unrealized_pct > 0 ? '+' : ''}${bot.unrealized_pct.toFixed(2)}%</div>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary btn-sm" onclick="toggleBot('${bot.id}')">
+                                ${bot.status === 'running' ? '⏸' : '▶'}
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="editBot('${bot.id}')">✏️</button>
+                            <button class="btn btn-primary btn-sm" onclick="deleteBot('${bot.id}')">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            const bots = Object.values(botsData);
+            const running = bots.filter(b => b.status === 'running').length;
+            const portfolio = bots.reduce((sum, b) => sum + (b.cost_basis + b.unrealized_pnl), 0);
+            const balance = bots.reduce((sum, b) => sum + b.free_balance, 0);
+            const pnl = bots.reduce((sum, b) => sum + b.unrealized_pnl, 0);
+            const pnlPct = bots.reduce((sum, b) => sum + b.cost_basis, 0) > 0
+                ? (pnl / bots.reduce((sum, b) => sum + b.cost_basis, 0)) * 100
+                : 0;
+
+            document.getElementById('activeBots').textContent = running;
+            document.getElementById('totalPortfolio').textContent = formatCurrency(portfolio).replace('$', '');
+            document.getElementById('freeBalance').textContent = formatCurrency(balance).replace('$', '');
+            document.getElementById('hubPnl').textContent = `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
+        }
+
+        function toggleBot(botId) {
+            const bot = botsData[botId];
+            bot.status = bot.status === 'running' ? 'paused' : bot.status === 'paused' ? 'running' : 'running';
+            showToast(`${bot.name} → ${bot.status.toUpperCase()}`);
+            renderBots();
+        }
+
+        function editBot(botId) {
+            const bot = botsData[botId];
+            showToast(`Editar: ${bot.name}`);
+        }
+
+        function deleteBot(botId) {
+            if (confirm('Eliminar bot?')) {
+                const name = botsData[botId].name;
+                delete botsData[botId];
+                showToast(`${name} eliminado`);
+                renderBots();
+                updateStats();
+            }
+        }
+
+        function initCharts() {
+            // PNL Histórico
+            const ctxPnl = document.getElementById('pnlChart');
+            if (ctxPnl) {
+                new Chart(ctxPnl, {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                        datasets: [
+                            {
+                                label: 'BTC',
+                                data: [0, 0.5, 1.2, 2.1, 2.5, 2.8, 2.81],
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'ETH',
+                                data: [0, -0.3, -0.8, -1.2, -1, -1.2, -1.2],
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'SOL',
+                                data: [0, 2, 5, 8, 9.5, 10.2, 10.69],
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                fill: true,
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // PNL % Individual
+            const ctxPnlPercent = document.getElementById('pnlPercentChart');
+            if (ctxPnlPercent) {
+                new Chart(ctxPnlPercent, {
+                    type: 'bar',
+                    data: {
+                        labels: ['BTC', 'ETH', 'SOL'],
+                        datasets: [{
+                            label: '%PNL',
+                            data: [2.81, -1.2, 10.69],
+                            backgroundColor: ['#f59e0b', '#ef4444', '#22c55e']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // API Weight
+            const ctxWeight = document.getElementById('weightChart');
+            if (ctxWeight) {
+                new Chart(ctxWeight, {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '08:00', '16:00', '24:00'],
+                        datasets: [
+                            { label: 'BTC', data: [150, 450, 680, 1050], borderColor: '#f59e0b', tension: 0.3 },
+                            { label: 'ETH', data: [100, 320, 550, 850], borderColor: '#667eea', tension: 0.3 },
+                            { label: 'SOL', data: [80, 280, 490, 750], borderColor: '#22c55e', tension: 0.3 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } },
+                        scales: { y: { max: 6000, beginAtZero: true } }
+                    }
+                });
+            }
+
+            // Solicitudes HTTP
+            const ctxRequests = document.getElementById('requestsChart');
+            if (ctxRequests) {
+                new Chart(ctxRequests, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['BTC', 'ETH', 'SOL'],
+                        datasets: [{ data: [245, 189, 156], backgroundColor: ['#f59e0b', '#667eea', '#22c55e'] }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } }
+                    }
+                });
+            }
+
+            // Trades
+            const ctxTrades = document.getElementById('tradesChart');
+            if (ctxTrades) {
+                new Chart(ctxTrades, {
+                    type: 'bar',
+                    data: {
+                        labels: ['S1', 'S2', 'S3', 'S4'],
+                        datasets: [{ label: 'Trades', data: [12, 19, 15, 21], backgroundColor: '#667eea' }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+        }
+
+        // Init
+        renderBots();
+        updateStats();
+        initCharts();
+
+        // Live updates
+        setInterval(() => {
+            Object.keys(botsData).forEach(botId => {
+                const bot = botsData[botId];
+                if (bot.status === 'running') {
+                    bot.current_price += (Math.random() - 0.5) * 100;
+                    bot.unrealized_pnl = (bot.position_size * bot.current_price) - bot.cost_basis;
+                    bot.unrealized_pct = bot.cost_basis > 0 ? (bot.unrealized_pnl / bot.cost_basis) * 100 : 0;
+                }
+            });
+            renderBots();
+            updateStats();
+        }, 5000);
+    </script>
+</body>
+</html>
