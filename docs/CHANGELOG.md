@@ -52,121 +52,121 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 ## 2026-04-29
 
 ### Added
-- Carpeta `examples/` como punto único para referencias históricas no funcionales (fusión de propósito de `exampleJV` + `exampleJV_enhanced`).
-- Documento arquitectónico `docs/main-runtime-boundary.md` con responsabilidades explícitas de `main` y `runtime` para escalar.
+- `examples/` folder as the single entry point for non-functional historical references (merging the purpose of `exampleJV` + `exampleJV_enhanced`).
+- Architecture document `docs/main-runtime-boundary.md` with explicit responsibilities of `main` and `runtime` for scaling.
 
 ### Changed
-- Scripts reorganizados por dominio:
-  - `scripts/ui/` (dashboard, launcher, atajos de escritorio)
-  - `scripts/engine/` (arranque/parada/supervisor del motor)
-  - `scripts/data/` (snapshots operativos como `exchangeInfo`)
-- Documentación actualizada a las nuevas rutas de scripts y al uso de `examples/`.
+- Scripts reorganized by domain:
+  - `scripts/ui/` (dashboard, launcher, desktop shortcuts)
+  - `scripts/engine/` (engine start/stop/supervisor)
+  - `scripts/data/` (operational snapshots such as `exchangeInfo`)
+- Documentation updated to new script paths and to the use of `examples/`.
 
 ### Operational impact
-- Menor fricción para mantenimiento al separar responsabilidades operativas por carpeta.
-- Menos riesgo de mezclar código productivo con ejemplos de referencia.
+- Less friction for maintenance by separating operational responsibilities per folder.
+- Lower risk of mixing production code with reference examples.
 
 ## 2026-04-29
 
 ### Added
-- Nuevo workflow de seguridad `.github/workflows/secret-scan.yml` (Gitleaks) para detectar secretos en pushes/PR hacia ramas principales.
+- New security workflow `.github/workflows/secret-scan.yml` (Gitleaks) to detect secrets in pushes/PRs to main branches.
 
 ### Changed
-- Scripts de arranque `scripts/engine/run_engine.ps1` y `scripts/engine/run_engine_immortal.ps1` endurecidos con fallback a `python` del sistema cuando no existe `.venv`.
+- Startup scripts `scripts/engine/run_engine.ps1` and `scripts/engine/run_engine_immortal.ps1` hardened with fallback to system `python` when `.venv` does not exist.
 
 ### Operational impact
-- Menor riesgo de fuga de credenciales en el repositorio.
-- Menor fragilidad operativa al iniciar motor en equipos sin entorno virtual activado.
+- Lower risk of credential leaks in the repository.
+- Less operational fragility when starting the engine on machines without an active virtual environment.
 
 ## 2026-04-29
 
 ### Added
-- Estructura modular explícita por dominio:
+- Explicit modular structure by domain:
   - `runtime/modules/bots/`
   - `runtime/modules/tools/`
-- Índices modulares en raíz para expansión y legibilidad:
+- Modular indexes in root for expansion and readability:
   - `bots/` (Dorothy, Masha, Thusnelda)
   - `tools/` (ops protocols, sandbox rest, rest-weight monitor)
-- Archivos `MODULE.md` por bot/herramienta con entrypoints, API surface y SQLite asociados.
+- `MODULE.md` files per bot/tool with entrypoints, API surface, and associated SQLite.
 
 ### Changed
-- Servicios API de bots y tests principales migrados a imports `runtime.modules.bots.*`.
-- Workflow Python (`mypy`) actualizado para validar el path modular de bots.
-- Documentación de arquitectura (`README.md`, `docs/architecture-next.md`) alineada al nuevo esquema modular.
+- Bot API services and main tests migrated to `runtime.modules.bots.*` imports.
+- Python workflow (`mypy`) updated to validate the bot modular path.
+- Architecture documentation (`README.md`, `docs/architecture-next.md`) aligned to the new modular schema.
 
 ### Fixed
-- Eliminada documentación de refactor legacy que ya no representa el estado actual (`REFACTOR_*`).
+- Removed legacy refactor documentation that no longer represents the current state (`REFACTOR_*`).
 
 ### Operational impact
-- Navegación más clara para añadir nuevos bots/herramientas sin mezclar capas.
-- Menor fricción para onboarding y mantenimiento de runtime a mediano plazo.
+- Clearer navigation for adding new bots/tools without mixing layers.
+- Less friction for onboarding and runtime maintenance in the medium term.
 
 ## 2026-04-29
 
 ### Added
-- Auditoría detallada de peso REST por acción/fuente con nuevos endpoints:
+- Detailed REST weight audit per action/source with new endpoints:
   - `GET /api/v1/usage/rest-weight/events`
   - `GET /api/v1/usage/rest-weight/report`
-- Documento operativo `docs/rest-weight-audit.md` con modelo de cuantización y lista de fuentes de consumo.
-- Monitor UI de peso REST enriquecido con pestañas de resumen, eventos auditados y muestras históricas.
+- Operational document `docs/rest-weight-audit.md` with quantization model and list of consumption sources.
+- REST weight UI monitor enriched with summary tabs, audited events, and historical samples.
 
 ### Changed
-- Se eliminaron llamadas redundantes de `ping` en el loop de polling del gateway para reducir consumo de peso innecesario.
-- Se agregaron tooltips extensos en seteo individual de Masha y Thusnelda (creación + edición por instancia).
-- Se amplió el manual in-app por bot (`BotGuidePage`) con guía de parámetros y troubleshooting.
-- Módulo de herramientas operativas (close/red/cleanups) reorganizado en lista compacta en una sola tarjeta.
+- Removed redundant `ping` calls in the gateway polling loop to reduce unnecessary weight consumption.
+- Added extended tooltips on individual Masha and Thusnelda setup (create + edit per instance).
+- Expanded the in-app manual per bot (`BotGuidePage`) with parameter guide and troubleshooting.
+- Operational tools module (close/red/cleanups) reorganized into a compact list on a single card.
 
 ### Operational impact
-- Más trazabilidad para identificar qué endpoint/acción eleva el peso por minuto.
-- Menor ruido de consumo base en el monitor al evitar pings periódicos redundantes.
-- Menor ambigüedad operativa al ajustar parámetros por bot e instrumento.
+- More traceability to identify which endpoint/action raises weight per minute.
+- Less baseline consumption noise in the monitor by avoiding redundant periodic pings.
+- Less operational ambiguity when adjusting parameters per bot and instrument.
 
 ## 2026-04-29
 
 ### Added
-- Páginas guía dedicadas por bot en la UI Flutter (`Dorothy`, `Masha`, `Thusnelda`) para simplificar la introducción operativa y evitar instructivos extensos en modales.
+- Dedicated guide pages per bot in the Flutter UI (`Dorothy`, `Masha`, `Thusnelda`) to simplify operational onboarding and avoid lengthy instructions in modals.
 
 ### Changed
-- Botones de instructivo en cada Hub ahora abren una pantalla completa con: qué hace el bot, operación base, riesgos y flujo de inicio rápido.
-- Scripts de arranque del motor (`run_engine.ps1`, `run_engine_immortal.ps1`) simplificados a arranque directo de `main.py` sin dependencia de ejemplos externos.
-- Documentación (`README.md`, `docs/architecture-next.md`, `docs/binance-api-and-compliance.md`) actualizada para reflejar flujo de credenciales por cofre/entorno.
+- Guide buttons in each Hub now open a full screen with: what the bot does, base operation, risks, and quick-start flow.
+- Engine startup scripts (`run_engine.ps1`, `run_engine_immortal.ps1`) simplified to direct launch of `main.py` without dependency on external examples.
+- Documentation (`README.md`, `docs/architecture-next.md`, `docs/binance-api-and-compliance.md`) updated to reflect credential flow via vault/environment.
 
 ### Fixed
-- Limpiadas referencias operativas antiguas a `exampleJV` en runtime/UI para evitar confusión de mantenimiento.
+- Cleaned up old operational references to `exampleJV` in runtime/UI to avoid maintenance confusion.
 
 ### Operational impact
-- Onboarding más rápido para operar cada bot desde su Hub.
-- Menor acoplamiento entre runtime productivo y carpetas de ejemplo.
+- Faster onboarding to operate each bot from its Hub.
+- Less coupling between production runtime and example folders.
 
 ## 2026-04-29
 
 ### Added
-- Importado `exampleJV_enhanced/` desde la rama de colaboración para dejar trazabilidad de ejemplos mejorados (`Dorothy7.1`, `Masha2.1`, `Thusnelda1.1`) en paralelo a `exampleJV/`.
-- Manuales de usuario por bot en `docs/bots/` (uno para Dorothy, Masha y Thusnelda) con variables operativas y consultas SQLite.
-- Nuevas tablas SQLite por hub para persistencia operativa:
+- Imported `exampleJV_enhanced/` from the collaboration branch to preserve traceability of improved examples (`Dorothy7.1`, `Masha2.1`, `Thusnelda1.1`) alongside `exampleJV/`.
+- Per-bot user manuals in `docs/bots/` (one each for Dorothy, Masha, and Thusnelda) with operational variables and SQLite queries.
+- New SQLite tables per hub for operational persistence:
   - `*_runtime_state`
   - `*_equity_snapshots`
   - `*_metrics_log`
 
 ### Changed
-- Integración incremental de mejoras de `exampleJV_enhanced` en los runners de runtime:
+- Incremental integration of `exampleJV_enhanced` improvements into the runtime runners:
   - `runtime/bot/dorothy.py`
   - `runtime/bot/masha.py`
   - `runtime/bot/thusnelda.py`
-- Se agregaron parámetros configurables de riesgo/métricas por bot:
+- Added configurable risk/metrics parameters per bot:
   - `max_drawdown_pct`
   - `stop_loss_pct`
   - `metrics_interval_cycles`
-- Se actualizó el API schema/surface para aceptar esos parámetros en create/update de los 3 hubs.
-- UI Flutter actualizada para exponer esos parámetros en Dorothy/Masha/Thusnelda y aplicar cambios vía `Guardar y aplicar`.
-- Se agregaron instructivos en interfaz para Masha y Thusnelda (Dorothy ya existente) para mejorar coherencia de uso.
+- Updated the API schema/surface to accept those parameters in create/update for all 3 hubs.
+- Flutter UI updated to expose those parameters in Dorothy/Masha/Thusnelda and apply changes via `Save and apply`.
+- Added in-interface guides for Masha and Thusnelda (Dorothy already existing) to improve usage consistency.
 
 ### Fixed
-- Los hubs ahora restauran estado de riesgo persistido al reiniciar (peak equity / max drawdown / contador de ciclos), evitando reinicio "ciego" de protección.
+- Hubs now restore persisted risk state on restart (peak equity / max drawdown / cycle counter), avoiding "blind" restart of protection.
 
 ### Operational impact
-- Mayor protección ante mercados bajistas (drawdown guard + stop-loss) sin romper arquitectura original de cada bot.
-- Métricas de performance y snapshots de equity quedan persistidos en SQLite por instancia para auditoría y tuning.
+- Greater protection against bear markets (drawdown guard + stop-loss) without breaking the original architecture of each bot.
+- Performance metrics and equity snapshots are persisted in SQLite per instance for auditing and tuning.
 
 ## 2026-04-29
 
