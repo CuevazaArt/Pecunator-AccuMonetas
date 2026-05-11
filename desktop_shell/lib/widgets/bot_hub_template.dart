@@ -364,7 +364,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                   // Controls
                   if (running)
                     Tooltip(
-                      message: 'Detener bot',
+                      message: 'Stop bot',
                       child: _miniBtn(
                         Icons.stop,
                         Colors.orangeAccent,
@@ -373,7 +373,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                     )
                   else
                     Tooltip(
-                      message: 'Iniciar bot',
+                      message: 'Start bot',
                       child: _miniBtn(
                         Icons.play_arrow,
                         Colors.greenAccent,
@@ -381,7 +381,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                       ),
                     ),
                   Tooltip(
-                    message: 'Eliminar bot',
+                    message: 'Delete bot',
                     child: _miniBtn(
                       Icons.delete_outline,
                       Colors.redAccent,
@@ -389,7 +389,7 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
                     ),
                   ),
                   Tooltip(
-                    message: 'Ver logs',
+                    message: 'View logs',
                     child: Icon(
                       isExpanded ? Icons.expand_less : Icons.expand_more,
                       size: 14,
@@ -448,17 +448,17 @@ class _BotHubTemplateState extends State<BotHubTemplate> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar bot'),
-        content: Text('¿Eliminar $symbol ($botId)?'),
+        title: const Text('Delete bot'),
+        content: Text('Delete $symbol ($botId)?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Eliminar'),
+            child: const Text('Delete'),
           ),
         ],
       ),

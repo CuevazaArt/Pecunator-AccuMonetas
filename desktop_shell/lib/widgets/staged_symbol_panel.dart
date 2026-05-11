@@ -119,7 +119,7 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
     if (dQty <= 0 || dProfit <= 0 || dDrop <= 0 || dLoop <= 0 || dRungs <= 0 ||
         eQty <= 0 || eProfit <= 0 || eDrop <= 0 || eLoop <= 0 || eRungs <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Valores inválidos. Revisa la configuración.'), backgroundColor: Colors.redAccent),
+        const SnackBar(content: Text('Invalid values. Check the configuration.'), backgroundColor: Colors.redAccent),
       );
       return;
     }
@@ -178,7 +178,7 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
               const Icon(Icons.warning_amber_rounded, color: Colors.yellowAccent, size: 24),
               const SizedBox(width: 8),
               const Text(
-                'SÍMBOLO EN STAGING',
+                'SYMBOL IN STAGING',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.yellowAccent, letterSpacing: 1),
               ),
               const Spacer(),
@@ -222,13 +222,13 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
             children: [
               TextButton(
                 onPressed: widget.onCancel,
-                child: const Text('Descartar', style: TextStyle(color: Colors.white54)),
+                child: const Text('Discard', style: TextStyle(color: Colors.white54)),
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: _accept,
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('DESPLEGAR SIMÉTRICO', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('DEPLOY SYMMETRIC', style: TextStyle(fontWeight: FontWeight.bold)),
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.greenAccent.shade700,
                   foregroundColor: Colors.white,
@@ -257,14 +257,14 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
             children: [
               Icon(Icons.link, size: 14, color: Colors.cyanAccent.withAlpha(180)),
               const SizedBox(width: 6),
-              Text('CONFIG SIMÉTRICA', style: TextStyle(
+              Text('SYMMETRIC CONFIG', style: TextStyle(
                 color: Colors.cyanAccent.withAlpha(200),
                 fontWeight: FontWeight.w900,
                 fontSize: 11,
                 letterSpacing: 0.5,
               )),
               const Spacer(),
-              Text('Aplica a ambos hubs', style: TextStyle(
+              Text('Applies to both hubs', style: TextStyle(
                 color: Colors.white.withAlpha(100),
                 fontSize: 9,
               )),
@@ -308,7 +308,7 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
               children: [
                 Text(title, style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 11)),
                 const Spacer(),
-                Text(expanded ? 'override activo' : 'usar simétrico',
+                Text(expanded ? 'override active' : 'use symmetric',
                     style: TextStyle(fontSize: 8, color: accentColor.withAlpha(120))),
                 const SizedBox(width: 4),
                 Icon(expanded ? Icons.expand_less : Icons.expand_more, size: 14, color: accentColor.withAlpha(120)),
@@ -327,7 +327,7 @@ class _StagedSymbolPanelState extends State<StagedSymbolPanel> with SingleTicker
             ),
           if (expanded) ...[
             const SizedBox(height: 4),
-            Text('Dejar vacío = hereda config simétrica',
+            Text('Leave empty = inherits symmetric config',
                 style: TextStyle(fontSize: 8, color: Colors.white.withAlpha(80), fontStyle: FontStyle.italic)),
             const SizedBox(height: 6),
             Wrap(

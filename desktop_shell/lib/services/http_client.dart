@@ -136,7 +136,7 @@ class RobustHttpClient {
           ),
         );
       default:
-        throw ValidationException(message: 'Método HTTP no soportado: $method');
+        throw ValidationException(message: 'Unsupported HTTP method: $method');
     }
   }
 
@@ -171,7 +171,7 @@ class RobustHttpClient {
         attempt++;
         if (attempt >= config.maxRetries) {
           throw NetworkException(
-            message: 'No se pudo conectar al motor. ¿Está en línea?',
+            message: 'Could not connect to the engine. Is it online?',
             originalError: e.toString(),
           );
         }
@@ -211,25 +211,25 @@ class RobustHttpClient {
 
       switch (response.statusCode) {
         case 400:
-          throw ValidationException(message: 'Solicitud inválida: $detail');
+          throw ValidationException(message: 'Invalid request: $detail');
         case 401:
           throw ApiException.unauthorized();
         case 403:
           throw ApiException(
-            message: 'Acceso prohibido: permisos insuficientes',
+            message: 'Forbidden: insufficient permissions',
             statusCode: 403,
           );
         case 404:
           throw ApiException.notFound();
         case 422:
           throw ValidationException(
-            message: 'Datos inválidos: $detail',
+            message: 'Invalid data: $detail',
           );
         case >= 500:
           throw ApiException.serverError(detail);
         default:
           throw ApiException(
-            message: 'Error HTTP ${response.statusCode}: $detail',
+            message: 'HTTP error ${response.statusCode}: $detail',
             statusCode: response.statusCode,
           );
       }
@@ -237,7 +237,7 @@ class RobustHttpClient {
       rethrow;
     } catch (e) {
       throw ApiException(
-        message: 'Error al procesar respuesta del servidor',
+        message: 'Error processing server response',
         originalError: e.toString(),
       );
     }

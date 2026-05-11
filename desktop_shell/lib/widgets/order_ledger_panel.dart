@@ -99,7 +99,7 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
               ),
               const Spacer(),
               // Stats chips
-              _statChip('Activas', '$live',
+              _statChip('Active', '$live',
                   live > 0 ? Colors.orangeAccent : Colors.white30),
               const SizedBox(width: 6),
               _statChip('Total', '$total', Colors.white38),
@@ -113,7 +113,7 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Center(
                 child: Text(
-                  'Sin órdenes registradas',
+                  'No orders recorded',
                   style: TextStyle(
                     fontSize: 9,
                     color: Colors.white.withValues(alpha: 0.2),

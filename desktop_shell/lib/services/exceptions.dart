@@ -16,11 +16,11 @@ class NetworkException extends AppException {
   NetworkException({required super.message, super.originalError});
 
   factory NetworkException.timeout() => NetworkException(
-    message: 'Conexión agotada: el servidor tardó demasiado en responder',
+    message: 'Connection timed out: the server took too long to respond',
   );
 
   factory NetworkException.connectionRefused() => NetworkException(
-    message: 'No se pudo conectar al motor. ¿Está ejecutando python main.py?',
+    message: 'Could not connect to the engine. Is python main.py running?',
   );
 }
 
@@ -31,20 +31,20 @@ class ApiException extends AppException {
   ApiException({required super.message, this.statusCode, super.originalError});
 
   factory ApiException.unauthorized() => ApiException(
-    message: 'No autorizado: credenciales inválidas o sesión expirada',
+    message: 'Unauthorized: invalid credentials or session expired',
     statusCode: 401,
   );
 
   factory ApiException.badRequest(String details) =>
-      ApiException(message: 'Solicitud inválida: $details', statusCode: 400);
+      ApiException(message: 'Invalid request: $details', statusCode: 400);
 
   factory ApiException.notFound() => ApiException(
-    message: 'Recurso no encontrado en el servidor',
+    message: 'Resource not found on the server',
     statusCode: 404,
   );
 
   factory ApiException.serverError([String? details]) => ApiException(
-    message: 'Error en el servidor${details != null ? ': $details' : ''}',
+    message: 'Server error${details != null ? ': $details' : ''}',
     statusCode: 500,
   );
 }
@@ -54,10 +54,10 @@ class ValidationException extends AppException {
   ValidationException({required super.message, super.originalError});
 
   factory ValidationException.emptyCredential() =>
-      ValidationException(message: 'API key y secret son requeridos');
+      ValidationException(message: 'API key and secret are required');
 
   factory ValidationException.invalidSymbol(String symbol) =>
-      ValidationException(message: 'Símbolo inválido: $symbol');
+      ValidationException(message: 'Invalid symbol: $symbol');
 }
 
 /// Credential/security related errors.
@@ -65,8 +65,8 @@ class AuthException extends AppException {
   AuthException({required super.message, super.originalError});
 
   factory AuthException.credentialNotFound() =>
-      AuthException(message: 'Credencial no encontrada en el vault');
+      AuthException(message: 'Credential not found in the vault');
 
   factory AuthException.vaultLocked() =>
-      AuthException(message: 'Vault no disponible o ilegible');
+      AuthException(message: 'Vault unavailable or unreadable');
 }

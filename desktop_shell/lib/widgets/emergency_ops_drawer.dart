@@ -101,14 +101,14 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: Text('¿Ejecutar $label?', style: const TextStyle(color: Colors.white)),
-        content: const Text('Esta operación es irreversible.', style: TextStyle(color: Colors.white70)),
+        title: Text('Execute $label?', style: const TextStyle(color: Colors.white)),
+        content: const Text('This operation is irreversible.', style: TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Ejecutar', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Execute', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -132,7 +132,7 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$op completado'), backgroundColor: Colors.green),
+          SnackBar(content: Text('$op completed'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
