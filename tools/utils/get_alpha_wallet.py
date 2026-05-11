@@ -6,7 +6,7 @@ from pathlib import Path
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-# Agregar directorio actual para poder importar runtime
+# Add current directory to be able to import runtime
 sys.path.append(str(Path(__file__).parent.absolute()))
 
 from binance.client import Client
@@ -16,18 +16,18 @@ def main():
         import config
         api_key = config.api_key
         api_secret = config.api_secret
-        print("Credenciales cargadas desde config.py.")
+        print("Credentials loaded from config.py.")
     except ImportError:
-        print("Error: No se encontró config.py con las credenciales.")
+        print("Error: config.py with credentials not found.")
         return
     except AttributeError:
-        print("Error: config.py no tiene 'api_key' o 'api_secret'.")
+        print("Error: config.py does not have 'api_key' or 'api_secret'.")
         return
         
-    print("Conectando a Binance...")
+    print("Connecting to Binance...")
     
     try:
-        # Usar binance-python client
+        # Use binance-python client
         client = Client(api_key, api_secret)
         account = client.get_account()
         
@@ -61,10 +61,10 @@ def main():
                     "value_usdt": value_usdt
                 })
         
-        # Ordenar por valor en USDT (descendente)
+        # Sort by USDT value (descending)
         active_balances.sort(key=lambda x: x["value_usdt"], reverse=True)
         
-        print(f"\n--- Billetera 'Alpha' Balances (Activos: {len(active_balances)}) ---")
+        print(f"\n--- 'Alpha' Wallet Balances (Assets: {len(active_balances)}) ---")
         print(f"{'Asset':<15} | {'Balance':<20} | {'Value (USDT)':<20}")
         print("-" * 60)
         for b in active_balances:
@@ -72,10 +72,10 @@ def main():
             print(f"{b['asset']:<15} | {b['free']:<20} | {usdt_str:<20}")
             
         print("-" * 60)
-        print(f"Total Estimado en Billetera: ${total_wallet_usdt:.2f} USDT")
+        print(f"Estimated Wallet Total: ${total_wallet_usdt:.2f} USDT")
             
     except Exception as e:
-        print(f"Error al obtener la información de Binance: {e}")
+        print(f"Error fetching Binance account info: {e}")
 
 if __name__ == "__main__":
     main()

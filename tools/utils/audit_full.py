@@ -16,7 +16,7 @@ def main():
     now_ts = int(time.time() * 1000)
     three_years_ago = now_ts - (1095 * 24 * 3600 * 1000)
 
-    sys.stderr.write("FASE 1: Datos base...\n")
+    sys.stderr.write("PHASE 1: Base data...\n")
     account = client.get_account()
     balances = account.get("balances", [])
     tickers = client.get_all_tickers()
@@ -32,11 +32,11 @@ def main():
             held_assets.add(clean)
 
     relevant_symbols = [s for s in trading_symbols if s.replace("USDT","") in held_assets]
-    sys.stderr.write(f"  {len(relevant_symbols)} pares relevantes encontrados.\n")
+    sys.stderr.write(f"  {len(relevant_symbols)} relevant pairs found.\n")
     time.sleep(1)
 
-    # FASE 2: Trades Spot
-    sys.stderr.write("FASE 2: Historial de trades spot...\n")
+    # PHASE 2: Spot Trades
+    sys.stderr.write("PHASE 2: Spot trade history...\n")
     all_trades = []
     batch_size = 40
     for i in range(0, len(relevant_symbols), batch_size):
@@ -52,12 +52,12 @@ def main():
             except:
                 pass
             time.sleep(0.15)
-        sys.stderr.write(f"  Lote {i//batch_size+1}/{(len(relevant_symbols)//batch_size)+1} completado ({len(all_trades)} trades)\n")
+        sys.stderr.write(f"  Batch {i//batch_size+1}/{(len(relevant_symbols)//batch_size)+1} completed ({len(all_trades)} trades)\n")
         if i + batch_size < len(relevant_symbols):
             time.sleep(5)
 
-    # FASE 3: Préstamos
-    sys.stderr.write("FASE 3: Historial de préstamos...\n")
+    # PHASE 3: Loans
+    sys.stderr.write("PHASE 3: Loan history...\n")
     borrows, repays, ltv_adj = [], [], []
     page = 1
     while True:
@@ -107,8 +107,8 @@ def main():
             page += 1
         except: break
 
-    # FASE 4: Earn
-    sys.stderr.write("FASE 4: Historial de Earn...\n")
+    # PHASE 4: Earn
+    sys.stderr.write("PHASE 4: Earn history...\n")
     earn_subs, earn_redeems = [], []
     page = 1
     while True:
@@ -134,8 +134,8 @@ def main():
         except: break
     time.sleep(1)
 
-    # FASE 5: Conversiones
-    sys.stderr.write("FASE 5: Conversiones y otros...\n")
+    # PHASE 5: Conversions
+    sys.stderr.write("PHASE 5: Conversions and other...\n")
     converts = []
     window = 90 * 24 * 3600 * 1000
     cursor = three_years_ago
@@ -179,10 +179,10 @@ def main():
         cursor = end
         time.sleep(0.5)
 
-    sys.stderr.write("Generando reporte...\n")
+    sys.stderr.write("Generating report...\n")
 
-    # ===================== ANÁLISIS =====================
-    # Trades por tipo
+    # ===================== ANALYSIS =====================
+    # Trades by type
     buys = [t for t in all_trades if t.get("isBuyer")]
     sells = [t for t in all_trades if not t.get("isBuyer")]
 
@@ -197,7 +197,7 @@ def main():
         elif comm_asset + "USDT" in prices:
             total_commission_usdt += comm * prices[comm_asset + "USDT"]
 
-    # P&L por activo
+    # P&L by asset
     asset_pnl = {}
     for t in all_trades:
         sym = t["_symbol"]
@@ -213,17 +213,17 @@ def main():
             asset_pnl[asset]["sold"] += qty
             asset_pnl[asset]["qty_sold"] += float(t["qty"])
 
-    # Préstamos
+    # Loans
     total_borrowed = sum(float(b.get("initialLoanAmount", 0)) for b in borrows)
     total_repaid = sum(float(r.get("repayAmount", 0)) for r in repays)
     total_ongoing_debt = sum(float(l.get("totalDebt", 0)) for l in ongoing_loans)
     interest_estimated = total_ongoing_debt + total_repaid - total_borrowed
 
-    # Colateral perdido (repays con collateralReturn = 0 implica liquidación parcial)
+    # Lost collateral (repays with collateralReturn = 0 implies partial liquidation)
     forced_liquidations = [r for r in repays if float(r.get("collateralReturn", 0)) == 0 and float(r.get("repayAmount", 0)) > 0]
     forced_liq_total = sum(float(r.get("repayAmount", 0)) for r in forced_liquidations)
 
-    # Conversiones
+    # Conversions
     convert_cost = sum(float(c.get("fromAmount",0)) for c in converts if c.get("fromAsset") == "USDT")
     convert_revenue = sum(float(c.get("toAmount",0)) for c in converts if c.get("toAsset") == "USDT")
 
@@ -242,7 +242,7 @@ def main():
         if coin == "USDT": withdraw_usdt += amt
         elif coin + "USDT" in prices: withdraw_usdt += amt * prices[coin + "USDT"]
 
-    # Valor actual del portafolio
+    # Current portfolio value
     current_portfolio = 0
     for b in balances:
         asset = b["asset"]
@@ -251,40 +251,40 @@ def main():
             if asset == "USDT": current_portfolio += qty
             elif asset + "USDT" in prices: current_portfolio += qty * prices[asset + "USDT"]
 
-    # ===================== REPORTE =====================
+    # ===================== REPORT =====================
     print("=" * 110)
-    print("  PECUNATOR - AUDITORÍA FINANCIERA COMPLETA")
-    print(f"  Período: {ts_to_date(three_years_ago)} → {datetime.now().strftime('%Y-%m-%d')}")
+    print("  PECUNATOR - COMPLETE FINANCIAL AUDIT")
+    print(f"  Period: {ts_to_date(three_years_ago)} → {datetime.now().strftime('%Y-%m-%d')}")
     print("=" * 110)
 
     print("\n┌─────────────────────────────────────────────────────────────────┐")
-    print("│                    RESUMEN EJECUTIVO                           │")
+    print("│                    EXECUTIVE SUMMARY                           │")
     print("├─────────────────────────────────────┬─────────────────────────┤")
-    print(f"│ Compras Spot (total gastado)        │ ${total_buy_cost:>20,.2f} │")
-    print(f"│ Ventas Spot (total recibido)        │ ${total_sell_revenue:>20,.2f} │")
-    print(f"│ P&L Spot (ventas - compras)         │ ${total_sell_revenue - total_buy_cost:>+20,.2f} │")
-    print(f"│ Comisiones pagadas (est.)           │ ${total_commission_usdt:>20,.2f} │")
-    print(f"│ Préstamos tomados                   │ ${total_borrowed:>20,.2f} │")
-    print(f"│ Préstamos pagados                   │ ${total_repaid:>20,.2f} │")
-    print(f"│ Deuda pendiente                     │ ${total_ongoing_debt:>20,.2f} │")
-    print(f"│ Intereses pagados (est.)            │ ${max(interest_estimated,0):>20,.2f} │")
-    print(f"│ Liquidaciones forzadas (pago sin    │                         │")
-    print(f"│   devolución de colateral)          │ ${forced_liq_total:>20,.2f} │")
-    print(f"│ Depósitos recibidos                 │ ${deposit_usdt:>20,.2f} │")
-    print(f"│ Retiros enviados                    │ ${withdraw_usdt:>20,.2f} │")
-    print(f"│ Conversiones (USDT gastado)         │ ${convert_cost:>20,.2f} │")
-    print(f"│ Conversiones (USDT recibido)        │ ${convert_revenue:>20,.2f} │")
-    print(f"│ Valor actual del portafolio         │ ${current_portfolio:>20,.2f} │")
+    print(f"│ Spot Buys (total spent)             │ ${total_buy_cost:>20,.2f} │")
+    print(f"│ Spot Sales (total received)         │ ${total_sell_revenue:>20,.2f} │")
+    print(f"│ Spot P&L (sales - buys)             │ ${total_sell_revenue - total_buy_cost:>+20,.2f} │")
+    print(f"│ Commissions paid (est.)             │ ${total_commission_usdt:>20,.2f} │")
+    print(f"│ Loans taken                         │ ${total_borrowed:>20,.2f} │")
+    print(f"│ Loans repaid                        │ ${total_repaid:>20,.2f} │")
+    print(f"│ Outstanding debt                    │ ${total_ongoing_debt:>20,.2f} │")
+    print(f"│ Interest paid (est.)                │ ${max(interest_estimated,0):>20,.2f} │")
+    print(f"│ Forced liquidations (payment w/o   │                         │")
+    print(f"│   collateral return)                │ ${forced_liq_total:>20,.2f} │")
+    print(f"│ Deposits received                   │ ${deposit_usdt:>20,.2f} │")
+    print(f"│ Withdrawals sent                    │ ${withdraw_usdt:>20,.2f} │")
+    print(f"│ Conversions (USDT spent)            │ ${convert_cost:>20,.2f} │")
+    print(f"│ Conversions (USDT received)         │ ${convert_revenue:>20,.2f} │")
+    print(f"│ Current portfolio value             │ ${current_portfolio:>20,.2f} │")
     print("├─────────────────────────────────────┼─────────────────────────┤")
     net_result = current_portfolio + total_sell_revenue + withdraw_usdt - total_buy_cost - deposit_usdt - total_ongoing_debt
-    print(f"│ RESULTADO NETO ESTIMADO             │ ${net_result:>+20,.2f} │")
+    print(f"│ ESTIMATED NET RESULT                │ ${net_result:>+20,.2f} │")
     print("└─────────────────────────────────────┴─────────────────────────┘")
 
-    # TOP ACTIVOS POR P&L
+    # TOP ASSETS BY P&L
     print("\n" + "=" * 110)
-    print("  DETALLE POR ACTIVO (Spot Trades)")
+    print("  DETAIL BY ASSET (Spot Trades)")
     print("=" * 110)
-    print(f"{'Asset':<10} {'Comprado$':>12} {'Vendido$':>12} {'P&L Spot':>12} {'#Trades':>8} {'Holding$':>12} {'P&L Total':>12}")
+    print(f"{'Asset':<10} {'Bought$':>12} {'Sold$':>12} {'P&L Spot':>12} {'#Trades':>8} {'Holding$':>12} {'P&L Total':>12}")
     print("-" * 110)
 
     sorted_assets = sorted(asset_pnl.items(), key=lambda x: x[1]["sold"] - x[1]["bought"], reverse=True)
@@ -299,23 +299,23 @@ def main():
         indicator = "🟢" if total_pnl > 0 else "🔴"
         print(f"{asset:<10} ${data['bought']:>10,.2f} ${data['sold']:>10,.2f} ${spot_pnl:>+10,.2f} {data['trades']:>8} ${holding_val:>10,.2f} {indicator}${total_pnl:>+9,.2f}")
 
-    # PRÉSTAMOS DETALLE
+    # LOANS DETAIL
     print("\n" + "=" * 110)
-    print("  HISTORIAL DE PRÉSTAMOS")
+    print("  LOAN HISTORY")
     print("=" * 110)
-    print(f"  Total préstamos tomados:           {len(borrows)}")
-    print(f"  Total pagos realizados:            {len(repays)}")
-    print(f"  Ajustes LTV (colateral añadido):   {len(ltv_adj)}")
-    print(f"  Pagos sin devolución de colateral: {len(forced_liquidations)}")
+    print(f"  Total loans taken:                 {len(borrows)}")
+    print(f"  Total payments made:               {len(repays)}")
+    print(f"  LTV adjustments (collateral added): {len(ltv_adj)}")
+    print(f"  Payments without collateral return: {len(forced_liquidations)}")
 
     if forced_liquidations:
-        print(f"\n  ⚠️  PAGOS SIN DEVOLUCIÓN DE COLATERAL (posibles liquidaciones parciales):")
-        print(f"  {'Moneda':>8} {'Colateral':>10} {'Monto Pagado':>14} {'Fecha':>12}")
+        print(f"\n  ⚠️  PAYMENTS WITHOUT COLLATERAL RETURN (possible partial liquidations):")
+        print(f"  {'Currency':>8} {'Collateral':>10} {'Amount Paid':>14} {'Date':>12}")
         for r in sorted(forced_liquidations, key=lambda x: float(x.get("repayAmount",0)), reverse=True)[:20]:
             print(f"  {r.get('loanCoin','?'):>8} {r.get('collateralCoin','?'):>10} ${float(r.get('repayAmount',0)):>12,.4f} {ts_to_date(r.get('repayTime',0)):>12}")
 
     if ltv_adj:
-        print(f"\n  📊 AJUSTES DE LTV (colateral forzado a añadir):")
+        print(f"\n  📊 LTV ADJUSTMENTS (forced collateral addition):")
         for a in ltv_adj:
             col_coin = a.get("collateralCoin","?")
             col_amt = float(a.get("collateralAmount", 0))
@@ -326,24 +326,24 @@ def main():
 
     # EARN
     print("\n" + "=" * 110)
-    print("  ACTIVIDAD EN EARN")
+    print("  EARN ACTIVITY")
     print("=" * 110)
-    print(f"  Suscripciones registradas:  {len(earn_subs)}")
-    print(f"  Redenciones registradas:    {len(earn_redeems)}")
+    print(f"  Subscriptions recorded:     {len(earn_subs)}")
+    print(f"  Redemptions recorded:       {len(earn_redeems)}")
 
-    # CONVERSIONES
+    # CONVERSIONS
     if converts:
         print("\n" + "=" * 110)
-        print("  CONVERSIONES RÁPIDAS")
+        print("  QUICK CONVERSIONS")
         print("=" * 110)
-        print(f"  Total conversiones: {len(converts)}")
-        print(f"  USDT gastado en conversiones: ${convert_cost:.2f}")
-        print(f"  USDT recibido de conversiones: ${convert_revenue:.2f}")
+        print(f"  Total conversions: {len(converts)}")
+        print(f"  USDT spent on conversions: ${convert_cost:.2f}")
+        print(f"  USDT received from conversions: ${convert_revenue:.2f}")
 
-    # DIVIDENDOS
+    # DIVIDENDS
     if dividends:
         print("\n" + "=" * 110)
-        print("  AIRDROPS / DIVIDENDOS")
+        print("  AIRDROPS / DIVIDENDS")
         print("=" * 110)
         div_total = 0
         for d in dividends:
@@ -351,56 +351,56 @@ def main():
             asset = d.get("asset","?")
             p = prices.get(asset + "USDT", 0)
             div_total += amt * p
-        print(f"  Dividendos recibidos: {len(dividends)}")
-        print(f"  Valor estimado actual: ${div_total:.2f} USDT")
+        print(f"  Dividends received: {len(dividends)}")
+        print(f"  Current estimated value: ${div_total:.2f} USDT")
 
-    # ANÁLISIS FINAL
+    # FINAL ANALYSIS
     print("\n" + "=" * 110)
-    print("  DIAGNÓSTICO: ¿QUÉ HICISTE BIEN Y QUÉ MAL?")
+    print("  DIAGNOSIS: WHAT DID YOU DO RIGHT AND WRONG?")
     print("=" * 110)
 
     winners = [(a, d) for a, d in sorted_assets if d["sold"] - d["bought"] > 0]
     losers = [(a, d) for a, d in sorted_assets if d["sold"] - d["bought"] < 0]
 
-    print(f"\n  ✅ LO QUE HICISTE BIEN:")
+    print(f"\n  ✅ WHAT YOU DID RIGHT:")
     if winners:
         win_total = sum(d["sold"]-d["bought"] for _,d in winners)
-        print(f"     - {len(winners)} activos vendiste con ganancia, generando ${win_total:,.2f} USDT")
+        print(f"     - You sold {len(winners)} assets with profit, generating ${win_total:,.2f} USDT")
         top3 = winners[:3]
         for a, d in top3:
             print(f"       🏆 {a}: +${d['sold']-d['bought']:,.2f}")
     if earn_subs:
-        print(f"     - Usaste Earn activamente ({len(earn_subs)} suscripciones), generando rendimiento pasivo")
+        print(f"     - You used Earn actively ({len(earn_subs)} subscriptions), generating passive income")
 
-    print(f"\n  ❌ LO QUE HICISTE MAL:")
+    print(f"\n  ❌ WHAT YOU DID WRONG:")
     if losers:
         loss_total = sum(d["sold"]-d["bought"] for _,d in losers)
-        print(f"     - {len(losers)} activos vendiste con pérdida, perdiendo ${abs(loss_total):,.2f} USDT")
+        print(f"     - You sold {len(losers)} assets at a loss, losing ${abs(loss_total):,.2f} USDT")
         worst3 = losers[-3:]
         for a, d in worst3:
             print(f"       💀 {a}: ${d['sold']-d['bought']:,.2f}")
 
     if total_borrowed > 0:
-        print(f"     - Tomaste ${total_borrowed:,.2f} en préstamos. Intereses acumulados: ~${max(interest_estimated,0):,.2f}")
+        print(f"     - You took ${total_borrowed:,.2f} in loans. Accumulated interest: ~${max(interest_estimated,0):,.2f}")
     if forced_liquidations:
-        print(f"     - {len(forced_liquidations)} pagos forzados sin devolución de colateral (${forced_liq_total:,.2f} USDT)")
+        print(f"     - {len(forced_liquidations)} forced payments without collateral return (${forced_liq_total:,.2f} USDT)")
     if total_commission_usdt > 10:
-        print(f"     - Comisiones de trading acumuladas: ${total_commission_usdt:,.2f}")
+        print(f"     - Accumulated trading commissions: ${total_commission_usdt:,.2f}")
 
-    print(f"\n  📋 LECCIONES DETECTADAS:")
+    print(f"\n  📋 DETECTED LESSONS:")
     if total_borrowed > total_buy_cost * 0.3:
-        print(f"     ⚠️  Sobreexposición a préstamos: prestaste ${total_borrowed:,.2f} vs compraste ${total_buy_cost:,.2f}")
-        print(f"        Regla sugerida: No prestar más del 20% del valor del portafolio.")
+        print(f"     ⚠️  Over-exposure to loans: borrowed ${total_borrowed:,.2f} vs bought ${total_buy_cost:,.2f}")
+        print(f"        Suggested rule: Do not borrow more than 20% of the portfolio value.")
     if len(losers) > len(winners) * 2:
-        print(f"     ⚠️  Ratio de acierto bajo: {len(winners)} ganadores vs {len(losers)} perdedores")
-        print(f"        Regla sugerida: Implementar stop-loss automáticos al -15%.")
+        print(f"     ⚠️  Low win ratio: {len(winners)} winners vs {len(losers)} losers")
+        print(f"        Suggested rule: Implement automatic stop-loss at -15%.")
     if forced_liquidations:
-        print(f"     ⚠️  Liquidaciones forzadas detectadas: el LTV subió demasiado sin intervención.")
-        print(f"        Regla sugerida: Monitorear LTV diario, actuar si pasa del 65%.")
+        print(f"     ⚠️  Forced liquidations detected: LTV rose too high without intervention.")
+        print(f"        Suggested rule: Monitor LTV daily, act if it exceeds 65%.")
 
     print(f"\n{'=' * 110}")
-    print(f"  Datos recopilados: {len(all_trades)} trades, {len(borrows)} préstamos,")
-    print(f"  {len(repays)} pagos, {len(earn_subs)} suscripciones earn, {len(converts)} conversiones")
+    print(f"  Data collected: {len(all_trades)} trades, {len(borrows)} loans,")
+    print(f"  {len(repays)} payments, {len(earn_subs)} earn subscriptions, {len(converts)} conversions")
     print(f"{'=' * 110}")
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ STABLECOINS = {
 
 LOG_FILE    = os.path.join(os.path.dirname(__file__), "earn_rates_log.csv")
 SNAP_FILE   = os.path.join(os.path.dirname(__file__), "earn_rates_last.txt")
-INTERVAL_S  = 3600  # 1 hora
+INTERVAL_S  = 3600  # 1 hour
 
 CSV_HEADERS = [
     "timestamp", "datetime_utc", "type",
@@ -170,7 +170,7 @@ def save_snapshot(records, ts_ms):
     flex    = [r for r in records if r["type"] == "FLEXIBLE"]
     locked  = [r for r in records if r["type"] == "LOCKED"]
 
-    # Ordenar por APR descendente
+    # Sort by APR descending
     flex.sort(key=lambda x: x["total_apr_pct"], reverse=True)
     locked.sort(key=lambda x: x["total_apr_pct"], reverse=True)
 
@@ -261,7 +261,7 @@ def print_history_report():
             f"{min(aprs):>9.4f}% {max(aprs):>9.4f}% {aprs[-1]:>9.4f}%"
         )
 
-    print(f"\n  Último registro: {entries[-1]['dt']} UTC")
+    print(f"\n  Last record: {entries[-1]['dt']} UTC")
     print("=" * 90)
 
 # ─── MAIN CYCLE ──────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ def run_cycle(client):
     with open(SNAP_FILE, "r", encoding="utf-8") as f:
         print(f.read())
 
-    sys.stderr.write(f"  ✅ {len(records)} productos registrados en {LOG_FILE}\n")
+    sys.stderr.write(f"  ✅ {len(records)} products logged to {LOG_FILE}\n")
     return len(records)
 
 def main():

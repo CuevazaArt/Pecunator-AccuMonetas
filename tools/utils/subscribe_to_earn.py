@@ -9,22 +9,22 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     client = Client(config.api_key, config.api_secret, requests_params={'timeout': 30})
-    print("Obteniendo balances de Spot...")
+    print("Fetching Spot balances...")
 
     try:
         account = client.get_account()
         balances = account.get("balances", [])
     except Exception as e:
-        print(f"Error conectando a Binance: {e}")
+        print(f"Error connecting to Binance: {e}")
         return
 
-    # Filtrar activos con saldo disponible (free > 0), excluir USDT
+    # Filter assets with available balance (free > 0), exclude USDT
     spot_balances = [
         b for b in balances
         if float(b.get("free", 0)) > 0 and b["asset"] != "USDT"
     ]
 
-    print(f"Activos con saldo en Spot: {len(spot_balances)}")
+    print(f"Assets with Spot balance: {len(spot_balances)}")
     print("=" * 75)
 
     subscribed_count = 0
@@ -34,9 +34,9 @@ def main():
         asset = b["asset"]
         free_qty = b["free"]
 
-        # Saltar activos LD que aún estén atrapados en Earn
+        # Skip LD assets still trapped in Earn
         if asset.startswith("LD"):
-            print(f"Saltando {asset}: Ya es un token de Earn.")
+            print(f"Skipping {asset}: Already an Earn token.")
             skipped_count += 1
             continue
 
@@ -66,7 +66,7 @@ def main():
                         "type": "LOCKED"
                     }
         except Exception as e:
-            print(f"  Advertencia al buscar Locked: {e}")
+            print(f"  Warning while searching Locked: {e}")
 
         # =============================================
         # 2) Buscar productos Flexible
@@ -82,7 +82,7 @@ def main():
                 if float(free_qty) < min_purchase:
                     continue
                 apr = float(prod.get("latestAnnualPercentageRate", 0))
-                # Revisar si hay tiers con mejor tasa
+                # Check if there are tiers with a better rate
                 tiers = prod.get("tierAnnualPercentageRate", {})
                 for tier_range, tier_apr in tiers.items():
                     tier_apr_f = float(tier_apr)
@@ -95,10 +95,10 @@ def main():
                         "type": "FLEXIBLE"
                     }
         except Exception as e:
-            print(f"  Advertencia al buscar Flexible: {e}")
+            print(f"  Warning while searching Flexible: {e}")
 
         # =============================================
-        # 3) Elegir el mejor producto (mayor APR gana)
+        # 3) Choose the best product (highest APR wins)
         # =============================================
         chosen = None
         if best_locked and best_flexible:
@@ -109,7 +109,7 @@ def main():
             chosen = best_flexible
 
         if not chosen:
-            print(f"  Sin productos Earn disponibles para {asset}. Saltando.")
+            print(f"  No Earn products available for {asset}. Skipping.")
             skipped_count += 1
             time.sleep(0.5)
             continue
@@ -117,57 +117,57 @@ def main():
         apr_pct = chosen["apr"] * 100
 
         # =============================================
-        # 4) Suscribir al producto elegido
+        # 4) Subscribe to the chosen product
         # =============================================
         if chosen["type"] == "LOCKED":
-            print(f"  Mejor opción: LOCKED ({chosen['duration']} días) | APR: {apr_pct:.2f}% | ID: {chosen['projectId']}")
+            print(f"  Best option: LOCKED ({chosen['duration']} days) | APR: {apr_pct:.2f}% | ID: {chosen['projectId']}")
             try:
                 res = client.subscribe_simple_earn_locked_product(
                     projectId=chosen["projectId"],
                     amount=free_qty,
                     autoSubscribe=True
                 )
-                print(f"  -> ¡Suscrito exitosamente a Locked Earn!")
+                print(f"  -> Successfully subscribed to Locked Earn!")
                 subscribed_count += 1
             except BinanceAPIException as e:
                 print(f"  -> Error API: {e}")
-                # Fallback: intentar con Flexible si Locked falla
+                # Fallback: try Flexible if Locked fails
                 if best_flexible:
-                    print(f"  Intentando fallback a Flexible (APR: {best_flexible['apr']*100:.2f}%)...")
+                    print(f"  Trying fallback to Flexible (APR: {best_flexible['apr']*100:.2f}%)...")
                     try:
                         res = client.subscribe_simple_earn_flexible_product(
                             productId=best_flexible["productId"],
                             amount=free_qty,
                             autoSubscribe=True
                         )
-                        print(f"  -> ¡Suscrito a Flexible Earn como fallback!")
+                        print(f"  -> Subscribed to Flexible Earn as fallback!")
                         subscribed_count += 1
                     except Exception as e2:
-                        print(f"  -> Fallback también falló: {e2}")
+                        print(f"  -> Fallback also failed: {e2}")
             except Exception as e:
-                print(f"  -> Error inesperado: {e}")
+                print(f"  -> Unexpected error: {e}")
         else:
-            print(f"  Mejor opción: FLEXIBLE | APR: {apr_pct:.2f}% | ID: {chosen['productId']}")
+            print(f"  Best option: FLEXIBLE | APR: {apr_pct:.2f}% | ID: {chosen['productId']}")
             try:
                 res = client.subscribe_simple_earn_flexible_product(
                     productId=chosen["productId"],
                     amount=free_qty,
                     autoSubscribe=True
                 )
-                print(f"  -> ¡Suscrito exitosamente a Flexible Earn!")
+                print(f"  -> Successfully subscribed to Flexible Earn!")
                 subscribed_count += 1
             except BinanceAPIException as e:
                 print(f"  -> Error API: {e}")
             except Exception as e:
-                print(f"  -> Error inesperado: {e}")
+                print(f"  -> Unexpected error: {e}")
 
-        # Esperar 1 segundo para respetar los límites de la API
+        # Wait 1 second to respect API rate limits
         time.sleep(1.0)
 
     print("\n" + "=" * 75)
-    print(f"Proceso finalizado.")
-    print(f"  Activos suscritos a Earn: {subscribed_count}")
-    print(f"  Activos saltados:         {skipped_count}")
+    print(f"Process completed.")
+    print(f"  Assets subscribed to Earn: {subscribed_count}")
+    print(f"  Assets skipped:           {skipped_count}")
 
 if __name__ == "__main__":
     main()
