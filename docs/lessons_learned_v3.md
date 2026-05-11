@@ -1,37 +1,37 @@
-# Pecunator Hardening: Lecciones Aprendidas (v3.1.0 - v3.1.1)
+# Pecunator Hardening: Lessons Learned (v3.1.0 - v3.1.1)
 
-Durante la fase de endurecimiento y auditoría del motor Pecunator, se identificaron y mitigaron varios puntos críticos de falla. Este documento resume los hallazgos y las soluciones implementadas.
+During the hardening and audit phase of the Pecunator engine, several critical failure points were identified and mitigated. This document summarizes the findings and implemented solutions.
 
-## 1. Validación de Esquemas (API 500)
-**Problema**: El bot Elphaba (Margin Short) no iniciaba porque el esquema Pydantic `HubBotOut` requería `stop_loss_pct`. Como Elphaba no usa stop loss convencional, la validación fallaba con un error 500 interno.
-**Lección**: Los esquemas compartidos entre diferentes tipos de bots deben ser lo suficientemente flexibles para manejar campos opcionales o específicos de cada lógica.
-**Solución**: Se hizo `stop_loss_pct` opcional con valor por defecto `"0"`.
+## 1. Schema Validation (API 500)
+**Problem**: The Elphaba bot (Margin Short) would not start because the Pydantic schema `HubBotOut` required `stop_loss_pct`. Since Elphaba does not use a conventional stop loss, validation failed with an internal 500 error.
+**Lesson**: Shared schemas across different bot types must be flexible enough to handle optional or logic-specific fields.
+**Solution**: Made `stop_loss_pct` optional with a default value of `"0"`.
 
-## 2. Visibilidad de Guards
-**Problema**: Los mecanismos de seguridad (`ApiFuse`, `Governor`, `SymmetryGuard`) estaban envueltos en bloques `except Exception: pass`. Si fallaban, el bot seguía operando "a ciegas" sin que el operador supiera que las protecciones estaban inactivas.
-**Lección**: Nunca silenciar errores en capas de seguridad crítica. Es mejor un log de advertencia ruidoso que un silencio peligroso.
-**Solución**: Se reemplazaron por logs explícitos (`fuse_check_failed`, etc.) y se integraron al sistema de alertas.
+## 2. Guard Visibility
+**Problem**: Safety mechanisms (`ApiFuse`, `Governor`, `SymmetryGuard`) were wrapped in `except Exception: pass` blocks. If they failed, the bot continued operating "blind" without the operator knowing the protections were inactive.
+**Lesson**: Never silence errors in critical security layers. A noisy warning log is better than dangerous silence.
+**Solution**: Replaced with explicit logs (`fuse_check_failed`, etc.) and integrated into the alerting system.
 
-## 3. Ruido en Logs y Rotación
-**Problema**:
-1. El archivo `backend.log` crecía sin límite, arriesgando el espacio en disco.
-2. El polling constante de la UI Flutter (cada 1s para snapshot y fuse) enterraba los logs de ejecución real.
-**Lección**: El logging productivo requiere gestión de cuotas y filtrado de ruido de transporte.
-**Solución**:
-- Implementado `RotatingFileHandler` (15MB total).
-- Silenciado `uvicorn.access` por defecto (activable vía `PECUNATOR_ACCESS_LOGS=1`).
+## 3. Log Noise and Rotation
+**Problem**:
+1. The `backend.log` file grew without limit, risking disk space exhaustion.
+2. Constant polling from the Flutter UI (every 1s for snapshot and fuse) buried the real execution logs.
+**Lesson**: Production logging requires quota management and transport noise filtering.
+**Solution**:
+- Implemented `RotatingFileHandler` (15MB total).
+- Silenced `uvicorn.access` by default (activatable via `PECUNATOR_ACCESS_LOGS=1`).
 
-## 4. Asimetría de Despliegue
-**Problema**: Crear Dorothy y luego Elphaba manualmente dejaba una ventana de tiempo (o riesgo de error humano/red) donde solo un lado del hedge estaba activo.
-**Lección**: Las operaciones de cobertura deben ser atómicas.
-**Solución**: Endpoint `/api/v1/hub/deploy-symmetric` que garantiza el éxito de ambos o realiza rollback total.
+## 4. Deployment Asymmetry
+**Problem**: Creating Dorothy and then Elphaba manually left a time window (or human/network error risk) where only one side of the hedge was active.
+**Lesson**: Hedging operations must be atomic.
+**Solution**: Endpoint `/api/v1/hub/deploy-symmetric` that guarantees both sides succeed or performs a full rollback.
 
-## 5. Supervivencia del Proceso
-**Problema**: Si el motor Python crasheaba por una excepción no controlada, no había nada que lo levantara automáticamente.
-**Lección**: Un sistema autónomo requiere supervisión externa (Watchdog).
-**Solución**: Script `watchdog.py` que monitorea el endpoint `/health` y reinicia el proceso ante fallos.
+## 5. Process Survival
+**Problem**: If the Python engine crashed due to an unhandled exception, nothing would restart it automatically.
+**Lesson**: An autonomous system requires external supervision (Watchdog).
+**Solution**: `watchdog.py` script that monitors the `/health` endpoint and restarts the process on failure.
 
-## 6. Visibilidad del Prospector
-**Problema**: El prospector realizaba escaneos pesados pero solo logueaba el inicio y el final, lo que hacía parecer que el sistema estaba "congelado" o no hacía nada.
-**Lección**: Tareas de larga duración deben reportar progreso granular en el log para dar confianza al operador.
-**Solución**: Añadido logging por batches (ej. "procesando batch 3/10") y logs detallados de decisiones de auto-staging.
+## 6. Prospector Visibility
+**Problem**: The prospector performed heavy scans but only logged the start and end, making the system appear "frozen" or idle.
+**Lesson**: Long-running tasks must report granular progress in the log to give the operator confidence.
+**Solution**: Added per-batch logging (e.g. "processing batch 3/10") and detailed auto-staging decision logs.

@@ -1,21 +1,21 @@
-# Flujo de Capital — Aporte, Dispersión y Circulación de Recursos
+# Capital Flow — Contribution, Distribution, and Resource Circulation
 
 > **Fecha:** 2026-05-06
-> **Estado:** Diseño Arquitectónico (Pre-implementación de subcuentas)
-> **Referencia:** Fase 2 del Evolution Plan
+> **Status:** Architectural Design (Pre-subaccount implementation)
+> **Reference:** Phase 2 of the Evolution Plan
 
 ---
 
-## 1. Arquitectura de Cuentas
+## 1. Account Architecture
 
 ```
 ╔══════════════════════════════════════════════╗
-║              CUENTA PRINCIPAL                ║
+║              MASTER ACCOUNT                  ║
 ║         (Binance Master Account)             ║
 ║                                              ║
 ║  ┌──────────┐  ┌──────────┐  ┌──────────┐   ║
-║  │ RESERVA  │  │ EARN     │  │ LIQUIDEZ │   ║
-║  │ FRÍA     │  │ ACTIVO   │  │ LIBRE    │   ║
+║  │ COLD     │  │ EARN     │  │ FREE     │   ║
+║  │ RESERVE  │  │ ACTIVE   │  │ LIQUIDITY│   ║
 ║  │ (HODL)   │  │ (Yield)  │  │ (Deploy) │   ║
 ║  └────┬─────┘  └────┬─────┘  └────┬─────┘   ║
 ╚═══════╪═════════════╪════════════╪═══════════╝
@@ -30,31 +30,31 @@
 
 ---
 
-## 2. Mecanismo de Aporte (¿Cómo entran los fondos?)
+## 2. Contribution Mechanism (How do funds enter?)
 
-### 2.1 Aporte Inicial (Funding)
-El operador deposita USDT/crypto en la **Cuenta Principal** de Binance.
-Desde ahí, se distribuye manualmente o (en el futuro) vía el
+### 2.1 Initial Contribution (Funding)
+The operator deposits USDT/crypto into the Binance **Master Account**.
+From there, it is distributed manually or (in the future) via the
 `AccountMonitor + BotCoordinator`:
 
 ```
-Operador → Depósito → Cuenta Principal → Distribución
+Operator → Deposit → Master Account → Distribution
 ```
 
-### 2.2 Aporte Específico a un Bot o Sistema
-Para dirigir capital a un bot específico:
+### 2.2 Specific Contribution to a Bot or System
+To direct capital to a specific bot:
 
 | Método | Mecanismo | Estado |
 |--------|-----------|--------|
-| **Directo (actual)** | Transferir USDT de cuenta principal a subcuenta vía API REST (`POST /sapi/v1/sub-account/universalTransfer`) | Disponible (Fase 2) |
-| **Via Coordinator** | `bot_coordinator.allocate(bot_id, amount_usdt)` — el coordinator ejecuta la transferencia y registra en TelemetryVault | Por implementar |
-| **Via Dashboard** | Botón en Flutter: "Fondear Dorothy +500 USDT" → llama al endpoint REST del coordinator | Por implementar |
+| **Direct (current)** | Transfer USDT from master account to subaccount via REST API (`POST /sapi/v1/sub-account/universalTransfer`) | Available (Phase 2) |
+| **Via Coordinator** | `bot_coordinator.allocate(bot_id, amount_usdt)` — the coordinator executes the transfer and records it in TelemetryVault | To implement |
+| **Via Dashboard** | Button in Flutter: "Fund Dorothy +500 USDT" → calls the coordinator REST endpoint | To implement |
 
-### 2.3 Aporte a un Grupo
-Si quieres fondear "todos los bots de trend-following":
+### 2.3 Group Contribution
+To fund "all trend-following bots":
 
 ```python
-# Concepto: el coordinator agrupa bots por tipo y reparte equitativamente
+# Concept: the coordinator groups bots by type and distributes equally
 coordinator.allocate_group(
     group="trend_bots",  # dorothy instances
     total_usdt=1000,
@@ -64,72 +64,72 @@ coordinator.allocate_group(
 
 ---
 
-## 3. Dispersión de Recursos (¿A dónde van?)
+## 3. Resource Distribution (Where do they go?)
 
-### 3.1 Regla de Distribución Base
+### 3.1 Base Distribution Rule
 
 ```
-100% Capital Disponible
-  ├── 30% → Reserva Fría (HODL, acumulación largo plazo)
-  ├── 20% → Earn Activo (staking, savings — rendimiento pasivo)
-  ├── 10% → Liquidez de Emergencia (nunca tocar salvo pánico)
-  └── 40% → Capital de Trabajo (repartido entre bots activos)
-        ├── Dorothy: hasta 50% del capital de trabajo
-        └── Elphaba: hasta 50% del capital de trabajo
+100% Available Capital
+  ├── 30% → Cold Reserve (HODL, long-term accumulation)
+  ├── 20% → Active Earn (staking, savings — passive yield)
+  ├── 10% → Emergency Liquidity (never touch except in panic)
+  └── 40% → Working Capital (distributed among active bots)
+        ├── Dorothy: up to 50% of working capital
+        └── Elphaba: up to 50% of working capital
 ```
 
-### 3.2 Destino por Subcuenta
+### 3.2 Destination by Subaccount
 
 | Subcuenta | Bot(s) | Capital Máx | Función |
 |-----------|--------|-------------|---------|
-| SUB-01 | Dorothy | 50% trabajo | Scalp Long simétrico |
-| SUB-02 | Elphaba | 50% trabajo | Scalp Short simétrico |
-| SUB-03 | (Reserva) | — | Capital rotativo, buffer |
-| SUB-04 | (Earn) | — | Savings/Staking activos |
+| SUB-01 | Dorothy | 50% working | Symmetric Scalp Long |
+| SUB-02 | Elphaba | 50% working | Symmetric Scalp Short |
+| SUB-03 | (Reserve) | — | Rotating capital, buffer |
+| SUB-04 | (Earn) | — | Active Savings/Staking |
 
 ---
 
-## 4. Circulación (¿Cómo regresan y rotan los fondos?)
+## 4. Circulation (How do funds return and rotate?)
 
-### 4.1 Profit Taking (Toma de Ganancias)
+### 4.1 Profit Taking
 
 ```mermaid
 sequenceDiagram
     participant Bot as Dorothy (SUB-01)
     participant AM as AccountMonitor
     participant BC as BotCoordinator
-    participant Main as Cuenta Principal
+    participant Main as Master Account
 
     Bot->>AM: P&L snapshot: +150 USDT
     AM->>BC: Signal: PROFIT_THRESHOLD (>10% ROI)
-    BC->>Bot: Retire 50% de ganancias
-    Bot->>Main: Transfer 75 USDT → Principal
-    Main->>Main: 50% a Earn, 50% a Reserva
+    BC->>Bot: Withdraw 50% of profits
+    Bot->>Main: Transfer 75 USDT → Master
+    Main->>Main: 50% to Earn, 50% to Reserve
 ```
 
-**Regla:** Cuando un bot acumula >10% ROI sobre su capital asignado,
-el coordinator extrae automáticamente el 50% de las ganancias y las
-redirige a la cuenta principal para redistribución.
+**Rule:** When a bot accumulates >10% ROI on its allocated capital,
+the coordinator automatically extracts 50% of the profits and
+redirects them to the master account for redistribution.
 
-### 4.2 Rebalanceo Periódico (Mensual)
+### 4.2 Periodic Rebalancing (Monthly)
 
 ```
-Día 1 de cada mes:
-1. AccountMonitor toma snapshot de TODAS las subcuentas
-2. Calcula: ¿Quién está sobre-capitalizado? ¿Quién necesita más?
-3. Genera señales de rebalanceo (rebalance_signals table)
-4. El operador aprueba (o auto-aprobación si <5% del total)
-5. Coordinator ejecuta transferencias inter-subcuenta
-6. Todo se registra en TelemetryVault (bot_decisions)
+Day 1 of each month:
+1. AccountMonitor takes a snapshot of ALL subaccounts
+2. Calculates: Who is over-capitalized? Who needs more?
+3. Generates rebalancing signals (rebalance_signals table)
+4. The operator approves (or auto-approval if <5% of total)
+5. Coordinator executes inter-subaccount transfers
+6. Everything is recorded in TelemetryVault (bot_decisions)
 ```
 
-### 4.3 Movimiento a Earn (Activos Acumulables)
+### 4.3 Move to Earn (Accumulating Assets)
 
-Activos que no necesitan liquidez inmediata (BNB, SOL, ETH en HODL)
-se mueven a Flexible Savings o Staking:
+Assets that do not need immediate liquidity (BNB, SOL, ETH in HODL)
+are moved to Flexible Savings or Staking:
 
 ```python
-# Concepto
+# Concept
 coordinator.move_to_earn(
     asset="BNB",
     amount="10.5",
@@ -138,31 +138,31 @@ coordinator.move_to_earn(
 )
 ```
 
-### 4.4 Flujo Circular Completo
+### 4.4 Complete Circular Flow
 
 ```
-Depósito → Principal → Subcuentas → Bots operan → Ganancias
+Deposit → Master → Subaccounts → Bots operate → Profits
                 ↑                                       │
-                └───── Profit Take ← Rebalanceo ←───────┘
+                └───── Profit Take ← Rebalancing ←────────┘
                            │
-                           ├── Earn (rendimiento pasivo)
-                           └── Reserva (acumulación)
+                           ├── Earn (passive yield)
+                           └── Reserve (accumulation)
 ```
 
 ---
 
-## 5. Resumen del Estado Actual
+## 5. Current Status Summary
 
 | Componente | Estado | Responsable |
 |------------|--------|-------------|
-| Detección de necesidad de rebalanceo | ✅ Implementado | `AccountMonitor.rebalance_signals` |
-| Snapshot de balances | ✅ Implementado | `AccountMonitor.record_snapshot()` |
-| Registro de decisiones | ✅ Implementado | `TelemetryVault.log_decision()` |
-| Transferencia inter-subcuenta | ⏳ Fase 2 | `BinanceGateway` (necesita endpoint) |
-| Auto-profit-taking | ⏳ Fase 2 | `BotCoordinator` (necesita lógica) |
-| Movimiento a Earn | ⏳ Fase 2 | `BinanceGateway` (necesita endpoint) |
-| Dashboard de capital flow | ⏳ Fase 3 | Flutter UI |
+| Rebalancing need detection | ✅ Implemented | `AccountMonitor.rebalance_signals` |
+| Balance snapshot | ✅ Implemented | `AccountMonitor.record_snapshot()` |
+| Decision logging | ✅ Implemented | `TelemetryVault.log_decision()` |
+| Inter-subaccount transfer | ⏳ Phase 2 | `BinanceGateway` (needs endpoint) |
+| Auto-profit-taking | ⏳ Phase 2 | `BotCoordinator` (needs logic) |
+| Move to Earn | ⏳ Phase 2 | `BinanceGateway` (needs endpoint) |
+| Capital flow dashboard | ⏳ Phase 3 | Flutter UI |
 
-> **La infraestructura de datos YA está lista.** Lo que falta es la lógica
-> de ejecución de transferencias y las reglas de negocio para profit-taking
-> automático. Eso llega con las subcuentas en Fase 2.
+> **The data infrastructure is ALREADY ready.** What is missing is the transfer
+> execution logic and the business rules for automatic profit-taking.
+> That comes with subaccounts in Phase 2.

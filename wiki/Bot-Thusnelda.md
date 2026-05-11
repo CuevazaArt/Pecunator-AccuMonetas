@@ -91,16 +91,16 @@ SELECT * FROM thusnelda_runtime_state;
 ## Buy logic by symbol
 
 ```
-Para cada símbolo en symbols_csv:
-  promedio_compras = promedio_ponderado_histórico_compras(símbolo, desde reference_ts_iso)
-  umbral_compra = promedio_compras * factor_multiplication
+For each symbol in symbols_csv:
+  avg_purchases = weighted_historical_purchase_average(symbol, since reference_ts_iso)
+  buy_threshold = avg_purchases * factor_multiplication
   
-  Si precio_actual < umbral_compra
-    Y drawdown_total < max_drawdown_pct
-    Y equity_total < meta_equity_usdt:
-      → Comprar quote_order_qty_modulo en quote
+  If current_price < buy_threshold
+    AND total_drawdown < max_drawdown_pct
+    AND total_equity < meta_equity_usdt:
+      → Buy quote_order_qty_modulo in quote
   
-  Esperar between_symbol_sec antes del siguiente símbolo
+  Wait between_symbol_sec before next symbol
 ```
 
 ---

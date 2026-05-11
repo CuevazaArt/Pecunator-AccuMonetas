@@ -1,25 +1,25 @@
 # VMO Evolution & Maximization Plan
 
-> **Estado:** Documento de diseño arquitectónico
-> **Fecha:** 2026-05-06
-> **Objetivo:** Maximizar el uso del "Free Tier" de APIs (chart-img, Gemini) y potenciar la inteligencia del Visual Market Observer (VMO).
+> **Status:** Architectural design document
+> **Date:** 2026-05-06
+> **Objective:** Maximize the use of the "Free Tier" of APIs (chart-img, Gemini) and enhance the intelligence of the Visual Market Observer (VMO).
 
-El VMO actual es robusto en resiliencia pero adolece de ineficiencias analíticas y de red. Se proponen 4 mejoras arquitectónicas críticas:
+The current VMO is robust in resilience but suffers from analytical and network inefficiencies. Four critical architectural improvements are proposed:
 
-## 1. Ceguera Histórica (Falta de Memoria de Estado)
-**Problema:** Gemini evalúa cada imagen como un evento aislado (amnésico). Ignora si el mercado viene de una tendencia alcista o de un rango prolongado.
-**Mejora a implementar:** Modificar el `_SYSTEM_PROMPT` para inyectar el régimen de los últimos 3 ciclos (recuperados de `regime_cache.py`), otorgándole contexto temporal.
+## 1. Historical Blindness (Lack of State Memory)
+**Problem:** Gemini evaluates each image as an isolated event (amnesic). It ignores whether the market is coming from a bullish trend or a prolonged range.
+**Improvement to implement:** Modify the `_SYSTEM_PROMPT` to inject the regime from the last 3 cycles (retrieved from `regime_cache.py`), giving it temporal context.
 
-## 2. Desperdicio de Peticiones (Falta de Batch Processing)
-**Problema:** El orquestador analiza 20 gráficos (10 símbolos × 2 timeframes) de forma aislada, gastando 20 llamadas a la API del LLM, lo que provoca errores `429 Too Many Requests`.
-**Mejora a implementar:** Enviar las imágenes del mismo timeframe (ej. los 10 gráficos de 4h) en un solo mega-prompt. Esto reduce las llamadas a la API a 1 y permite al LLM detectar **correlación de mercado** (ej. "Todo cae porque BTC arrastra el mercado").
+## 2. Request Waste (Lack of Batch Processing)
+**Problem:** The orchestrator analyzes 20 charts (10 symbols × 2 timeframes) in isolation, spending 20 LLM API calls, which causes `429 Too Many Requests` errors.
+**Improvement to implement:** Send images of the same timeframe (e.g. the 10 4h charts) in a single mega-prompt. This reduces API calls to 1 and allows the LLM to detect **market correlation** (e.g. "Everything is falling because BTC is dragging the market").
 
-## 3. Ineficiencia de Frecuencia (Static Timeframes)
-**Problema:** Capturar un gráfico de 1 día (`1d`) cada 12 horas es redundante (la vela no ha cerrado) y desperdicia cuota de `chart-img`.
-**Mejora a implementar:** Refactorizar el orquestador (`observer.py`) para tener un CRON dinámico por timeframe:
-- Gráficos `4h` se capturan cada 4 horas.
-- Gráficos `1d` se capturan cada 24 horas (00:00 UTC).
+## 3. Frequency Inefficiency (Static Timeframes)
+**Problem:** Capturing a 1-day chart (`1d`) every 12 hours is redundant (the candle has not closed) and wastes `chart-img` quota.
+**Improvement to implement:** Refactor the orchestrator (`observer.py`) to have a dynamic CRON per timeframe:
+- `4h` charts are captured every 4 hours.
+- `1d` charts are captured every 24 hours (00:00 UTC).
 
-## 4. Foco del Prompt (Ingeniería de Prompting)
-**Problema:** Hemos añadido indicadores (RSI, MACD, BB) a los gráficos, pero el LLM no tiene instrucciones explícitas para leerlos.
-**Mejora a implementar:** Actualizar el `_SYSTEM_PROMPT` para instruir a la IA a buscar sobrecompra/sobreventa (RSI), cruces de momentum (MACD) y compresión (Bollinger Bands) antes de emitir un veredicto.
+## 4. Prompt Focus (Prompt Engineering)
+**Problem:** We have added indicators (RSI, MACD, BB) to the charts, but the LLM has no explicit instructions to read them.
+**Improvement to implement:** Update the `_SYSTEM_PROMPT` to instruct the AI to look for overbought/oversold conditions (RSI), momentum crossovers (MACD) and compression (Bollinger Bands) before issuing a verdict.

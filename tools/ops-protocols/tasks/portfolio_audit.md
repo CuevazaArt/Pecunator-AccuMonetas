@@ -1,73 +1,72 @@
-# Task: Auditoría Profunda de Portfolio
+# Task: Deep Portfolio Audit
 
-## Objetivo
-Ejecutar una auditoría completa del portfolio, analizar desviaciones respecto
-a la sesión anterior, calcular métricas de riesgo, y proponer acciones
-de rebalanceo si corresponde.
+## Objective
+Execute a complete portfolio audit, analyze deviations from the previous session,
+calculate risk metrics, and propose rebalancing actions where appropriate.
 
-## Contexto del Proyecto
-- **Auditoría completa:** `audit_full.py` → genera `audit_report.txt`
-- **Reporte de préstamos:** `loans_report.py` → genera `loans_report.txt`
-- **Tabla de portfolio:** `portfolio_table.py` → genera `portfolio_report.txt`
-- **Clasificación:** `token_classification.txt`
+## Project Context
+- **Full audit:** `audit_full.py` → generates `audit_report.txt`
+- **Loans report:** `loans_report.py` → generates `loans_report.txt`
+- **Portfolio table:** `portfolio_table.py` → generates `portfolio_report.txt`
+- **Classification:** `token_classification.txt`
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Generar Reportes Frescos
+### Step 1 — Generate Fresh Reports
 ```bash
 python audit_full.py
 python loans_report.py
 python portfolio_table.py
 ```
-Verificar que los 3 reportes se generaron exitosamente.
+Verify that all 3 reports were generated successfully.
 
-### Paso 2 — Análisis de Posiciones
-Parsear `audit_report.txt` y `portfolio_report.txt`:
-- Listar todas las posiciones con: token, cantidad, valor USD, peso %
-- Calcular concentración: ¿Algún token supera el 25% del portfolio?
-- Clasificar exposición por sector (usando `token_classification.txt`)
+### Step 2 — Position Analysis
+Parse `audit_report.txt` and `portfolio_report.txt`:
+- List all positions with: token, quantity, USD value, weight %
+- Calculate concentration: Does any token exceed 25% of the portfolio?
+- Classify exposure by sector (using `token_classification.txt`)
 
-### Paso 3 — Análisis de Deuda
-Parsear `loans_report.txt`:
-- Extraer préstamos activos: token, monto, tasa, colateral, health factor
-- Calcular ratio deuda/equity total
-- Identificar préstamos con health factor < 1.5
+### Step 3 — Debt Analysis
+Parse `loans_report.txt`:
+- Extract active loans: token, amount, rate, collateral, health factor
+- Calculate total debt/equity ratio
+- Identify loans with health factor < 1.5
 
-### Paso 4 — Detección de Drift
-Si existe un reporte de auditoría previo (archivo anterior o en historial):
-- Comparar pesos actuales vs anteriores
-- Detectar posiciones que crecieron/decrecieron > 10%
-- Detectar nuevas posiciones o posiciones cerradas
+### Step 4 — Drift Detection
+If a previous audit report exists (prior file or in history):
+- Compare current weights vs previous
+- Detect positions that grew/shrank > 10%
+- Detect new positions or closed positions
 
-### Paso 5 — Métricas de Riesgo
-Calcular y reportar:
+### Step 5 — Risk Metrics
+Calculate and report:
 | Métrica | Fórmula | Umbral |
 |---|---|---|
-| Concentración máxima | max(peso_token) | ⚠️ > 25% |
-| Ratio deuda/equity | deuda_total / equity_total | ⚠️ > 0.5 |
-| Health factor mínimo | min(HF por préstamo) | 🔴 < 1.3, ⚠️ < 1.5 |
-| Tokens idle en spot | tokens sin earn ni posición | 💡 oportunidad |
-| Earn rate vs loan cost | spread entre rendimiento y costo | 💡 si positivo |
+| Maximum concentration | max(token_weight) | ⚠️ > 25% |
+| Debt/equity ratio | total_debt / total_equity | ⚠️ > 0.5 |
+| Minimum health factor | min(HF per loan) | 🔴 < 1.3, ⚠️ < 1.5 |
+| Idle tokens in spot | tokens without earn or position | 💡 opportunity |
+| Earn rate vs loan cost | spread between yield and cost | 💡 if positive |
 
-### Paso 6 — Recomendaciones
-Generar lista priorizada de acciones:
-1. **URGENTE** — Posiciones que requieren acción inmediata (health factor bajo)
-2. **OPTIMIZAR** — Rebalanceos para reducir concentración
-3. **OPORTUNIDAD** — Tokens idle que podrían generar rendimiento
-4. **MONITOREAR** — Posiciones que no requieren acción pero merecen vigilancia
+### Step 6 — Recommendations
+Generate a prioritized list of actions:
+1. **URGENT** — Positions requiring immediate action (low health factor)
+2. **OPTIMIZE** — Rebalancing to reduce concentration
+3. **OPPORTUNITY** — Idle tokens that could generate yield
+4. **MONITOR** — Positions requiring no action but warranting watch
 
-## Criterios de Alerta
-- 🔴 **CRITICAL**: Health factor < 1.3 en cualquier préstamo
-- ⚠️ **WARNING**: Concentración > 25% en un solo token
-- ⚠️ **WARNING**: Ratio deuda/equity > 0.5
-- 💡 **INFO**: Capital idle > 5% del portfolio total
+## Alert Criteria
+- 🔴 **CRITICAL**: Health factor < 1.3 on any loan
+- ⚠️ **WARNING**: Concentration > 25% in a single token
+- ⚠️ **WARNING**: Debt/equity ratio > 0.5
+- 💡 **INFO**: Idle capital > 5% of total portfolio
 
-## Output Esperado
-Artefacto `audit_YYYY-MM-DD.md` con todas las métricas, tablas y recomendaciones.
+## Expected Output
+Artifact `audit_YYYY-MM-DD.md` with all metrics, tables, and recommendations.
 
-## Criterios de Éxito
-- [ ] Los 3 reportes base generados sin errores
-- [ ] Métricas de riesgo calculadas
-- [ ] Drift detectado (si hay datos previos disponibles)
-- [ ] Al menos 1 recomendación accionable generada
-- [ ] Artefacto entregado con formato tabular legible
+## Success Criteria
+- [ ] All 3 base reports generated without errors
+- [ ] Risk metrics calculated
+- [ ] Drift detected (if prior data available)
+- [ ] At least 1 actionable recommendation generated
+- [ ] Artifact delivered with readable tabular format

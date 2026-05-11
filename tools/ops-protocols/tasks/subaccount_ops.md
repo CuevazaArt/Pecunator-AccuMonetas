@@ -1,69 +1,69 @@
-# Task: Operaciones de Sub-Cuentas
+# Task: Subaccount Operations
 
-## Objetivo
-Gestionar programáticamente subcuentas de Binance desde la cuenta Master,
-incluyendo creación, configuración de permisos, transferencia de fondos,
-y reportes consolidados.
+## Objective
+Programmatically manage Binance subaccounts from the Master account,
+including creation, permission configuration, fund transfers,
+and consolidated reports.
 
-## ⛔ Precaución
-Todas las operaciones que involucren movimiento de fondos o creación de
-cuentas requieren confirmación explícita del usuario antes de ejecutarse.
+## ⛔ Caution
+All operations involving fund movement or account creation
+require explicit user confirmation before executing.
 
-## Contexto
+## Context
 - **Gateway:** `runtime/connectors/binance_gateway.py`
 - **Base URL:** `https://api.binance.com`
-- **Autenticación:** HMAC SHA256 signing (implementado en gateway)
+- **Authentication:** HMAC SHA256 signing (implemented in gateway)
 
-## Variante A — Crear Nueva Subcuenta para Bot
+## Variant A — Create New Subaccount for Bot
 
-### Pasos
-1. Llamar `POST /sapi/v1/sub-account/virtualSubAccount`
-   - Genera email virtual automáticamente
-   - Requiere permiso "Enable Spot & Margin Trading" en API key Master
+### Steps
+1. Call `POST /sapi/v1/sub-account/virtualSubAccount`
+   - Automatically generates a virtual email
+   - Requires "Enable Spot & Margin Trading" permission on Master API key
 
-2. Habilitar capacidades según bot:
-   - Dorothy (Spot): Solo Spot habilitado por defecto
+2. Enable capabilities per bot:
+   - Dorothy (Spot): Spot only enabled by default
    - Masha (Futures): `POST /sapi/v1/sub-account/futures/enable`
    - Thusnelda (Mixed): Futures + Margin enable
 
-3. Crear API Key para la subcuenta:
-   - Permisos mínimos necesarios (principio de menor privilegio)
-   - **NUNCA** habilitar withdraw en subcuenta de bot
+3. Create API Key for the subaccount:
+   - Minimum required permissions (principle of least privilege)
+   - **NEVER** enable withdraw on a bot subaccount
 
-4. Aplicar restricción de IP:
+4. Apply IP restriction:
    - `POST /sapi/v1/sub-account/subAccountApi/ipRestriction`
-   - Whitelist solo la IP del servidor donde corre el bot
+   - Whitelist only the server IP where the bot runs
 
-5. Registrar credenciales en `runtime/core/config_manager.py`:
-   - Guardar email de subcuenta
-   - Guardar API key (encrypted)
-   - Asociar con el bot correspondiente
+5. Register credentials in `runtime/core/config_manager.py`:
+   - Save subaccount email
+   - Save API key (encrypted)
+   - Associate with the corresponding bot
 
-6. Verificar conectividad:
-   - `GET /sapi/v1/sub-account/list` → confirmar subcuenta existe
-   - Query de balance → confirmar API key funciona
+6. Verify connectivity:
+   - `GET /sapi/v1/sub-account/list` → confirm subaccount exists
+   - Balance query → confirm API key works
 
 ### Output
-- Email de subcuenta creada
-- API key generada (mostrar solo últimos 4 chars)
-- Permisos configurados
-- IP restriction aplicada
-- Test de conectividad: ✅/🔴
+- Created subaccount email
+- Generated API key (show only last 4 chars)
+- Permissions configured
+- IP restriction applied
+- Connectivity test: ✅/🔴
 
 ---
 
-## Variante B — Redistribución de Capital
+## Variant B — Capital Redistribution
 
-### Pasos
-1. Consultar balance de todas las subcuentas:
-   - `GET /sapi/v1/sub-account/spot/summary` → Totales spot
-   - Por cada subcuenta: `GET /sapi/v1/sub-account/assets` (V4)
+### Steps
+1. Query balance of all subaccounts:
+   - `GET /sapi/v1/sub-account/spot/summary` → Spot totals
+   - For each subaccount: `GET /sapi/v1/sub-account/assets` (V4)
 
-2. Consultar rendimiento reciente de cada bot:
-   - PnL últimas 24h / 7d si disponible
-   - Ratio de utilización de capital (cuánto del balance asignado usa)
+2. Query recent performance of each bot:
+   - PnL last 24h / 7d if available
+   - Capital utilization ratio (how much of the assigned balance is used)
 
-3. Calcular distribución óptima:
+3. Calculate optimal distribution:
    ```
    Para cada bot:
      score = (PnL_7d / capital_asignado) * utilizacion
@@ -71,40 +71,40 @@ cuentas requieren confirmación explícita del usuario antes de ejecutarse.
    ```
    Con floor mínimo por bot y cap máximo de concentración.
 
-4. Generar plan de transferencias:
+4. Generate transfer plan:
    | Desde | Hacia | Monto | Token | Motivo |
    |-------|-------|-------|-------|--------|
    | Master | Sub-Masha | 500 USDT | USDT | Rendimiento alto |
    | Sub-Dorothy | Master | 200 USDT | USDT | Rendimiento bajo |
 
-5. **ESPERAR confirmación del usuario**
+5. **WAIT for user confirmation**
 
-6. Ejecutar Universal Transfers:
+6. Execute Universal Transfers:
    - `POST /sapi/v1/sub-account/universalTransfer`
-   - Tipo: `MAIN_TO_SUB` / `SUB_TO_MAIN` / `SUB_TO_SUB`
+   - Type: `MAIN_TO_SUB` / `SUB_TO_MAIN` / `SUB_TO_SUB`
 
-7. Verificar balances post-transferencia
+7. Verify post-transfer balances
 
 ### Output
-- Tabla de balances pre/post transferencia
-- Transfers ejecutados con txnIds
-- Verificación de balances correcta
+- Pre/post transfer balance table
+- Transfers executed with txnIds
+- Balance verification correct
 
 ---
 
-## Variante C — Reporte Consolidado
+## Variant C — Consolidated Report
 
-### Pasos
-1. Listar todas las subcuentas:
+### Steps
+1. List all subaccounts:
    - `GET /sapi/v1/sub-account/list`
 
-2. Por cada subcuenta, agregar:
-   - Balance total en USD equivalent
-   - PnL (si hay datos históricos)
-   - Posiciones abiertas (Futures)
-   - Préstamos activos (Margin)
+2. For each subaccount, aggregate:
+   - Total balance in USD equivalent
+   - PnL (if historical data exists)
+   - Open positions (Futures)
+   - Active loans (Margin)
 
-3. Calcular métricas consolidadas:
+3. Calculate consolidated metrics:
    | Métrica | Valor |
    |---------|-------|
    | AUM Total (Master + Subs) | $XXX |
@@ -113,13 +113,13 @@ cuentas requieren confirmación explícita del usuario antes de ejecutarse.
    | Capital idle total | $XXX (X%) |
    | Exposición apalancada total | $XXX |
 
-4. Generar reporte comparativo entre bots
+4. Generate comparative report across bots
 
 ### Output
-Artefacto `subaccount_report_YYYY-MM-DD.md` con tablas consolidadas
+Artifact `subaccount_report_YYYY-MM-DD.md` with consolidated tables
 
-## Criterios de Éxito
-- [ ] Operación completada sin errores de API
-- [ ] Confirmación del usuario obtenida antes de mover fondos
-- [ ] Balances verificados post-operación
-- [ ] Registro en audit log
+## Success Criteria
+- [ ] Operation completed without API errors
+- [ ] User confirmation obtained before moving funds
+- [ ] Balances verified post-operation
+- [ ] Entry recorded in audit log

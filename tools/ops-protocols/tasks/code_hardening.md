@@ -1,37 +1,36 @@
 # Task: Boy Scout Hardening Pass
 
-## Objetivo
-Aplicar mejoras incrementales de calidad al codebase del runtime sin alterar
-la lógica de negocio. Cada ejecución selecciona archivos no tocados recientemente
-y les aplica el estándar de producción.
+## Objective
+Apply incremental code quality improvements to the runtime codebase without altering
+business logic. Each run selects recently untouched files and applies the production standard to them.
 
-## Reglas Inquebrantables
-1. **NO cambiar lógica de negocio** — Solo calidad de código
-2. **NO agregar dependencias** — Trabajar con lo que ya existe
-3. **NO borrar comentarios existentes** — Preservar documentación
-4. **Cada cambio debe pasar los tests** — Ejecutar suite después de editar
+## Non-Negotiable Rules
+1. **DO NOT change business logic** — Code quality only
+2. **DO NOT add dependencies** — Work with what already exists
+3. **DO NOT delete existing comments** — Preserve documentation
+4. **Every change must pass tests** — Run suite after editing
 
-## Alcance por Ejecución
-Seleccionar **3 archivos** del `runtime/` que no hayan sido modificados
-en el commit más reciente. Priorizar por este orden:
-1. Archivos en `runtime/core/` (infraestructura crítica)
-2. Archivos en `runtime/connectors/` (interfaz con exchange)
-3. Archivos en `runtime/api/` (capa de presentación)
-4. Archivos en `runtime/modules/` (lógica de bots)
+## Scope per Run
+Select **3 files** from `runtime/` that have not been modified
+in the most recent commit. Prioritize in this order:
+1. Files in `runtime/core/` (critical infrastructure)
+2. Files in `runtime/connectors/` (exchange interface)
+3. Files in `runtime/api/` (presentation layer)
+4. Files in `runtime/modules/` (bot logic)
 
-## Checklist por Archivo
+## Per-File Checklist
 
 ### A) Type Hints
-- [ ] Todas las funciones públicas tienen type hints en parámetros
-- [ ] Todas las funciones públicas tienen type hint de retorno
-- [ ] Los tipos complejos usan `Optional`, `Union`, `dict[str, ...]` correctamente
-- [ ] Imports de `typing` o `__future__.annotations` presentes si necesario
+- [ ] All public functions have type hints on parameters
+- [ ] All public functions have a return type hint
+- [ ] Complex types use `Optional`, `Union`, `dict[str, ...]` correctly
+- [ ] Imports of `typing` or `__future__.annotations` present if needed
 
 ### B) Error Handling
-- [ ] No hay `except:` bare (sin tipo de excepción)
-- [ ] No hay `except Exception:` que silencie errores con `pass`
-- [ ] Operaciones de red tienen timeout y retry
-- [ ] Operaciones con Decimal tienen guard contra NaN/Infinity:
+- [ ] No bare `except:` (without exception type)
+- [ ] No `except Exception:` that silences errors with `pass`
+- [ ] Network operations have timeout and retry
+- [ ] Decimal operations have a guard against NaN/Infinity:
   ```python
   # Anti-NaN guard pattern
   if value.is_nan() or value.is_infinite():
@@ -39,42 +38,42 @@ en el commit más reciente. Priorizar por este orden:
   ```
 
 ### C) Docstrings
-- [ ] Todas las clases tienen docstring describiendo propósito
-- [ ] Funciones públicas tienen docstring con Args/Returns
-- [ ] Módulo tiene docstring de nivel superior
+- [ ] All classes have a docstring describing their purpose
+- [ ] Public functions have a docstring with Args/Returns
+- [ ] Module has a top-level docstring
 
 ### D) Code Hygiene
-- [ ] No hay `print()` sueltos (usar logger)
-- [ ] No hay TODO sin ticket/referencia
-- [ ] No hay imports sin usar
-- [ ] Constantes mágicas extraídas a variables con nombre descriptivo
+- [ ] No stray `print()` calls (use logger)
+- [ ] No TODO without ticket/reference
+- [ ] No unused imports
+- [ ] Magic constants extracted to descriptively named variables
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Seleccionar Archivos
+### Step 1 — Select Files
 ```bash
 git log --oneline -5 -- runtime/
 ```
-Identificar los 3 archivos con menos actividad reciente.
+Identify the 3 files with the least recent activity.
 
-### Paso 2 — Aplicar Checklist
-Por cada archivo seleccionado, aplicar los 4 bloques del checklist.
-Documentar cada cambio realizado.
+### Step 2 — Apply Checklist
+For each selected file, apply the 4 checklist blocks.
+Document each change made.
 
-### Paso 3 — Verificar Tests
+### Step 3 — Verify Tests
 ```bash
 python -m pytest runtime/tests/ -v --tb=short
 ```
-Si algún test falla por los cambios, revertir el cambio específico.
+If any test fails due to the changes, revert the specific change.
 
-### Paso 4 — Reportar
-Generar tabla resumen:
-| Archivo | Type Hints | Error Handling | Docstrings | Hygiene | Cambios |
+### Step 4 — Report
+Generate summary table:
+| File | Type Hints | Error Handling | Docstrings | Hygiene | Changes |
 |---------|-----------|----------------|------------|---------|---------|
 | ...     | ✅/⚠️     | ✅/⚠️          | ✅/⚠️      | ✅/⚠️   | N       |
 
-## Criterios de Éxito
-- [ ] 3 archivos procesados
-- [ ] Todos los tests siguen pasando
-- [ ] Al menos 1 mejora aplicada por archivo
-- [ ] Tabla resumen generada
+## Success Criteria
+- [ ] 3 files processed
+- [ ] All tests still passing
+- [ ] At least 1 improvement applied per file
+- [ ] Summary table generated

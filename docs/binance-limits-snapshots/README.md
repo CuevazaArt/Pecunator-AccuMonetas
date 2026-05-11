@@ -1,24 +1,24 @@
-# Binance Spot API — snapshots de `rateLimits` (análisis histórico)
+# Binance Spot API — `rateLimits` snapshots (historical analysis)
 
-Cada archivo JSON es una **captura puntual** del endpoint público:
+Each JSON file is a **point-in-time capture** of the public endpoint:
 
 `GET https://api.binance.com/api/v3/exchangeInfo`
 
-Se guardan solo campos útiles para límites: `serverTime`, `timezone`, `rateLimits`.
+Only fields useful for limits are saved: `serverTime`, `timezone`, `rateLimits`.
 
-## Cómo generar una nueva captura
+## How to generate a new snapshot
 
-Desde la raíz del repo (con red):
+From the repo root (with network access):
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\fetch_binance_exchange_info_limits.py
 ```
 
-O manualmente con `curl`/navegador y pegar `rateLimits` en un nuevo archivo nombrado:
+Or manually with `curl`/browser and paste `rateLimits` into a new file named:
 
 `exchangeInfo-rateLimits-YYYY-MM-DD.json`
 
-## Interpretación
+## Interpretation
 
-- `rateLimits` describe **ventanas** (`interval`, `intervalNum`) y **tipos** (`REQUEST_WEIGHT`, `RAW_REQUESTS`, `ORDERS`, etc.) según la respuesta en esa fecha.
-- Los valores **cambian**; este directorio sirve para **comparar en el tiempo**, no como constantes fijas en código.
+- `rateLimits` describes **windows** (`interval`, `intervalNum`) and **types** (`REQUEST_WEIGHT`, `RAW_REQUESTS`, `ORDERS`, etc.) as returned on that date.
+- Values **change**; this directory is for **comparing over time**, not as fixed constants in code.

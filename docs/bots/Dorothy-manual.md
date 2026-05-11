@@ -1,39 +1,39 @@
-# Manual de Usuario — Dorothy (Hub)
+# User Manual — Dorothy (Hub)
 
-## Qué hace
+## What it does
 
-`Dorothy` opera en un solo símbolo Spot con lógica de escalera:
+`Dorothy` operates on a single Spot symbol with ladder logic:
 
-- detecta la `SELL LIMIT` activa más baja
-- espera caída suficiente respecto a ese ancla
-- compra a mercado y coloca nueva `SELL LIMIT` con beneficio objetivo
+- detects the lowest active `SELL LIMIT`
+- waits for a sufficient drop relative to that anchor
+- buys at market and places a new `SELL LIMIT` with a target profit
 
-## Variables clave (nuevas y existentes)
+## Key variables (new and existing)
 
-- `symbol`: par Spot a operar (ej. `XRPUSDT`)
-- `loop_interval_sec`: intervalo entre ciclos
-- `quote_order_qty`: tamaño de compra en quote (USDT)
-- `profit_factor`: objetivo de beneficio por escalón
-- `margin_drop_factor`: margen adicional de caída para nueva compra
-- `max_drawdown_pct`: **[MEJORA]** bloqueo de nuevas compras si el drawdown excede el umbral
-- `stop_loss_pct`: **[MEJORA]** salida de protección por posición cuando el precio cae bajo el límite
-- `metrics_interval_cycles`: **[MEJORA]** cada cuántos ciclos calcular Sharpe/win rate/max drawdown
+- `symbol`: Spot pair to trade (e.g. `XRPUSDT`)
+- `loop_interval_sec`: interval between cycles
+- `quote_order_qty`: buy size in quote (USDT)
+- `profit_factor`: profit target per step
+- `margin_drop_factor`: additional drop margin for a new purchase
+- `max_drawdown_pct`: **[IMPROVEMENT]** blocks new purchases if the drawdown exceeds the threshold
+- `stop_loss_pct`: **[IMPROVEMENT]** position protection exit when the price falls below the limit
+- `metrics_interval_cycles`: **[IMPROVEMENT]** how many cycles to calculate Sharpe/win rate/max drawdown
 
-## Mejoras integradas (reemplazo incremental desde `exampleJV_enhanced`)
+## Integrated improvements (incremental replacement from `exampleJV_enhanced`)
 
-- **Protección por drawdown:** si el equity cae más del umbral, Dorothy entra en `WAIT_DRAWDOWN_GUARD`.
-- **Stop-loss por posición:** puede cancelar la `SELL LIMIT` ancla y liquidar a mercado.
-- **Persistencia robusta en SQLite:**
+- **Drawdown protection:** if equity drops more than the threshold, Dorothy enters `WAIT_DRAWDOWN_GUARD`.
+- **Stop-loss per position:** can cancel the anchor `SELL LIMIT` and liquidate to market.
+- **Robust SQLite persistence:**
   - `dorothy_runtime_state`
   - `dorothy_equity_snapshots`
   - `dorothy_metrics_log`
-- **Métricas periódicas:** Sharpe, win rate y max drawdown por instancia.
+- **Periodic metrics:** Sharpe, win rate and max drawdown per instance.
 
-## Dónde consultar datos en SQLite
+## Where to query data in SQLite
 
-Base: `runtime/data/dorothy_hub.sqlite`
+Database: `runtime/data/dorothy_hub.sqlite`
 
-Consultas útiles:
+Useful queries:
 
 ```sql
 SELECT * FROM dorothy_metrics_log ORDER BY id DESC LIMIT 20;
@@ -41,6 +41,6 @@ SELECT * FROM dorothy_equity_snapshots ORDER BY id DESC LIMIT 50;
 SELECT * FROM dorothy_runtime_state;
 ```
 
-## Recomendación operativa
+## Operational recommendation
 
-Mantener `simulated=true` al calibrar parámetros y mover a `trading_enabled=true` solo después de validar estabilidad de drawdown y métricas.
+Keep `simulated=true` when calibrating parameters and move to `trading_enabled=true` only after validating drawdown stability and metrics.

@@ -181,8 +181,8 @@ Or faster, directly from the web editor:
 ## 🔍 How to verify that the token is active
 
 ```bash
-# Desde tu terminal local, comprueba que el token tiene acceso
-curl -H "Authorization: token <tu-token>" \
+# From your local terminal, verify that the token has access
+curl -H "Authorization: token <your-token>" \
      https://api.github.com/repos/CuevazaArt/Pecunator \
      | python3 -m json.tool | grep '"permissions"' -A 10
 ```
@@ -194,11 +194,11 @@ You should see `"push": true`. If you see `"push": false` the token does not hav
 ## 📋 Deployment checklist
 
 ```
-□ Paso 1 — Creado fine-grained PAT con Contents: Read and Write
-□ Paso 2 — PAT guardado como secret WIKI_WRITE_TOKEN en el repo
-□ Paso 3 — .github/copilot-setup-steps.yml actualizado para exponer el secret
-□ Paso 4 — Verificado con curl que el token tiene push: true
-□ Recordatorio en calendario para rotar antes de la expiración
+□ Step 1 — Create fine-grained PAT with Contents: Read and Write
+□ Step 2 — Save PAT as secret WIKI_WRITE_TOKEN in the repo
+□ Step 3 — Update .github/copilot-setup-steps.yml to expose the secret
+□ Step 4 — Verify with curl that the token has push: true
+□ Set a calendar reminder to rotate before expiration
 ```
 
 ---

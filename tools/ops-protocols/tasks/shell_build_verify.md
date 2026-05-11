@@ -1,78 +1,78 @@
 # Task: Verificación de Desktop Shell (Flutter)
 
-## Objetivo
-Asegurar que el frontend Flutter del desktop shell compila correctamente,
-no tiene regresiones de análisis estático, y mantiene sincronía con los
-schemas del backend FastAPI.
+## Objective
+Ensure that the Flutter frontend of the desktop shell compiles correctly,
+has no static analysis regressions, and stays in sync with the
+FastAPI backend schemas.
 
 ## Contexto del Proyecto
 - **Ubicación:** `desktop_shell/`
 - **Framework:** Flutter (Windows desktop)
 - **Backend schemas:** `runtime/api/schemas.py` (Pydantic models)
-- **Análisis previo:** `desktop_shell/analyze_out.txt`
+- **Previous analysis:** `desktop_shell/analyze_out.txt`
 - **Config:** `desktop_shell/pubspec.yaml`
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Análisis Estático
+### Step 1 — Static Analysis
 ```bash
 cd desktop_shell && flutter analyze
 ```
-Capturar output completo. Clasificar issues en:
-- 🔴 **Errors** — Impiden compilación
-- ⚠️ **Warnings** — Posibles problemas
-- 💡 **Info/Hints** — Sugerencias de mejora
+Capture full output. Classify issues as:
+- 🔴 **Errors** — Prevent compilation
+- ⚠️ **Warnings** — Possible problems
+- 💡 **Info/Hints** — Improvement suggestions
 
-### Paso 2 — Comparar con Análisis Anterior
-Leer `desktop_shell/analyze_out.txt` (análisis previo).
-Detectar:
-- Issues **nuevos** que no existían antes → Regresiones
-- Issues **resueltos** que ya no aparecen → Progreso
-- Issues **persistentes** → Deuda técnica pendiente
+### Step 2 — Compare with Previous Analysis
+Read `desktop_shell/analyze_out.txt` (previous analysis).
+Detect:
+- **New** issues that did not exist before → Regressions
+- **Resolved** issues that no longer appear → Progress
+- **Persistent** issues → Pending technical debt
 
-### Paso 3 — Verificar Compilación
+### Step 3 — Verify Compilation
 ```bash
 cd desktop_shell && flutter build windows --debug
 ```
-Si falla:
-- Capturar error exacto
-- Identificar si es error de dependencia, código, o configuración
-- Proponer fix
+If it fails:
+- Capture exact error
+- Identify whether it is a dependency, code, or configuration error
+- Propose fix
 
-### Paso 4 — Sincronía de Schemas
-Comparar los modelos de datos del frontend (archivos Dart en `lib/`)
-con los schemas del backend en `runtime/api/schemas.py`:
+### Step 4 — Schema Sync
+Compare the frontend data models (Dart files in `lib/`)
+with backend schemas in `runtime/api/schemas.py`:
 
-- ¿Los campos coinciden en nombre y tipo?
-- ¿Hay campos nuevos en el backend que el frontend no conoce?
-- ¿Hay campos deprecados en el backend que el frontend sigue usando?
+- Do field names and types match?
+- Are there new backend fields that the frontend does not know about?
+- Are there deprecated backend fields that the frontend still uses?
 
-Generar tabla de discrepancias:
+Generate discrepancy table:
 | Schema Backend | Modelo Frontend | Estado | Discrepancia |
 |---------------|----------------|--------|-------------|
 | BotStatus     | BotStatusModel | ✅/⚠️  | [detalle]    |
 | ...           | ...            | ...    | ...         |
 
-### Paso 5 — Dependencias
-Revisar `pubspec.yaml` y `pubspec.lock`:
-- ¿Hay paquetes con versiones muy antiguas?
-- ¿Hay deprecation warnings en dependencias?
+### Step 5 — Dependencies
+Review `pubspec.yaml` and `pubspec.lock`:
+- Are there packages with very old versions?
+- Are there deprecation warnings in dependencies?
 
-### Paso 6 — Actualizar Registro
-Guardar el nuevo output de `flutter analyze` en `desktop_shell/analyze_out.txt`
-para la próxima comparación.
+### Step 6 — Update Record
+Save the new `flutter analyze` output to `desktop_shell/analyze_out.txt`
+for the next comparison.
 
-## Output Esperado
-Reporte con:
-1. Estado de compilación: ✅ BUILD OK / 🔴 BUILD FAILED
-2. Análisis estático: X errors, Y warnings, Z hints
-3. Delta vs análisis anterior: +N nuevos, -M resueltos
-4. Tabla de sincronía de schemas
-5. Lista de dependencias a actualizar (si aplica)
+## Expected Output
+Report with:
+1. Compilation status: ✅ BUILD OK / 🔴 BUILD FAILED
+2. Static analysis: X errors, Y warnings, Z hints
+3. Delta vs previous analysis: +N new, -M resolved
+4. Schema sync table
+5. List of dependencies to update (if applicable)
 
-## Criterios de Éxito
-- [ ] `flutter analyze` ejecutado
-- [ ] Comparación con análisis anterior realizada
-- [ ] Build debug intentado
-- [ ] Sincronía de schemas verificada
-- [ ] `analyze_out.txt` actualizado
+## Success Criteria
+- [ ] `flutter analyze` executed
+- [ ] Comparison with previous analysis performed
+- [ ] Debug build attempted
+- [ ] Schema sync verified
+- [ ] `analyze_out.txt` updated

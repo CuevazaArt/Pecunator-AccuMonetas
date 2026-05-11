@@ -171,14 +171,14 @@ dart format lib/
 
 ```
 runtime/
-├── tests/              # Suite de tests
+├── tests/              # Test suite
 ├── api/                # FastAPI endpoints
-├── bot/                # Compatibilidad legacy (deprecado)
-├── connectors/         # Clientes API
-├── core/               # Config, seguridad, state
+├── bot/                # Legacy compatibility (deprecated)
+├── connectors/         # API clients
+├── core/               # Config, security, state
 └── modules/
-    ├── bots/           # Lógica de bots (imports canónicos aquí)
-    └── tools/          # Herramientas operativas
+    ├── bots/           # Bot logic (canonical imports here)
+    └── tools/          # Operational tools
 ```
 
 **Python Conventions:**

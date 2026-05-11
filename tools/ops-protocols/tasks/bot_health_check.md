@@ -1,49 +1,49 @@
-# Task: Health Check de Infraestructura Bot
+# Task: Bot Infrastructure Health Check
 
-## Objetivo
-Verificar la integridad estructural y funcional del runtime de Pecunator,
-incluyendo los 3 bots (Dorothy, Masha, Thusnelda), los sistemas de
-coordinación (BotCoordinator, WeightGovernor), y la capa de API.
+## Objective
+Verify the structural and functional integrity of the Pecunator runtime,
+including the 3 bots (Dorothy, Masha, Thusnelda), the coordination systems
+(BotCoordinator, WeightGovernor), and the API layer.
 
-## Contexto del Proyecto
+## Project Context
 ```
 runtime/
 ├── core/
-│   ├── bot_coordinator.py    # Orquestador central de bots
-│   ├── weight_governor.py    # Control de peso de API requests
-│   ├── api_fuse.py           # Circuit breaker para API calls
-│   ├── market_cache.py       # Cache de datos de mercado
-│   ├── rest_usage_log.py     # Logging de uso de API REST
-│   ├── config_manager.py     # Gestión de configuración
-│   ├── settings.py           # Settings centrales
-│   ├── event_bus.py          # Bus de eventos inter-módulo
-│   └── state_store.py        # Persistencia de estado
+│   ├── bot_coordinator.py    # Central bot orchestrator
+│   ├── weight_governor.py    # API request weight control
+│   ├── api_fuse.py           # Circuit breaker for API calls
+│   ├── market_cache.py       # Market data cache
+│   ├── rest_usage_log.py     # REST API usage logging
+│   ├── config_manager.py     # Configuration management
+│   ├── settings.py           # Central settings
+│   ├── event_bus.py          # Inter-module event bus
+│   └── state_store.py        # State persistence
 ├── api/
-│   ├── app.py                # FastAPI principal (~100KB, monolito)
-│   ├── routers/              # Routers desacoplados
+│   ├── app.py                # Main FastAPI app (~100KB, monolith)
+│   ├── routers/              # Decoupled routers
 │   │   ├── system.py
 │   │   ├── masha.py
 │   │   └── thusnelda.py
 │   ├── schemas.py            # Pydantic schemas
 │   └── deps.py               # Dependency injection
 ├── connectors/
-│   └── binance_gateway.py    # Gateway a Binance API
+│   └── binance_gateway.py    # Binance API gateway
 ├── modules/
-│   ├── bots/                 # Lógica de cada bot
+│   ├── bots/                 # Per-bot logic
 │   │   ├── dorothy.py
 │   │   ├── masha.py
 │   │   └── thusnelda.py
-│   └── tools/                # Herramientas auxiliares
+│   └── tools/                # Auxiliary tools
 │       ├── ops/
 │       ├── rest_weight/
 │       └── sandbox/
 └── tests/                    # Test suite
 ```
 
-## Pasos de Ejecución
+## Execution Steps
 
-### Paso 1 — Validación Sintáctica
-Verificar que todos los archivos Python del runtime parsean sin errores:
+### Step 1 — Syntax Validation
+Verify that all Python files in the runtime parse without errors:
 ```bash
 python -m py_compile runtime/core/bot_coordinator.py
 python -m py_compile runtime/core/weight_governor.py
@@ -51,63 +51,63 @@ python -m py_compile runtime/core/api_fuse.py
 python -m py_compile runtime/connectors/binance_gateway.py
 python -m py_compile runtime/api/app.py
 ```
-Reportar cualquier SyntaxError inmediatamente.
+Report any SyntaxError immediately.
 
-### Paso 2 — Validación de Imports
-Verificar que los imports cruzados entre módulos resuelven correctamente:
+### Step 2 — Import Validation
+Verify that cross-module imports resolve correctly:
 ```bash
 python -c "from runtime.core.bot_coordinator import BotCoordinator"
 python -c "from runtime.core.weight_governor import WeightGovernor"
 python -c "from runtime.connectors.binance_gateway import BinanceGateway"
 ```
 
-### Paso 3 — Test Suite
-Ejecutar los tests existentes:
+### Step 3 — Test Suite
+Run the existing tests:
 ```bash
 python -m pytest runtime/tests/ -v --tb=short
 ```
-Capturar: total tests, passed, failed, errors, warnings.
+Capture: total tests, passed, failed, errors, warnings.
 
-### Paso 4 — Inspección de Circuit Breakers
-Revisar `runtime/core/api_fuse.py`:
-- ¿Hay circuit breakers en estado OPEN (activados por fallo)?
-- ¿Cuántos fallos consecutivos registra?
-- ¿Cuándo fue el último reset?
+### Step 4 — Circuit Breaker Inspection
+Review `runtime/core/api_fuse.py`:
+- Are there circuit breakers in OPEN state (triggered by failure)?
+- How many consecutive failures are recorded?
+- When was the last reset?
 
-### Paso 5 — Inspección de Rate Limits
-Revisar `runtime/core/rest_usage_log.py` y `weight_governor.py`:
-- ¿Peso acumulado actual vs límite permitido?
-- ¿Porcentaje de uso del rate limit?
-- ¿Alguna ventana temporal cercana al límite?
+### Step 5 — Rate Limit Inspection
+Review `runtime/core/rest_usage_log.py` and `weight_governor.py`:
+- Current accumulated weight vs allowed limit?
+- Rate limit usage percentage?
+- Any time window close to the limit?
 
-### Paso 6 — Integridad de Routers
-Verificar que los routers FastAPI están correctamente registrados:
-- `routers/system.py` → rutas de sistema
-- `routers/masha.py` → rutas de bot Masha
-- `routers/thusnelda.py` → rutas de bot Thusnelda
+### Step 6 — Router Integrity
+Verify that FastAPI routers are correctly registered:
+- `routers/system.py` → system routes
+- `routers/masha.py` → Masha bot routes
+- `routers/thusnelda.py` → Thusnelda bot routes
 
-### Paso 7 — Generar Tabla de Estado
+### Step 7 — Generate Status Table
 
 ```
 | Componente            | Estado | Detalle                        |
 |-----------------------|--------|--------------------------------|
-| bot_coordinator.py    | ✅/⚠️/🔴 | [descripción]               |
-| weight_governor.py    | ✅/⚠️/🔴 | [descripción]               |
+| bot_coordinator.py    | ✅/⚠️/🔴 | [description]               |
+| weight_governor.py    | ✅/⚠️/🔴 | [description]               |
 | api_fuse.py           | ✅/⚠️/🔴 | [circuit breaker status]    |
-| binance_gateway.py    | ✅/⚠️/🔴 | [descripción]               |
-| FastAPI app + routers | ✅/⚠️/🔴 | [rutas cargadas]            |
+| binance_gateway.py    | ✅/⚠️/🔴 | [description]               |
+| FastAPI app + routers | ✅/⚠️/🔴 | [routes loaded]             |
 | Test suite            | ✅/⚠️/🔴 | [X/Y passed]                |
-| Rate limits           | ✅/⚠️/🔴 | [X% usado]                  |
+| Rate limits           | ✅/⚠️/🔴 | [X% used]                   |
 ```
 
-## Criterios de Estado
-- ✅ **OK**: Componente funcional, sin warnings
-- ⚠️ **WARN**: Funcional pero con warnings o degradación detectada
-- 🔴 **FAIL**: Error de compilación, test fallido, o circuit breaker abierto
+## Status Criteria
+- ✅ **OK**: Component functional, no warnings
+- ⚠️ **WARN**: Functional but with warnings or detected degradation
+- 🔴 **FAIL**: Compilation error, failed test, or open circuit breaker
 
-## Criterios de Éxito
-- [ ] Todos los archivos core compilan sin SyntaxError
-- [ ] Imports cruzados resuelven correctamente
-- [ ] Test suite ejecutada (reportar pass rate)
-- [ ] Estado de circuit breakers documentado
-- [ ] Tabla de estado completa generada
+## Success Criteria
+- [ ] All core files compile without SyntaxError
+- [ ] Cross-module imports resolve correctly
+- [ ] Test suite executed (report pass rate)
+- [ ] Circuit breaker status documented
+- [ ] Complete status table generated
