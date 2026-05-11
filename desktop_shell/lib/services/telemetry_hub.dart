@@ -71,6 +71,10 @@ class TelemetrySnapshot {
   final Map<String, dynamic>? orderLedgerStats;
   final List<Map<String, dynamic>> orderLedgerRecent;
 
+  // Louise Hub (pushed via WS — zero REST polling for bots list)
+  final List<Map<String, dynamic>> louiseBots;
+  final Map<String, dynamic>? louiseMetrics;
+
   const TelemetrySnapshot({
     required this.timestamp,
     this.equity = 0,
@@ -95,6 +99,8 @@ class TelemetrySnapshot {
     this.elphabaBots = const [],
     this.orderLedgerStats,
     this.orderLedgerRecent = const [],
+    this.louiseBots = const [],
+    this.louiseMetrics,
   });
 
   factory TelemetrySnapshot.fromPayload(Map<String, dynamic> payload) {
@@ -122,6 +128,8 @@ class TelemetrySnapshot {
       elphabaBots: _toBotList(payload['elphaba_bots']),
       orderLedgerStats: payload['order_ledger_stats'] as Map<String, dynamic>?,
       orderLedgerRecent: _toBotList(payload['order_ledger_recent']),
+      louiseBots: _toBotList(payload['louise_bots']),
+      louiseMetrics: payload['louise_metrics'] as Map<String, dynamic>?,
     );
   }
 

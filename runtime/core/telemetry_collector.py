@@ -269,6 +269,14 @@ class TelemetryCollector:
             snapshot["order_ledger_stats"] = None
             snapshot["order_ledger_recent"] = None
 
+        # -- Louise Hub state (pushed via WS — zero REST polling) --
+        try:
+            from runtime.api.routers.louise import get_louise_telemetry
+            snapshot.update(get_louise_telemetry())
+        except Exception:
+            snapshot["louise_bots"] = []
+            snapshot["louise_metrics"] = {}
+
         return snapshot
 
     # ── Persistence ───────────────────────────────────────────────────
