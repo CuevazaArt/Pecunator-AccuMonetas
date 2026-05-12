@@ -10,13 +10,36 @@ import sys
 def _configure_logging() -> None:
     level_name = os.environ.get("PECUNATOR_LOG_LEVEL", "INFO").strip().upper()
     level = getattr(logging, level_name, logging.INFO)
-    fmt = os.environ.get(
-        "PECUNATOR_LOG_FMT",
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    datefmt = os.environ.get("PECUNATOR_LOG_DATEFMT", "%Y-%m-%d %H:%M:%S")
+    use_json = os.environ.get("PECUNATOR_LOG_JSON", "").strip().lower() in ("1", "true", "yes")
 
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    if use_json:
+        try:
+            from pythonjsonlogger import jsonlogger
+
+            # JSON formatter for stdout
+            json_formatter = jsonlogger.JsonFormatter(
+                fmt="%(timestamp)s %(level)s %(name)s %(message)s %(correlation_id)s",
+                timestamp=True,
+                datefmt="%Y-%m-%dT%H:%M:%S%z",
+            )
+            handlers[0].setFormatter(json_formatter)
+        except ImportError:
+            print("[WARN] python-json-logger not installed, using text format", file=sys.stderr)
+            fmt = os.environ.get(
+                "PECUNATOR_LOG_FMT",
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            )
+            datefmt = os.environ.get("PECUNATOR_LOG_DATEFMT", "%Y-%m-%d %H:%M:%S")
+            handlers[0].setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+    else:
+        fmt = os.environ.get(
+            "PECUNATOR_LOG_FMT",
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+        datefmt = os.environ.get("PECUNATOR_LOG_DATEFMT", "%Y-%m-%d %H:%M:%S")
+        handlers[0].setFormatter(logging.Formatter(fmt, datefmt=datefmt))
 
     # M1: Log rotation — 5MB × 3 backups = 15MB ceiling
     try:
@@ -30,7 +53,19 @@ def _configure_logging() -> None:
             encoding="utf-8",
         )
         rh.setLevel(level)
-        rh.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
+        if use_json:
+            try:
+                from pythonjsonlogger import jsonlogger
+                json_formatter = jsonlogger.JsonFormatter(
+                    fmt="%(timestamp)s %(level)s %(name)s %(message)s %(correlation_id)s",
+                    timestamp=True,
+                    datefmt="%Y-%m-%dT%H:%M:%S%z",
+                )
+                rh.setFormatter(json_formatter)
+            except ImportError:
+                pass
+        else:
+            rh.setFormatter(logging.Formatter(fmt, datefmt=datefmt))
         handlers.append(rh)
     except Exception as exc:
         # Log to stderr so operator is aware file-logging is unavailable
@@ -38,8 +73,6 @@ def _configure_logging() -> None:
 
     logging.basicConfig(
         level=level,
-        format=fmt,
-        datefmt=datefmt,
         handlers=handlers,
         force=True,
     )

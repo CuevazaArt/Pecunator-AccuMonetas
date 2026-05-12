@@ -2,11 +2,29 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Depends
+import uuid
+import logging
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from runtime.api.auth import verify_token
 from runtime.api.lifespan import lifespan
+
+_LOG = logging.getLogger("pecunator.api.app")
+
+
+class CorrelationIDMiddleware(BaseHTTPMiddleware):
+    """Add correlation ID to every request for tracing across logs."""
+
+    async def dispatch(self, request: Request, call_next):
+        correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+        request.state.correlation_id = correlation_id
+
+        # Add to response headers
+        response = await call_next(request)
+        response.headers["X-Correlation-ID"] = correlation_id
+        return response
 from runtime.api.routers import system as _system_router
 from runtime.api.routers import vault as _vault_router
 from runtime.api.routers import ops as _ops_router
@@ -27,6 +45,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         dependencies=[],  # auth injected per-router
     )
+    # Add correlation ID middleware (must be before CORS)
+    app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=api_bind_host_for_cors_regex(),
