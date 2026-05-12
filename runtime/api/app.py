@@ -15,6 +15,7 @@ from runtime.api.routers import telemetry as _telemetry_router
 from runtime.api.routers import stream as _stream_router
 from runtime.api.routers import louise as _louise_router
 from runtime.api.routers import orphan as _orphan_router
+from runtime.api.routers import metrics as _metrics_router
 
 from runtime.core.settings import api_bind_host_for_cors_regex
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(_stream_router.router)  # Handles auth itself via query param
     app.include_router(_louise_router.router, dependencies=[Depends(verify_token)])
     app.include_router(_orphan_router.router, dependencies=[Depends(verify_token)])
+    app.include_router(_metrics_router.router)  # No auth required for Prometheus scraping
 
     return app
 
