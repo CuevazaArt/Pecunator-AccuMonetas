@@ -21,8 +21,9 @@ router = APIRouter(tags=["system"])
 async def health() -> dict[str, Any]:
     """Standard health check — safe to poll frequently, weight 0."""
     ctx = deps.get_ctx()
-    bot = deps.get_bot()
-    elphaba = deps.get_elphaba()
+    from runtime.core.louise_db import LouiseDB
+    louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
+    
     # Core system state
     fuse_tripped = False
     weight_zone = "UNKNOWN"
@@ -45,13 +46,11 @@ async def health() -> dict[str, Any]:
         staged_bots = cs.get("staged_bots", 0)
     except Exception as exc:
         _LOG.debug("health: bot_coordinator unavailable: %s", exc)
-    hub_stats = {
-        "dorothy": bot.hub_stats(),
-        "elphaba": elphaba.hub_stats(),
-    }
-    total_running = sum(
-        v.get("hub_bots_running", 0) for v in hub_stats.values()
-    )
+    
+    from runtime.api.routers.louise import _hub_metrics
+    hub_stats = {"louise": _hub_metrics(louise_db)}
+    total_running = hub_stats["louise"].get("active_bots", 0)
+    
     return {
         "status": "degraded" if fuse_tripped else "healthy",
         "fuse_tripped": fuse_tripped,
@@ -68,19 +67,20 @@ async def health() -> dict[str, Any]:
 @router.get("/health/deep")
 async def health_deep() -> dict[str, Any]:
     ctx = deps.get_ctx()
-    bot = deps.get_bot()
-    elphaba = deps.get_elphaba()
     gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
     
     status = "ok" if gw_ok else "degraded"
+    
+    from runtime.core.louise_db import LouiseDB
+    louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
+    from runtime.api.routers.louise import _hub_metrics
     
     return {
         "status": status,
         "gateway_connected": gw_ok,
         "gateway_last_error": ctx.state.last_error,
         "hubs": {
-            "dorothy": bot.hub_stats(),
-            "elphaba": elphaba.hub_stats(),
+            "louise": _hub_metrics(louise_db),
         },
         "data_dir": str(ctx.config.data_dir),
     }

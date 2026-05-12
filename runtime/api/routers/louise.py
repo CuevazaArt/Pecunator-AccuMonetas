@@ -2,77 +2,90 @@
 
 from __future__ import annotations
 
-import copy
 import datetime as dt
 import uuid
-from typing import Any
+import os
+import logging
+from typing import Any, List, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+
+from runtime.core.louise_db import LouiseDB
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/louise", tags=["louise"])
 
-# ─── In-memory registry ───────────────────────────────────────────────
-# Mutable state for demo/development. Replace with DB-backed service in Phase 2.
+def get_db():
+    return LouiseDB()
 
-_REGISTRY: dict[str, dict[str, Any]] = {
-    "louise_btc_001": {
-        "id": "louise_btc_001",
-        "name": "louise_btc_001",
-        "symbol": "BTC/USDT",
-        "status": "running",
-        "current_price": 42500.00,
-        "position_size": 0.05,
-        "cost_basis": 1200.00,
-        "unrealized_pnl": 127.50,
-        "unrealized_pct": 2.81,
-        "free_balance": 450.00,
-        "target_profit_pct": 5.0,
-        "progress_percent": 56.2,
-        "daily_budget": 1000.00,
-        "trades_today": 3,
-    },
-    "louise_eth_001": {
-        "id": "louise_eth_001",
-        "name": "louise_eth_001",
-        "symbol": "ETH/USDT",
-        "status": "paused",
-        "current_price": 2150.00,
-        "position_size": 2.3,
-        "cost_basis": 1850.00,
-        "unrealized_pnl": -22.10,
-        "unrealized_pct": -1.2,
-        "free_balance": 320.00,
-        "target_profit_pct": 5.0,
-        "progress_percent": 0.0,
-        "daily_budget": 800.00,
-        "trades_today": 1,
-    },
-    "louise_sol_001": {
-        "id": "louise_sol_001",
-        "name": "louise_sol_001",
-        "symbol": "SOL/USDT",
-        "status": "shutdown",
-        "current_price": 142.00,
-        "position_size": 0.0,
-        "cost_basis": 800.00,
-        "unrealized_pnl": 85.50,
-        "unrealized_pct": 10.69,
-        "free_balance": 885.50,
-        "target_profit_pct": 5.0,
-        "progress_percent": 100.0,
-        "daily_budget": 500.00,
-        "trades_today": 0,
-    },
-}
+# ─── Mappers for UI compatibility ─────────────────────────────────────
+def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
+    """Maps DB row to the format expected by Flutter UI."""
+    active_epoch = db.get_active_epoch(bot["bot_id"])
+    
+    from runtime.core.market_cache import get_market_cache
+    
+    current_price = 0.0
+    symbol = bot["symbol"]
+    ticker = get_market_cache().get_ticker(symbol)
+    if ticker:
+        current_price = float(ticker.last_price)
+        
+    position_size = 0.0
+    cost_basis = 0.0
+    unrealized_pnl = 0.0
+    unrealized_pct = 0.0
+    trades_today = 0
+    progress_percent = 0.0
+    
+    if active_epoch:
+        cost_basis = active_epoch["total_cost"]
+        avg_buy_price = active_epoch["avg_buy_price"]
+        position_size = cost_basis / avg_buy_price if avg_buy_price > 0 else 0
+        trades_today = active_epoch["num_purchases"]
+        
+        if current_price > 0 and cost_basis > 0:
+            current_value = position_size * current_price
+            unrealized_pnl = current_value - cost_basis
+            unrealized_pct = (unrealized_pnl / cost_basis) * 100.0
+            target = bot.get("target_profit_pct", 5.0)
+            if target > 0:
+                progress_percent = (unrealized_pct / target) * 100.0
+        
+    return {
+        "id": bot["bot_id"],
+        "name": bot["bot_id"],
+        "symbol": bot["symbol"],
+        "status": bot["status"].lower(),
+        "current_price": current_price,
+        "position_size": position_size,
+        "cost_basis": cost_basis,
+        "unrealized_pnl": unrealized_pnl,
+        "unrealized_pct": unrealized_pct,
+        "free_balance": bot["daily_budget_usdt"],
+        "target_profit_pct": bot["target_profit_pct"],
+        "buy_volume": bot.get("buy_volume", 10.0),
+        "progress_percent": progress_percent,
+        "daily_budget": bot["daily_budget_usdt"],
+        "trades_today": trades_today,
+    }
 
-
-def _hub_metrics() -> dict[str, Any]:
-    bots = list(_REGISTRY.values())
-    active = sum(1 for b in bots if b["status"] == "running")
-    portfolio = sum(b["cost_basis"] + b["unrealized_pnl"] for b in bots)
-    free = sum(b["free_balance"] for b in bots)
-    pnl_abs = sum(b["unrealized_pnl"] for b in bots)
+def _hub_metrics(db: LouiseDB) -> dict[str, Any]:
+    bots = db.get_all_bots()
+    active = sum(1 for b in bots if b["status"] == "ACCUMULATING" or b["status"] == "RUNNING")
+    
+    portfolio = 0.0
+    free = 0.0
+    pnl_abs = 0.0
+    
+    for b in bots:
+        mapped = map_bot_to_ui(b, db)
+        portfolio += mapped["cost_basis"] + mapped["unrealized_pnl"]
+        free += mapped["free_balance"]
+        pnl_abs += mapped["unrealized_pnl"]
+        
     pnl_pct = round(pnl_abs / portfolio * 100, 2) if portfolio > 0 else 0.0
     return {
         "active_bots": active,
@@ -80,17 +93,17 @@ def _hub_metrics() -> dict[str, Any]:
         "total_free_balance": round(free, 2),
         "total_unrealized_pnl": round(pnl_abs, 2),
         "hub_pnl_percent": pnl_pct,
-        "completed_epochs": 12,
+        "completed_epochs": db.get_completed_epochs_count(),
     }
 
-
-def get_louise_telemetry() -> dict[str, Any]:
+def get_louise_telemetry(db: LouiseDB = None) -> dict[str, Any]:
     """Export Louise state for inclusion in the WS TELEMETRY_TICK payload."""
+    db = db or LouiseDB()
+    bots = db.get_all_bots()
     return {
-        "louise_bots": list(_REGISTRY.values()),
-        "louise_metrics": _hub_metrics(),
+        "louise_bots": [map_bot_to_ui(b, db) for b in bots],
+        "louise_metrics": _hub_metrics(db),
     }
-
 
 # ─── Pydantic models ──────────────────────────────────────────────────
 
@@ -98,25 +111,25 @@ class BotCreateRequest(BaseModel):
     symbol: str
     daily_budget: float = 500.0
     target_profit_pct: float = 5.0
-
+    buy_volume: float = 10.0
+    poll_interval_seconds: int = 60
+    subaccount: str = "bluechip"
 
 class BotUpdateRequest(BaseModel):
     daily_budget: float | None = None
     target_profit_pct: float | None = None
     symbol: str | None = None
 
-
 # ─── GET endpoints ────────────────────────────────────────────────────
 
 @router.get("/bots")
-async def get_louise_bots() -> list[dict[str, Any]]:
-    return list(_REGISTRY.values())
-
+async def get_louise_bots(db: LouiseDB = Depends(get_db)) -> list[dict[str, Any]]:
+    bots = db.get_all_bots()
+    return [map_bot_to_ui(b, db) for b in bots]
 
 @router.get("/metrics")
-async def get_hub_metrics() -> dict[str, Any]:
-    return _hub_metrics()
-
+async def get_hub_metrics_ep(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    return _hub_metrics(db)
 
 @router.get("/weight-governor/status")
 async def get_weight_status() -> dict[str, Any]:
@@ -131,8 +144,8 @@ async def get_weight_status() -> dict[str, Any]:
         ctx = deps.get_ctx()
         weight = getattr(getattr(ctx, "state", None), "api_weight_used_1m", None) or 0
     except Exception:
-        weight = 1050  # fallback demo value
-    pct = round(weight / limit * 100, 1)
+        weight = 1050
+    pct = round(weight / limit * 100, 1) if limit > 0 else 0.0
     if pct < 50:
         zone, msg = "GREEN", f"API weight normal. {pct}% del límite usado."
     elif pct < 80:
@@ -148,124 +161,135 @@ async def get_weight_status() -> dict[str, Any]:
         "status_message": msg,
     }
 
-
 @router.get("/weight-governor/history")
 async def get_weight_history() -> list[dict[str, Any]]:
-    return [
-        {"time": "00:00", "louise_btc_001": 150, "louise_eth_001": 100, "louise_sol_001": 80},
-        {"time": "04:00", "louise_btc_001": 280, "louise_eth_001": 200, "louise_sol_001": 150},
-        {"time": "08:00", "louise_btc_001": 450, "louise_eth_001": 320, "louise_sol_001": 280},
-        {"time": "12:00", "louise_btc_001": 520, "louise_eth_001": 420, "louise_sol_001": 380},
-        {"time": "16:00", "louise_btc_001": 680, "louise_eth_001": 550, "louise_sol_001": 490},
-        {"time": "20:00", "louise_btc_001": 890, "louise_eth_001": 720, "louise_sol_001": 620},
-        {"time": "24:00", "louise_btc_001": 1050, "louise_eth_001": 850, "louise_sol_001": 750},
-    ]
-
+    # Instead of hardcoding, we should read actual history.
+    # Currently telemetry vault holds snapshots. Returning empty or placeholder for now until UI chart is adapted.
+    return []
 
 @router.get("/telemetry/requests")
-async def get_requests_stats() -> dict[str, Any]:
-    bots = list(_REGISTRY.values())
-    counts = {b["id"]: b.get("trades_today", 0) * 82 for b in bots}
-    return {**counts, "total": sum(counts.values())}
-
+async def get_requests_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bots = db.get_all_bots()
+    counts = {}
+    total = 0
+    for b in bots:
+        mapped = map_bot_to_ui(b, db)
+        c = mapped.get("trades_today", 0) * 82
+        counts[b["bot_id"]] = c
+        total += c
+    return {**counts, "total": total}
 
 @router.get("/telemetry/bandwidth")
-async def get_bandwidth_stats() -> dict[str, Any]:
-    bots = list(_REGISTRY.values())
-    bw = {b["id"]: b.get("trades_today", 0) * 82000 for b in bots}
-    return {**bw, "total": sum(bw.values())}
-
+async def get_bandwidth_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bots = db.get_all_bots()
+    bw = {}
+    total = 0
+    for b in bots:
+        mapped = map_bot_to_ui(b, db)
+        c = mapped.get("trades_today", 0) * 82000
+        bw[b["bot_id"]] = c
+        total += c
+    return {**bw, "total": total}
 
 @router.get("/health")
-async def louise_health() -> dict[str, Any]:
-    active = sum(1 for b in _REGISTRY.values() if b["status"] == "running")
+async def louise_health(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bots = db.get_all_bots()
+    active = sum(1 for b in bots if b["status"] == "ACCUMULATING" or b["status"] == "RUNNING")
     return {
         "status": "healthy",
         "active_bots": active,
-        "total_bots": len(_REGISTRY),
+        "total_bots": len(bots),
         "weight_zone": "GREEN",
         "last_check": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
 
-
 # ─── Control endpoints ────────────────────────────────────────────────
 
 @router.post("/bots")
-async def create_bot(req: BotCreateRequest) -> dict[str, Any]:
+async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    from runtime.api import deps
+    from runtime.api._helpers import resolve_pair_for_bot
+    
+    ctx = deps.get_ctx()
+    pair = resolve_pair_for_bot(ctx, req.subaccount)
+    if not pair and os.environ.get("LOUISE_PAPER_TRADE", "true").lower() != "true":
+        raise HTTPException(status_code=400, detail=f"No credentials found for subaccount {req.subaccount}")
+
     base = req.symbol.split("/")[0].lower()
     bot_id = f"louise_{base}_{str(uuid.uuid4())[:4]}"
-    _REGISTRY[bot_id] = {
-        "id": bot_id,
-        "name": bot_id,
-        "symbol": req.symbol,
-        "status": "running",
-        "current_price": 0.0,
-        "position_size": 0.0,
-        "cost_basis": 0.0,
-        "unrealized_pnl": 0.0,
-        "unrealized_pct": 0.0,
-        "free_balance": req.daily_budget,
-        "target_profit_pct": req.target_profit_pct,
-        "progress_percent": 0.0,
-        "daily_budget": req.daily_budget,
-        "trades_today": 0,
-    }
-    _push_louise_ws()
-    return {"bot_id": bot_id, "status": "created", "bot": _REGISTRY[bot_id]}
-
+    
+    db.create_bot(
+        bot_id=bot_id,
+        symbol=req.symbol,
+        buy_volume=req.buy_volume,
+        poll_interval_seconds=req.poll_interval_seconds,
+        target_profit_pct=req.target_profit_pct,
+        daily_budget_usdt=req.daily_budget,
+        subaccount=req.subaccount
+    )
+    db.update_bot_status(bot_id, "RUNNING")
+    
+    _push_louise_ws(db)
+    
+    bot_raw = db.get_bot(bot_id)
+    return {"bot_id": bot_id, "status": "created", "bot": map_bot_to_ui(bot_raw, db)}
 
 @router.post("/bots/{bot_id}/pause")
-async def pause_bot(bot_id: str) -> dict[str, Any]:
-    if bot_id not in _REGISTRY:
+async def pause_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bot = db.get_bot(bot_id)
+    if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-    _REGISTRY[bot_id]["status"] = "paused"
-    _push_louise_ws()
+        
+    db.update_bot_status(bot_id, "PAUSED")
+    _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "paused"}
 
-
 @router.post("/bots/{bot_id}/resume")
-async def resume_bot(bot_id: str) -> dict[str, Any]:
-    if bot_id not in _REGISTRY:
+async def resume_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bot = db.get_bot(bot_id)
+    if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-    _REGISTRY[bot_id]["status"] = "running"
-    _push_louise_ws()
+        
+    db.update_bot_status(bot_id, "RUNNING")
+    _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "running"}
 
-
 @router.patch("/bots/{bot_id}")
-async def update_bot(bot_id: str, req: BotUpdateRequest) -> dict[str, Any]:
-    if bot_id not in _REGISTRY:
+async def update_bot(bot_id: str, req: BotUpdateRequest, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bot = db.get_bot(bot_id)
+    if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-    bot = _REGISTRY[bot_id]
-    if req.daily_budget is not None:
-        bot["daily_budget"] = req.daily_budget
-    if req.target_profit_pct is not None:
-        bot["target_profit_pct"] = req.target_profit_pct
-    if req.symbol is not None:
-        bot["symbol"] = req.symbol
-    _push_louise_ws()
-    return {"bot_id": bot_id, "status": "updated", "bot": bot}
-
+        
+    new_budget = req.daily_budget if req.daily_budget is not None else bot.get("daily_budget_usdt", 500.0)
+    new_target = req.target_profit_pct if req.target_profit_pct is not None else bot.get("target_profit_pct", 5.0)
+    
+    db.update_bot_config(bot_id, new_budget, new_target)
+    
+    # Reload bot
+    bot = db.get_bot(bot_id)
+    _push_louise_ws(db)
+    return {"bot_id": bot_id, "status": "updated", "bot": map_bot_to_ui(bot, db)}
 
 @router.delete("/bots/{bot_id}")
-async def delete_bot(bot_id: str) -> dict[str, Any]:
-    if bot_id not in _REGISTRY:
+async def delete_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    bot = db.get_bot(bot_id)
+    if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-    del _REGISTRY[bot_id]
-    _push_louise_ws()
+    
+    db.update_bot_status(bot_id, "SHUTDOWN")
+    _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "deleted"}
-
 
 # ─── WS push helper ──────────────────────────────────────────────────
 
-def _push_louise_ws() -> None:
+def _push_louise_ws(db: LouiseDB = None) -> None:
     """Push Louise state update immediately via WS broadcaster."""
     try:
         from runtime.core.ws_broadcaster import get_broadcaster
         bc = get_broadcaster()
         bc.publish_sync("TELEMETRY_TICK", {
             "ts_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-            **get_louise_telemetry(),
+            **get_louise_telemetry(db),
         })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"WS push error: {e}")

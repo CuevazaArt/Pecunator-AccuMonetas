@@ -10,8 +10,9 @@ bound to loopback (127.0.0.1) and WebSocket auth is handled at connect time.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, WebSocket
-
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import os
+from runtime.api.auth import get_api_token
 from runtime.core.ws_broadcaster import get_broadcaster
 
 router = APIRouter(tags=["stream"])
@@ -19,11 +20,12 @@ router = APIRouter(tags=["stream"])
 
 @router.websocket("/ws/telemetry")
 async def telemetry_stream(ws: WebSocket) -> None:
-    """Persistent WebSocket — pushes telemetry, fuse, and alert events.
-
-    On connect, the client immediately receives the latest snapshot
-    so the UI can hydrate without a separate REST call.
-    """
+    """Persistent WebSocket — pushes telemetry, fuse, and alert events."""
+    token = ws.query_params.get("token") or ws.headers.get("x-api-token")
+    if token != get_api_token() and os.environ.get("PECUNATOR_API_AUTH_DISABLED", "").strip() not in ("1", "true"):
+        await ws.close(code=1008, reason="Unauthorized")
+        return
+        
     broadcaster = get_broadcaster()
     await broadcaster.accept(ws)
 

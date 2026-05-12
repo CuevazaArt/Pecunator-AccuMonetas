@@ -15,6 +15,10 @@ router = APIRouter(prefix="/api/v1", tags=["ops"])
 
 @router.get("/ops/protocol/status")
 async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[str, Any]:
+    from runtime.core.louise_db import LouiseDB
+    from runtime.api.routers.louise import _hub_metrics
+    louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
+    
     audit = get_ops_audit_log(ctx.config.data_dir)
     return {
         "close_protocol": audit.last("close_protocol"),
@@ -22,7 +26,7 @@ async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[s
         "cancel_limit_orders_cleanup": audit.last("cancel_limit_orders_cleanup"),
         "cancel_stop_orders_cleanup": audit.last("cancel_stop_orders_cleanup"),
         "cancel_all_orders_cleanup": audit.last("cancel_all_orders_cleanup"),
-        "hub_stats": deps.get_bot().hub_stats(),
+        "hub_stats": {"louise": _hub_metrics(louise_db)},
     }
 
 
