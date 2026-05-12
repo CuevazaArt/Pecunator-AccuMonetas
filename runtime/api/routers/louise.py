@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+import os
 import logging
 from typing import Any, List, Dict
 
@@ -24,17 +25,34 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
     """Maps DB row to the format expected by Flutter UI."""
     active_epoch = db.get_active_epoch(bot["bot_id"])
     
-    current_price = 0.0 # Will be updated by real feed
+    from runtime.core.market_cache import get_market_cache
+    
+    current_price = 0.0
+    symbol = bot["symbol"]
+    ticker = get_market_cache().get_ticker(symbol)
+    if ticker:
+        current_price = float(ticker.last_price)
+        
     position_size = 0.0
     cost_basis = 0.0
     unrealized_pnl = 0.0
     unrealized_pct = 0.0
     trades_today = 0
+    progress_percent = 0.0
     
     if active_epoch:
         cost_basis = active_epoch["total_cost"]
-        position_size = cost_basis / active_epoch["avg_buy_price"] if active_epoch["avg_buy_price"] > 0 else 0
+        avg_buy_price = active_epoch["avg_buy_price"]
+        position_size = cost_basis / avg_buy_price if avg_buy_price > 0 else 0
         trades_today = active_epoch["num_purchases"]
+        
+        if current_price > 0 and cost_basis > 0:
+            current_value = position_size * current_price
+            unrealized_pnl = current_value - cost_basis
+            unrealized_pct = (unrealized_pnl / cost_basis) * 100.0
+            target = bot.get("target_profit_pct", 5.0)
+            if target > 0:
+                progress_percent = (unrealized_pct / target) * 100.0
         
     return {
         "id": bot["bot_id"],
@@ -49,7 +67,7 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
         "free_balance": bot["daily_budget_usdt"],
         "target_profit_pct": bot["target_profit_pct"],
         "buy_volume": bot.get("buy_volume", 10.0),
-        "progress_percent": 0.0,
+        "progress_percent": progress_percent,
         "daily_budget": bot["daily_budget_usdt"],
         "trades_today": trades_today,
     }
@@ -75,7 +93,7 @@ def _hub_metrics(db: LouiseDB) -> dict[str, Any]:
         "total_free_balance": round(free, 2),
         "total_unrealized_pnl": round(pnl_abs, 2),
         "hub_pnl_percent": pnl_pct,
-        "completed_epochs": 0, # TODO: Query completed epochs from DB
+        "completed_epochs": db.get_completed_epochs_count(),
     }
 
 def get_louise_telemetry(db: LouiseDB = None) -> dict[str, Any]:
@@ -145,11 +163,9 @@ async def get_weight_status() -> dict[str, Any]:
 
 @router.get("/weight-governor/history")
 async def get_weight_history() -> list[dict[str, Any]]:
-    return [
-        {"time": "00:00", "louise_btc_001": 150, "louise_eth_001": 100, "louise_sol_001": 80},
-        {"time": "04:00", "louise_btc_001": 280, "louise_eth_001": 200, "louise_sol_001": 150},
-        {"time": "08:00", "louise_btc_001": 450, "louise_eth_001": 320, "louise_sol_001": 280},
-    ]
+    # Instead of hardcoding, we should read actual history.
+    # Currently telemetry vault holds snapshots. Returning empty or placeholder for now until UI chart is adapted.
+    return []
 
 @router.get("/telemetry/requests")
 async def get_requests_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
@@ -191,6 +207,14 @@ async def louise_health(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
 
 @router.post("/bots")
 async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    from runtime.api import deps
+    from runtime.api._helpers import resolve_pair_for_bot
+    
+    ctx = deps.get_ctx()
+    pair = resolve_pair_for_bot(ctx, req.subaccount)
+    if not pair and os.environ.get("LOUISE_PAPER_TRADE", "true").lower() != "true":
+        raise HTTPException(status_code=400, detail=f"No credentials found for subaccount {req.subaccount}")
+
     base = req.symbol.split("/")[0].lower()
     bot_id = f"louise_{base}_{str(uuid.uuid4())[:4]}"
     
@@ -236,6 +260,13 @@ async def update_bot(bot_id: str, req: BotUpdateRequest, db: LouiseDB = Depends(
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
         
+    new_budget = req.daily_budget if req.daily_budget is not None else bot.get("daily_budget_usdt", 500.0)
+    new_target = req.target_profit_pct if req.target_profit_pct is not None else bot.get("target_profit_pct", 5.0)
+    
+    db.update_bot_config(bot_id, new_budget, new_target)
+    
+    # Reload bot
+    bot = db.get_bot(bot_id)
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "updated", "bot": map_bot_to_ui(bot, db)}
 

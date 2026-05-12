@@ -36,7 +36,7 @@ class LouiseService:
             
         for bot_id, runner in list(self.runners.items()):
             try:
-                await runner.stop()
+                await runner.stop(shutdown_db=False)
             except Exception as e:
                 logger.error(f"Failed to stop {bot_id}: {e}")
             

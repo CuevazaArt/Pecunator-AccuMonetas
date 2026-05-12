@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from runtime.api.auth import verify_token
@@ -23,7 +23,7 @@ def create_app() -> FastAPI:
         description="Local HTTP API for the Flutter shell. Bind loopback only unless you know the risk.",
         version="0.4.0",
         lifespan=lifespan,
-        dependencies=[],  # auth injected per-router below
+        dependencies=[],  # auth injected per-router
     )
     app.add_middleware(
         CORSMiddleware,
@@ -33,14 +33,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(_system_router.router)
-    app.include_router(_vault_router.router)
-    app.include_router(_ops_router.router)
-    app.include_router(_gateway_router.router)
+    app.include_router(_system_router.router, dependencies=[Depends(verify_token)])
+    app.include_router(_vault_router.router, dependencies=[Depends(verify_token)])
+    app.include_router(_ops_router.router, dependencies=[Depends(verify_token)])
+    app.include_router(_gateway_router.router, dependencies=[Depends(verify_token)])
 
-    app.include_router(_telemetry_router.router)
-    app.include_router(_stream_router.router)
-    app.include_router(_louise_router.router)
+    app.include_router(_telemetry_router.router, dependencies=[Depends(verify_token)])
+    app.include_router(_stream_router.router)  # Handles auth itself via query param
+    app.include_router(_louise_router.router, dependencies=[Depends(verify_token)])
 
     return app
 

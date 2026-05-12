@@ -273,6 +273,111 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     );
   }
 
+  void _showMonitorDialog(BotMetrics bot) {
+    final avgPrice = bot.positionSize > 0 ? bot.costBasis / bot.positionSize : 0.0;
+    final targetPrice = avgPrice * (1 + bot.targetProfitPct / 100);
+    final distanceToTarget = targetPrice > 0 ? ((bot.currentPrice - targetPrice) / targetPrice * 100) : 0.0;
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Text(bot.statusEmoji, style: const TextStyle(fontSize: 24)),
+                      const SizedBox(width: 12),
+                      Text('Monitor: ${bot.symbol}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(ctx),
+                  )
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Top metrics
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _monitorMetric('Precio Promedio', '\$${avgPrice.toStringAsFixed(4)}'),
+                  _monitorMetric('Precio Actual', '\$${bot.currentPrice.toStringAsFixed(4)}', color: Colors.amber),
+                  _monitorMetric('Precio Objetivo', '\$${targetPrice.toStringAsFixed(4)}', color: Colors.greenAccent),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 16),
+              
+              // Portfolio View
+              const Text('Estado del Ciclo DCA (Epoch)', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 12),
+              
+              _monitorRow('Capital Invertido', '\$${bot.costBasis.toStringAsFixed(2)}'),
+              _monitorRow('Valor Actual', '\$${(bot.costBasis + bot.unrealizedPnl).toStringAsFixed(2)}'),
+              _monitorRow('Posición Acumulada', '${bot.positionSize.toStringAsFixed(6)} ${bot.symbol.split("/")[0]}'),
+              _monitorRow('Compras (Trades)', '${bot.tradesToday}'),
+              const SizedBox(height: 8),
+              _monitorRow('Beneficio/Pérdida (PNL)', '\$${bot.unrealizedPnl.toStringAsFixed(2)} (${bot.unrealizedPct.toStringAsFixed(2)}%)', 
+                  valueColor: bot.unrealizedPnl >= 0 ? Colors.greenAccent : Colors.redAccent),
+                  
+              const SizedBox(height: 24),
+              
+              // Distance to target graphic
+              Text('Distancia al Take Profit: ${distanceToTarget.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: (bot.progressPercent / 100).clamp(0, 1),
+                  minHeight: 12,
+                  backgroundColor: Colors.white10,
+                  valueColor: AlwaysStoppedAnimation<Color>(bot.progressPercent >= 100 ? Colors.greenAccent : Colors.blueAccent),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _monitorMetric(String label, String value, {Color? color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: color ?? Colors.white)),
+      ],
+    );
+  }
+
+  Widget _monitorRow(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace', color: valueColor ?? Colors.white)),
+        ],
+      ),
+    );
+  }
+
   // ── Build ────────────────────────────────────────────────────────────
 
   @override
@@ -644,9 +749,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                         icon: Icons.auto_graph_rounded,
                         label: 'Monitorear',
                         color: Colors.blueAccent,
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoreo en desarrollo...')));
-                        },
+                        onTap: () => _showMonitorDialog(bot),
                       ),
                       _actionBtn(
                         icon: Icons.edit_rounded,
