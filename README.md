@@ -207,3 +207,12 @@ python -m pytest runtime/tests/test_louise_integration.py::TestDCALifecycle::tes
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
 - [`docs/repo-modules-map.md`](docs/repo-modules-map.md) — mapa modular de carpetas y ownership
 - [`docs/main-runtime-boundary.md`](docs/main-runtime-boundary.md) — rol de `main` vs `runtime` y diseño escalable
+
+### Operations (producción)
+
+- [`docs/INCIDENT_RUNBOOK.md`](docs/INCIDENT_RUNBOOK.md) — procedimientos de incidentes: fuse, huérfanas, shutdown, DB corruption
+- [`docs/OPERATOR_MANUAL.md`](docs/OPERATOR_MANUAL.md) — checklist diario, variables de entorno, backup, troubleshooting
+
+### Scripts
+
+- [`scripts/backup/backup_databases.ps1`](scripts/backup/backup_databases.ps1) — backup automático de todas las bases SQLite con verificación de integridad y rotación por fecha
