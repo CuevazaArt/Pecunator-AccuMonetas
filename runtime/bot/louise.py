@@ -87,6 +87,10 @@ class LouiseBotRunner:
                     float(price_at_buy), float(volume), float(cost_usdt), order_id, "FILLED"
                 )
                 
+                # Record to global budget guard
+                from runtime.core.budget_guard import get_budget_guard
+                get_budget_guard().record_spend(self.bot_id, self.config["symbol"], "BUY", cost_usdt)
+                
                 # Update epoch stats
                 epoch = meta['epoch']
                 new_purchases = epoch['num_purchases'] + 1
@@ -211,11 +215,23 @@ class LouiseBotRunner:
                 return
 
         # If not exiting, check if we can buy
+        if epoch['num_purchases'] > 0:
+            avg_price = Decimal(str(epoch['avg_buy_price']))
+            if self.current_price >= avg_price:
+                logger.debug(f"{self.bot_id}: Price {self.current_price:.4f} is above average {avg_price:.4f}. Skipping buy to strictly average down.")
+                return
+
         daily_budget = Decimal(str(self.config.get("daily_budget_usdt", 500.0)))
         total_cost_so_far = Decimal(str(epoch.get('total_cost', 0.0)))
         
         if total_cost_so_far + buy_volume > daily_budget:
             logger.warning(f"{self.bot_id}: Daily budget reached ({daily_budget} USDT). Pausing DCA until target reached.")
+            return
+
+        from runtime.core.budget_guard import get_budget_guard
+        bg = get_budget_guard()
+        if not bg.can_spend(buy_volume, self.bot_id):
+            logger.warning(f"{self.bot_id}: Global BudgetGuard rejected buy of {buy_volume} USDT. Throttling.")
             return
 
         # Check spot balance
