@@ -10,6 +10,39 @@ Pecunator-AccuMonetas is a dedicated bot hub featuring a modular Python engine (
 - Risk control modules: rate-limiting, budget guards, auto-recovery
 - Production-hardened: tests, monitoring, explicit deployment policy
 
+## Status: Staging-Ready (Not Production)
+
+**Current readiness:** ✅ Safe for **non-financial testing** (dry-run, paper trading, local development)  
+**Production readiness:** ❌ **NOT READY** for operation with real capital or live Binance subaccounts
+
+### Audit Findings & Remediation Status
+
+| Finding | Severity | Status | Details |
+|---------|----------|--------|---------|
+| API route authentication gaps | CRITICAL | ✅ FIXED | All ops_router and gateway_router endpoints now require token verification |
+| Exception handling specificity | HIGH | ✅ FIXED | lifespan.py updated to catch specific exception types for better diagnostics |
+| CI gate incomplete coverage | HIGH | ✅ FIXED | test_e2e_pipeline.py now included in required merge checks |
+| Graceful shutdown missing | HIGH | ✅ FIXED | Signal handlers (SIGTERM/SIGINT) + 6-step shutdown sequence with pending order cancellation |
+| Orphan order recovery unavailable | MEDIUM | ✅ FIXED | Scan/adopt/cancel orphan orders tool implemented with REST endpoints |
+| Vault key rotation missing | MEDIUM | ✅ FIXED | PBKDF2+Fernet encryption with passphrase-based key derivation and audit logging |
+| Observability gaps | MEDIUM | ✅ FIXED | Prometheus metrics endpoint + JSON structured logging with correlation IDs |
+| Integration test coverage | MEDIUM | ✅ FIXED | 12 comprehensive tests covering Louise bot lifecycle, stop-loss, concurrency, recovery |
+
+### Requirements Before Production Deployment
+
+Before operating this system with real capital:
+
+1. ✅ All tests pass: `pytest runtime/tests/ tests/ -v --tb=short`
+2. ✅ Authentication verified on all operational endpoints (ops_router, gateway_router)
+3. ✅ Graceful shutdown tested: send SIGTERM, verify pending orders cancelled, DB state consistent
+4. ✅ Vault security configured: PECUNATOR_VAULT_PASSPHRASE set, vault_audit.log monitored
+5. ✅ Monitoring configured: Prometheus scraping `/metrics` endpoint, Grafana dashboard imported
+6. ✅ Alerting verified: Telegram token configured, test alert fires successfully
+7. ⚠️ Peer security review: another engineer reviews ops_router.py, lifespan.py, security_util.py
+8. ⚠️ Load testing passed: p95 API latency < 500ms, peak memory < 200MB under 10 concurrent bots
+9. ⚠️ Incident runbook reviewed: operator familiarized with alert meanings and recovery procedures
+10. ⚠️ Backup & restore tested: database backup/recovery workflow validated end-to-end
+
 ## Directiva de trabajo
 
 - Este IDE, conversación y coordinación entre nosotros: **Español latino**, por defecto.
@@ -89,17 +122,64 @@ Recomendación operativa: usar una sola fuente activa por sesión para evitar me
 
 Las credenciales Binance se guardan en **`runtime/data/credentials.enc`** cifradas con **Fernet** usando la clave **`vault_local.key`** en la misma carpeta.
 
+## Security Considerations
+
+### API Authentication
+
+**All endpoints require authentication** via bearer token (`Authorization: Bearer <token>` header) unless explicitly disabled. This includes:
+
+- REST API endpoints: `/api/v1//*`
+- WebSocket: `/ws/telemetry` (token via query param or `X-API-Token` header)
+- Operations endpoints: `/api/louise/*`, `/api/orphans/*` (require `verify_token` dependency)
+- Metrics endpoint: `/metrics` (public — no auth required for Prometheus scraping)
+
+**Development-only:** Disable auth with `PECUNATOR_API_AUTH_DISABLED=1`. ⚠️ **NEVER** use this in production.
+
+### Vault Passphrase Security
+
+The vault encryption key is derived from **`PECUNATOR_VAULT_PASSPHRASE`** environment variable using PBKDF2-SHA256 (100,000 iterations). This passphrase:
+
+- Must be **strong** (minimum 16 characters, mixed case + numbers + symbols recommended)
+- Must **NOT** be committed to source control (store in secure password manager or CI secrets)
+- Is **required** on every engine restart (encrypted vault cannot be unlocked without it)
+- Can be rotated via `POST /api/vault/rotate-key` endpoint (requires old + new passphrase)
+
+All vault access is logged to **`runtime/data/vault_audit.log`** with timestamps.
+
+### Telegram Alert Credentials
+
+Configure alerts via environment variables:
+
+```bash
+PECUNATOR_ALERT_TELEGRAM_TOKEN=<bot-token>
+PECUNATOR_ALERT_TELEGRAM_CHAT_ID=<chat-id>
+```
+
+Alert deduplication prevents spam: same alert fired multiple times within 300 seconds is muted.
+
+### What NOT to Do
+
+- ❌ Do not enable `PECUNATOR_API_AUTH_DISABLED=1` in production
+- ❌ Do not commit passphrases, API keys, or tokens to git (use `.env` files and `.gitignore`)
+- ❌ Do not operate with margin trading enabled until after peer security review
+- ❌ Do not expose the API port (8000) publicly without proper network segmentation
+- ❌ Do not reuse API credentials across multiple engine instances
+
 ## Política de tests
 
 ```bash
-# Run official test suite (195+ tests, ~1.5 seconds)
-python -m pytest runtime/tests/ -x -q --tb=short
+# Run full test suite (50+ tests across runtime/ and tests/)
+python -m pytest runtime/tests/ tests/ -v --tb=short
+
+# Or run specific test class/function
+python -m pytest runtime/tests/test_louise_integration.py::TestDCALifecycle::test_happy_path -v
 ```
 
-- **`runtime/tests/`** — official test suite. All tests must pass before merging.
+- **`runtime/tests/`** — official test suite covering core modules, control gates, metrics, security, logging (40+ tests). All tests must pass before merging.
+- **`tests/test_e2e_pipeline.py`** — end-to-end integration tests covering Louise bot lifecycle, subaccount registry, decision logging (10+ tests). **Required for merge** (CI gate includes this).
 - **`tests/legacy/`** — historical integration tests (reference only, not gated).
-- Verificación automatizada en **GitHub Actions** (`.github/workflows/`).
-- Escaneo automático de secretos en CI (`secret-scan.yml`).
+- **GitHub Actions** (`.github/workflows/ci-gate.yml`) — automated verification on every PR. Both `runtime/tests/` and `tests/` must pass.
+- **Secret scanning** — automatic credential detection in CI (`secret-scan.yml`).
 
 ### Risk control modules (v0.11+)
 
@@ -127,3 +207,12 @@ python -m pytest runtime/tests/ -x -q --tb=short
 - [`docs/architecture-next.md`](docs/architecture-next.md) — arquitectura Flutter + motor  
 - [`docs/repo-modules-map.md`](docs/repo-modules-map.md) — mapa modular de carpetas y ownership
 - [`docs/main-runtime-boundary.md`](docs/main-runtime-boundary.md) — rol de `main` vs `runtime` y diseño escalable
+
+### Operations (producción)
+
+- [`docs/INCIDENT_RUNBOOK.md`](docs/INCIDENT_RUNBOOK.md) — procedimientos de incidentes: fuse, huérfanas, shutdown, DB corruption
+- [`docs/OPERATOR_MANUAL.md`](docs/OPERATOR_MANUAL.md) — checklist diario, variables de entorno, backup, troubleshooting
+
+### Scripts
+
+- [`scripts/backup/backup_databases.ps1`](scripts/backup/backup_databases.ps1) — backup automático de todas las bases SQLite con verificación de integridad y rotación por fecha
