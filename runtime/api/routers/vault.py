@@ -33,7 +33,8 @@ async def vault_status(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
 @router.get("/vault/credentials")
 async def vault_credentials(
     ctx: AppContext = Depends(deps.get_ctx),
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict]]:
+    active_id = ctx.config.get_active_credential_id()
     return {
         "items": [
             {
@@ -41,6 +42,8 @@ async def vault_credentials(
                 "public_key": p["public_key"],
                 "public_key_short": mask_pk(p["public_key"]),
                 "label": p.get("label", ""),
+                "enabled": p.get("enabled", True),
+                "is_active": p["id"] == active_id,
             }
             for p in ctx.config.list_public_credentials()
         ]
@@ -109,6 +112,68 @@ async def vault_credentials_delete_compat(
     ctx: AppContext = Depends(deps.get_ctx),
 ) -> dict[str, Any]:
     return await vault_credentials_delete(credential_id, ctx)
+
+
+@router.post("/vault/credentials/{credential_id}/enable")
+async def vault_credentials_enable(
+    credential_id: str,
+    ctx: AppContext = Depends(deps.get_ctx),
+) -> dict[str, Any]:
+    ok = ctx.config.set_credential_enabled(credential_id, enabled=True)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    return {"credential_id": credential_id, "enabled": True}
+
+
+@router.post("/vault/credentials/{credential_id}/disable")
+async def vault_credentials_disable(
+    credential_id: str,
+    ctx: AppContext = Depends(deps.get_ctx),
+) -> dict[str, Any]:
+    # Prevent disabling the only remaining enabled credential
+    pubs = ctx.config.list_public_credentials()
+    enabled_count = sum(1 for p in pubs if p.get("enabled", True))
+    target = next((p for p in pubs if p["id"] == credential_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    if enabled_count <= 1 and target.get("enabled", True):
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot disable the only enabled credential. Add or enable another first.",
+        )
+    ok = ctx.config.set_credential_enabled(credential_id, enabled=False)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    # Clear context hint if this was the active credential
+    if ctx.config.get_active_credential_id() != credential_id:
+        ctx.active_api_key_hint = None
+        ctx.active_api_key_last4 = None
+        ctx.active_api_key_source = None
+    return {"credential_id": credential_id, "enabled": False}
+
+
+@router.post("/vault/credentials/{credential_id}/activate")
+async def vault_credentials_activate(
+    credential_id: str,
+    ctx: AppContext = Depends(deps.get_ctx),
+) -> dict[str, Any]:
+    ok = ctx.config.activate_credential(credential_id)
+    if not ok:
+        pubs = ctx.config.list_public_credentials()
+        target = next((p for p in pubs if p["id"] == credential_id), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot activate a disabled credential. Enable it first.",
+        )
+    pubs = ctx.config.list_public_credentials()
+    row = next((p for p in pubs if p["id"] == credential_id), None)
+    if row:
+        ctx.active_api_key_hint = mask_pk(row["public_key"])
+        ctx.active_api_key_last4 = pk_last4(row["public_key"])
+        ctx.active_api_key_source = "vault"
+    return {"credential_id": credential_id, "activated": True}
 
 
 @router.get("/credentials/active", response_model=ActiveCredentialOut)

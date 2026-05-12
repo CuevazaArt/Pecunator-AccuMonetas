@@ -49,6 +49,15 @@ class EngineApi {
   Future<Map<String, dynamic>> deleteVaultCredential(String credentialId) =>
       _client.delete('/api/v1/vault/credentials/$credentialId');
 
+  Future<Map<String, dynamic>> enableVaultCredential(String credentialId) =>
+      _client.post('/api/v1/vault/credentials/$credentialId/enable');
+
+  Future<Map<String, dynamic>> disableVaultCredential(String credentialId) =>
+      _client.post('/api/v1/vault/credentials/$credentialId/disable');
+
+  Future<Map<String, dynamic>> activateVaultCredential(String credentialId) =>
+      _client.post('/api/v1/vault/credentials/$credentialId/activate');
+
   Future<Map<String, dynamic>> subaccountsList() =>
       _client.get('/api/v1/subaccounts/list');
 
