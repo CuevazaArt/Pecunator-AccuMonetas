@@ -2,6 +2,7 @@ import logging
 import asyncio
 import time
 from decimal import Decimal
+import os
 from typing import Optional, Dict, Any
 
 from runtime.core.louise_db import LouiseDB
@@ -224,6 +225,8 @@ class LouiseBotRunner:
         client_oid = f"l_{self.bot_id}_{int(time.time())}"
         
         try:
+            is_simulation = os.environ.get("LOUISE_PAPER_TRADE", "true").lower() == "true"
+            
             if self.gateway and getattr(self.gateway, "_client", None):
                 client = self.gateway._client
                 
@@ -234,13 +237,30 @@ class LouiseBotRunner:
                     'epoch': epoch,
                 }
                 
-                await client.create_order(
-                    symbol=symbol,
-                    side="BUY",
-                    type="MARKET",
-                    newClientOrderId=client_oid,
-                    quoteOrderQty=str(cost_usdt)
-                )
+                if is_simulation:
+                    logger.info(f"{self.bot_id}: [SIMULATION] Paper-trading MARKET BUY of {cost_usdt} USDT")
+                    qty = cost_usdt / self.current_price
+                    sim_payload = {
+                        'e': 'executionReport',
+                        'x': 'TRADE',
+                        'X': 'FILLED',
+                        'c': client_oid,
+                        's': symbol,
+                        'S': 'BUY',
+                        'q': str(qty),
+                        'p': str(self.current_price),
+                        'Z': str(cost_usdt)
+                    }
+                    # Delay slightly to mimic network
+                    asyncio.create_task(self._delay_sim(sim_payload))
+                else:
+                    await client.create_order(
+                        symbol=symbol,
+                        side="BUY",
+                        type="MARKET",
+                        newClientOrderId=client_oid,
+                        quoteOrderQty=str(cost_usdt)
+                    )
                 self.usdt_free_balance -= cost_usdt
             else:
                 logger.error(f"{self.bot_id}: No gateway available to execute BUY")
@@ -264,6 +284,8 @@ class LouiseBotRunner:
         client_oid = f"ls_{self.bot_id}_{int(time.time())}"
         
         try:
+            is_simulation = os.environ.get("LOUISE_PAPER_TRADE", "true").lower() == "true"
+            
             if self.gateway and getattr(self.gateway, "_client", None):
                 client = self.gateway._client
                 
@@ -276,13 +298,28 @@ class LouiseBotRunner:
                     'profit_pct': profit_pct
                 }
                 
-                await client.create_order(
-                    symbol=symbol,
-                    side="SELL",
-                    type="MARKET",
-                    newClientOrderId=client_oid,
-                    quantity=str(quantized_vol)
-                )
+                if is_simulation:
+                    logger.info(f"{self.bot_id}: [SIMULATION] Paper-trading MARKET SELL of {quantized_vol} {symbol}")
+                    sim_payload = {
+                        'e': 'executionReport',
+                        'x': 'TRADE',
+                        'X': 'FILLED',
+                        'c': client_oid,
+                        's': symbol,
+                        'S': 'SELL',
+                        'q': str(quantized_vol),
+                        'p': str(self.current_price),
+                        'Z': str(quantized_vol * self.current_price)
+                    }
+                    asyncio.create_task(self._delay_sim(sim_payload))
+                else:
+                    await client.create_order(
+                        symbol=symbol,
+                        side="SELL",
+                        type="MARKET",
+                        newClientOrderId=client_oid,
+                        quantity=str(quantized_vol)
+                    )
             else:
                 logger.error(f"{self.bot_id}: No gateway available to execute SELL")
                 self.cooldown_until = int(time.time()) + 60
@@ -290,6 +327,10 @@ class LouiseBotRunner:
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute sell: {e}")
             self.cooldown_until = int(time.time()) + 300
+
+    async def _delay_sim(self, payload):
+        await asyncio.sleep(1.5)
+        await self.handle_order_update(payload)
 
     async def stop(self):
         """Clean shutdown of the bot."""
