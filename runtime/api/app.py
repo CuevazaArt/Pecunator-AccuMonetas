@@ -10,6 +10,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from runtime.api.auth import verify_token
 from runtime.api.lifespan import lifespan
+from runtime.api.routers import system as _system_router
+from runtime.api.routers import vault as _vault_router
+from runtime.api.routers import ops as _ops_router
+from runtime.api.routers import gateway as _gateway_router
+from runtime.api.routers import telemetry as _telemetry_router
+from runtime.api.routers import stream as _stream_router
+from runtime.api.routers import louise as _louise_router
+from runtime.api.routers import orphan as _orphan_router
+from runtime.api.routers import metrics as _metrics_router
+from runtime.core.settings import api_bind_host_for_cors_regex
 
 _LOG = logging.getLogger("pecunator.api.app")
 
@@ -25,17 +35,6 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
         return response
-from runtime.api.routers import system as _system_router
-from runtime.api.routers import vault as _vault_router
-from runtime.api.routers import ops as _ops_router
-from runtime.api.routers import gateway as _gateway_router
-from runtime.api.routers import telemetry as _telemetry_router
-from runtime.api.routers import stream as _stream_router
-from runtime.api.routers import louise as _louise_router
-from runtime.api.routers import orphan as _orphan_router
-from runtime.api.routers import metrics as _metrics_router
-
-from runtime.core.settings import api_bind_host_for_cors_regex
 
 def create_app() -> FastAPI:
     app = FastAPI(
