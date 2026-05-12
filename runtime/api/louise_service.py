@@ -8,6 +8,7 @@ from runtime.bot.louise import LouiseBotRunner
 from runtime.api import deps
 from runtime.api._helpers import resolve_pair_for_bot
 from runtime.connectors.binance_gateway import BinanceGateway
+from runtime.core.alert_dispatcher import get_alert_dispatcher
 
 logger = logging.getLogger("pecunator.louise_service")
 
@@ -57,34 +58,72 @@ class LouiseService:
     async def _check_bots(self):
         ctx = deps.get_ctx()
         bots = self.db.get_all_bots()
+        alerts = get_alert_dispatcher()
+
         for bot_data in bots:
             bot_id = bot_data["bot_id"]
             status = bot_data["status"]
-            
+
             if status in ["RUNNING", "ACCUMULATING"]:
                 if bot_id not in self.runners:
                     subaccount = bot_data.get("subaccount", "bluechip")
                     pair = resolve_pair_for_bot(ctx, subaccount)
                     if not pair:
                         logger.warning(f"No credentials found for subaccount {subaccount}. Cannot start {bot_id}.")
+                        alerts.warning(
+                            "NO_CREDENTIALS",
+                            f"Bot {bot_id}: No credentials found for subaccount {subaccount}",
+                            payload={"bot_id": bot_id, "subaccount": subaccount},
+                            silent=False
+                        )
                         continue
-                        
+
                     # Gateway per subaccount
                     if subaccount not in self._gateways:
-                        gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line, ctx.config.data_dir)
-                        await gw.start()
-                        self._gateways[subaccount] = gw
-                        
+                        try:
+                            gw = BinanceGateway(pair[0], pair[1], ctx.bus, ctx.state, ctx.log_line, ctx.config.data_dir)
+                            await gw.start()
+                            self._gateways[subaccount] = gw
+                        except Exception as e:
+                            logger.error(f"Failed to start gateway for {subaccount}: {e}")
+                            alerts.critical(
+                                "GATEWAY_START_FAILED",
+                                f"Failed to start Binance gateway for subaccount {subaccount}: {e}",
+                                payload={"subaccount": subaccount},
+                                silent=False
+                            )
+                            continue
+
                     gw = self._gateways[subaccount]
                     runner = LouiseBotRunner(bot_id, self.db, ctx.bus, gw)
                     if runner.initialize():
-                        await runner.start()
-                        self.runners[bot_id] = runner
-            
+                        try:
+                            await runner.start()
+                            self.runners[bot_id] = runner
+                        except Exception as e:
+                            logger.error(f"Failed to start bot {bot_id}: {e}")
+                            alerts.critical(
+                                "BOT_START_FAILED",
+                                f"Louise bot {bot_id} failed to start: {e}",
+                                payload={"bot_id": bot_id},
+                                silent=False
+                            )
+                    else:
+                        logger.error(f"Failed to initialize bot {bot_id}")
+                        alerts.critical(
+                            "BOT_INIT_FAILED",
+                            f"Louise bot {bot_id} failed to initialize (check logs)",
+                            payload={"bot_id": bot_id},
+                            silent=False
+                        )
+
             elif status not in ["RUNNING", "ACCUMULATING"]:
                 if bot_id in self.runners:
-                    await self.runners[bot_id].stop()
-                    del self.runners[bot_id]
+                    try:
+                        await self.runners[bot_id].stop()
+                        del self.runners[bot_id]
+                    except Exception as e:
+                        logger.error(f"Failed to stop bot {bot_id}: {e}")
 
 _service = None
 def get_louise_service() -> LouiseService:
