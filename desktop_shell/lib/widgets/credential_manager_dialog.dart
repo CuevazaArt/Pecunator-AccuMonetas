@@ -3,10 +3,10 @@ import '../api_client.dart';
 
 /// Known sub-account registry (no secrets, display-only).
 const _subAccountRegistry = [
-  {'account_id': 'dorothy', 'role': 'bot', 'description': 'DCA long hub', 'enabled': true},
-  {'account_id': 'elphaba', 'role': 'bot', 'description': 'Short/hedge hub', 'enabled': true},
-  {'account_id': 'bluechip', 'role': 'reserve', 'description': 'Blue-chip DCA reserve', 'enabled': false},
+  {'account_id': 'bluechip', 'role': 'bot', 'description': 'Louise Hub — active strategy account', 'enabled': true},
   {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'enabled': false},
+  {'account_id': 'dorothy', 'role': 'legacy', 'description': 'Migrated to Louise Hub', 'enabled': false},
+  {'account_id': 'elphaba', 'role': 'legacy', 'description': 'Migrated to Louise Hub', 'enabled': false},
 ];
 
 /// Opens the credential vault + sub-account registry dialog.
@@ -424,10 +424,25 @@ class _SubAccountTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
-                      color: role == 'bot' ? const Color(0xFF00E676).withValues(alpha: 0.1) : Colors.blueAccent.withValues(alpha: 0.1),
+                      color: role == 'bot'
+                          ? const Color(0xFF00E676).withValues(alpha: 0.1)
+                          : role == 'legacy'
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.blueAccent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(3),
                     ),
-                    child: Text(role, style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: role == 'bot' ? const Color(0xFF00E676) : Colors.blueAccent)),
+                    child: Text(
+                      role,
+                      style: TextStyle(
+                        fontSize: 7,
+                        fontWeight: FontWeight.w600,
+                        color: role == 'bot'
+                            ? const Color(0xFF00E676)
+                            : role == 'legacy'
+                                ? Colors.white24
+                                : Colors.blueAccent,
+                      ),
+                    ),
                   ),
                   if (!enabled) ...[
                     const SizedBox(width: 4),
