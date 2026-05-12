@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Production Hardening Complete - 6 Phases (v3.8.0 RC1)
+
+**Phase 1: Alerting System** — Telegram integration with exponential backoff retry (3 attempts), alert deduplication (300s window), email fallback, and integration to 6 Louise bot critical points.
+
+**Phase 2: Testing** — 12 integration tests covering full Louise DCA lifecycle (buy/sell/epoch completion), 12 load tests validating performance targets (write p95<50ms, read p95<20ms, epoch p95<500ms), 225+ total tests passing.
+
+**Phase 3: Graceful Shutdown & Orphan Recovery**
+- Graceful shutdown with SIGTERM/SIGINT handlers (Linux/macOS) and Windows fallback (Ctrl+C)
+- 6-step shutdown sequence: stop immortality → cancel pending orders → stop telemetry → stop gateway → stop coordinator → flush DB state
+- 30-second timeout enforcement with logging
+- Orphan order detection and recovery: scan Binance orders against local DB, adopt with purchase record insertion, cancel open orphans via API
+
+**Phase 4: Vault Security** — PBKDF2-SHA256 key derivation (100,000 iterations) for passphrase-based encryption, Fernet AES-128-CBC for credentials, key rotation endpoint with audit logging to `vault_audit.log`.
+
+**Phase 5: Observability** — Prometheus metrics endpoint exposing 11 metric categories (Louise bots, epochs, orders, API requests, risk controls, gateway, database, alerts), JSON structured logging with correlation ID tracing (optional via `PECUNATOR_LOG_JSON=1`).
+
+**Phase 6: Operations** — Incident Runbook (10 scenarios: fuse, orphans, WS disconnect, stop-loss, DB corruption, budget, weight, alerts, anomalies, emergency shutdown), Operator Manual (daily checklist, environment vars, monitoring, backup/restore, vault security, troubleshooting), Backup Script with SQLite integrity check and 30-day rotation.
+
+**Security Audit Resolution** — All 8 findings resolved: API auth gaps (verify_token on all ops), exception handling specificity (targeted exception types), CI gate coverage (test_e2e_pipeline.py included), graceful shutdown (signal handlers + sequence), orphan recovery (endpoints), vault rotation (PBKDF2+Fernet), monitoring (Prometheus+JSON), integration tests (50+ tests).
+
 ### Production Hardening & Security (v3.7.5+)
 
 - **Explicit Deployment:** Removed dangerous auto-update loops (`git pull` at startup) to guarantee predictable and tested deployments.
