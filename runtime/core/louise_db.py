@@ -172,3 +172,22 @@ class LouiseDB:
             cursor = conn.execute("SELECT COUNT(*) FROM louise_epochs WHERE status = 'CLOSED_SUCCESSFUL'")
             row = cursor.fetchone()
             return row[0] if row else 0
+
+    def get_epoch(self, epoch_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific epoch by ID."""
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM louise_epochs WHERE epoch_id = ?", (epoch_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_all_epochs(self, bot_id: str) -> List[Dict[str, Any]]:
+        """Get all epochs for a bot."""
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM louise_epochs WHERE bot_id = ? ORDER BY created_at DESC", (bot_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_epoch_purchases(self, epoch_id: str) -> List[Dict[str, Any]]:
+        """Alias for get_purchases_by_epoch for test convenience."""
+        return self.get_purchases_by_epoch(epoch_id)

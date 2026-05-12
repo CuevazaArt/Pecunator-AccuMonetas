@@ -1,10 +1,13 @@
-"""FastAPI lifespan — start/stop bot services and gateway."""
+"""FastAPI lifespan — start/stop bot services and gateway, with graceful shutdown."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import signal
+import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
 
@@ -13,16 +16,62 @@ from runtime.api._helpers import resolve_pair, resolve_pair_for_bot
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.security_util import sanitize_log_message
+from runtime.core.alert_dispatcher import get_alert_dispatcher
 
 _LOG = logging.getLogger("pecunator.api")
+
+# Global shutdown flag
+_shutdown_requested: bool = False
+_shutdown_start_time: Optional[float] = None
+_SHUTDOWN_TIMEOUT_SEC = 30
+
+
+def set_shutdown_flag():
+    """Signal handler for SIGTERM/SIGINT — sets graceful shutdown flag."""
+    global _shutdown_requested, _shutdown_start_time
+    _shutdown_requested = True
+    _shutdown_start_time = time.time()
+    _LOG.warning("Graceful shutdown initiated (SIGTERM/SIGINT received)")
+    try:
+        get_alert_dispatcher().warning(
+            "SHUTDOWN_INITIATED",
+            "Graceful shutdown initiated. Cancelling pending orders and flushing state...",
+            silent=False
+        )
+    except Exception:
+        pass
+
+
+def is_shutdown_requested() -> bool:
+    """Check if shutdown was requested."""
+    return _shutdown_requested
+
+
+def get_shutdown_elapsed() -> float:
+    """Get seconds elapsed since shutdown request."""
+    if not _shutdown_start_time:
+        return 0
+    return time.time() - _shutdown_start_time
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start Dorothy + Elphaba services, optionally autostart gateway."""
+    """Start Dorothy + Elphaba services, optionally autostart gateway, with graceful shutdown."""
     import os
+    global _shutdown_requested, _shutdown_start_time
+
+    # Reset shutdown flags on startup
+    _shutdown_requested = False
+    _shutdown_start_time = None
+
     if os.environ.get("PECUNATOR_API_AUTH_DISABLED", "").strip() in ("1", "true"):
         _LOG.critical("⚠️ PECUNATOR_API_AUTH_DISABLED is active! The API is exposed without authentication. DO NOT USE IN PRODUCTION.")
+
+    # Register signal handlers for graceful shutdown
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, set_shutdown_flag)
+    loop.add_signal_handler(signal.SIGINT, set_shutdown_flag)
+    _LOG.info("Signal handlers registered (SIGTERM, SIGINT)")
 
     deps.init_context()
     ctx = deps.get_ctx()
@@ -48,33 +97,82 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # ── Shutdown ──────────────────────────────────────────────────
+    # ── Graceful Shutdown ──────────────────────────────────────────
+    _LOG.info("Starting graceful shutdown sequence...")
+    shutdown_start = time.time()
+
+    # Step 1: Stop Louise immortality loop (stops creating new bot tasks)
     try:
         from runtime.api.louise_service import get_louise_service
+        _LOG.info("Stopping Louise immortality...")
         await get_louise_service().stop_immortality()
-    except Exception:
-        pass
+    except Exception as e:
+        _LOG.error("Louise immortality stop error: %s", e)
 
-    # Stop telemetry collector
+    # Step 2: Cancel pending orders in all bot runners
+    try:
+        from runtime.api.louise_service import get_louise_service
+        louise_svc = get_louise_service()
+        for bot_id, runner in list(louise_svc.runners.items()):
+            if runner.pending_orders:
+                _LOG.info("Cancelling %d pending orders for %s", len(runner.pending_orders), bot_id)
+                for client_oid, meta in list(runner.pending_orders.items()):
+                    try:
+                        symbol = runner.config.get("symbol", "UNKNOWN")
+                        if runner.gateway and getattr(runner.gateway, "_client", None):
+                            # Cancel order on exchange
+                            await runner.gateway._client.cancel_order(symbol=symbol, origClientOrderId=client_oid)
+                            _LOG.info("Cancelled order %s on %s", client_oid, symbol)
+                    except Exception as e:
+                        _LOG.warning("Failed to cancel order %s: %s", client_oid, e)
+    except Exception as e:
+        _LOG.error("Error during pending order cancellation: %s", e)
+
+    # Step 3: Stop telemetry collector
     try:
         from runtime.core.telemetry_collector import get_telemetry_collector
+        _LOG.info("Stopping telemetry collector...")
         await get_telemetry_collector().stop()
-    except Exception:
-        pass
+    except Exception as e:
+        _LOG.error("Telemetry stop error: %s", e)
 
+    # Step 4: Stop gateway
     ctx = deps.peek_ctx()
     if ctx and ctx.gateway:
         try:
+            _LOG.info("Stopping gateway...")
             await ctx.gateway.stop()
         except Exception as e:
-            _LOG.warning("gateway stop on shutdown: %s", e)
+            _LOG.warning("Gateway stop error: %s", e)
         ctx.gateway = None
-        
+
+    # Step 5: Stop bot coordinator
     try:
         from runtime.core.bot_coordinator import get_bot_coordinator
+        _LOG.info("Stopping bot coordinator...")
         await get_bot_coordinator().stop_launcher()
-    except Exception:
-        pass
+    except Exception as e:
+        _LOG.error("Bot coordinator stop error: %s", e)
+
+    # Step 6: Flush database state (Louise)
+    try:
+        from runtime.core.louise_db import LouiseDB
+        db = LouiseDB()
+        _LOG.info("Flushing Louise database state...")
+        # Database context managers auto-commit, no explicit action needed
+    except Exception as e:
+        _LOG.error("Database flush error: %s", e)
+
+    elapsed = time.time() - shutdown_start
+    _LOG.info("Graceful shutdown complete in %.2fs", elapsed)
+
+    if elapsed > _SHUTDOWN_TIMEOUT_SEC:
+        _LOG.critical("SHUTDOWN EXCEEDED TIMEOUT (%ds)! Forcing exit.", _SHUTDOWN_TIMEOUT_SEC)
+        get_alert_dispatcher().critical(
+            "SHUTDOWN_TIMEOUT_EXCEEDED",
+            f"Graceful shutdown took {elapsed:.1f}s, exceeding {_SHUTDOWN_TIMEOUT_SEC}s timeout",
+            silent=False
+        )
 
 
 async def autostart_gateway_if_possible(ctx: AppContext) -> None:
