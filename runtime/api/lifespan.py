@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import sqlite3
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -38,8 +39,8 @@ def set_shutdown_flag():
             "Graceful shutdown initiated. Cancelling pending orders and flushing state...",
             silent=False
         )
-    except Exception:
-        pass
+    except (ImportError, AttributeError, RuntimeError) as e:
+        _LOG.debug("Alert dispatcher unavailable during shutdown: %s", type(e).__name__)
 
 
 def is_shutdown_requested() -> bool:
@@ -88,8 +89,8 @@ async def lifespan(app: FastAPI):
         from runtime.core.telemetry_collector import get_telemetry_collector
         _tc = get_telemetry_collector(ctx.config.data_dir)
         await _tc.start(ctx)
-    except Exception as e:
-        _LOG.warning("telemetry_collector startup failed: %s", e)
+    except (ImportError, AttributeError, FileNotFoundError, OSError) as e:
+        _LOG.warning("telemetry_collector startup failed (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     # ── Start Louise Immortality ───────────────────────────────────
     from runtime.api.louise_service import get_louise_service
@@ -123,18 +124,18 @@ async def lifespan(app: FastAPI):
                             # Cancel order on exchange
                             await runner.gateway._client.cancel_order(symbol=symbol, origClientOrderId=client_oid)
                             _LOG.info("Cancelled order %s on %s", client_oid, symbol)
-                    except Exception as e:
-                        _LOG.warning("Failed to cancel order %s: %s", client_oid, e)
-    except Exception as e:
-        _LOG.error("Error during pending order cancellation: %s", e)
+                    except (OSError, TimeoutError, RuntimeError, AttributeError) as e:
+                        _LOG.warning("Failed to cancel order %s (type=%s): %s", client_oid, type(e).__name__, sanitize_log_message(str(e)))
+    except (ImportError, AttributeError, RuntimeError) as e:
+        _LOG.error("Error during pending order cancellation (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     # Step 3: Stop telemetry collector
     try:
         from runtime.core.telemetry_collector import get_telemetry_collector
         _LOG.info("Stopping telemetry collector...")
         await get_telemetry_collector().stop()
-    except Exception as e:
-        _LOG.error("Telemetry stop error: %s", e)
+    except (ImportError, AttributeError, RuntimeError, OSError) as e:
+        _LOG.error("Telemetry stop error (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     # Step 4: Stop gateway
     ctx = deps.peek_ctx()
@@ -142,8 +143,8 @@ async def lifespan(app: FastAPI):
         try:
             _LOG.info("Stopping gateway...")
             await ctx.gateway.stop()
-        except Exception as e:
-            _LOG.warning("Gateway stop error: %s", e)
+        except (OSError, RuntimeError, TimeoutError, AttributeError) as e:
+            _LOG.warning("Gateway stop error (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
         ctx.gateway = None
 
     # Step 5: Stop bot coordinator
@@ -151,8 +152,8 @@ async def lifespan(app: FastAPI):
         from runtime.core.bot_coordinator import get_bot_coordinator
         _LOG.info("Stopping bot coordinator...")
         await get_bot_coordinator().stop_launcher()
-    except Exception as e:
-        _LOG.error("Bot coordinator stop error: %s", e)
+    except (ImportError, AttributeError, RuntimeError, OSError) as e:
+        _LOG.error("Bot coordinator stop error (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     # Step 6: Flush database state (Louise)
     try:
@@ -160,8 +161,8 @@ async def lifespan(app: FastAPI):
         db = LouiseDB()
         _LOG.info("Flushing Louise database state...")
         # Database context managers auto-commit, no explicit action needed
-    except Exception as e:
-        _LOG.error("Database flush error: %s", e)
+    except (ImportError, OSError, sqlite3.DatabaseError) as e:
+        _LOG.error("Database flush error (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     elapsed = time.time() - shutdown_start
     _LOG.info("Graceful shutdown complete in %.2fs", elapsed)
@@ -187,8 +188,8 @@ async def autostart_gateway_if_possible(ctx: AppContext) -> None:
         pair = resolve_pair(ctx)
     except HTTPException:
         pair = None
-    except Exception as e:
-        _LOG.warning("Gateway auto-start resolve skipped: %s", sanitize_log_message(str(e)))
+    except (KeyError, ValueError, AttributeError, OSError) as e:
+        _LOG.warning("Gateway auto-start resolve skipped (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
         pair = None
     if not pair:
         _LOG.info("Gateway auto-start skipped: no credentials resolved")
@@ -202,10 +203,10 @@ async def autostart_gateway_if_possible(ctx: AppContext) -> None:
         ctx.gateway = gw
         ctx.state.last_error = None
         _LOG.info("Gateway auto-started on API startup")
-    except Exception as e:
+    except (OSError, TimeoutError, RuntimeError, ConnectionError) as e:
         try:
             await gw.stop()
-        except Exception:
+        except (OSError, RuntimeError, TimeoutError):
             pass
         ctx.state.last_error = sanitize_log_message(str(e))
-        _LOG.warning("Gateway auto-start failed: %s", ctx.state.last_error)
+        _LOG.warning("Gateway auto-start failed (type=%s): %s", type(e).__name__, ctx.state.last_error)
