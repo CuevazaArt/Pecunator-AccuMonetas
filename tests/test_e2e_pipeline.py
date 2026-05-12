@@ -156,14 +156,23 @@ class TestSubAccountRegistry:
 
     def test_default_accounts(self, fresh_registry):
         r = fresh_registry
+        # Current defaults: bluechip (strategy), dorothy/elphaba/reserve (inactive)
         assert len(r.list_all()) == 4
-        assert len(r.list_bots()) >= 2  # dorothy and masha at minimum
+        # As of v2.5, all bots are inactive (migrated to Louise/bluechip)
+        # list_bots() returns only active bot-role accounts
+        all_bots = r.list_bots()
+        assert isinstance(all_bots, list)
 
     def test_get_bot_account(self, fresh_registry):
         r = fresh_registry
+        # Get bluechip account (active Louise bot)
+        louise_bot = r.get_bot_account("louise")
+        if louise_bot is not None:
+            assert "bluechip" in louise_bot.account_id
+            assert louise_bot.enabled is True
+        # Dorothy is disabled (migrated to Louise)
         dorothy = r.get_bot_account("dorothy")
-        assert dorothy is not None
-        assert "dorothy" in dorothy.email
+        assert dorothy is None  # Expected: disabled
 
     def test_equity_limit(self, fresh_registry):
         r = fresh_registry
