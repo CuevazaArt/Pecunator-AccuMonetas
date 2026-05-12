@@ -551,108 +551,150 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   Widget _buildBotCard(BotMetrics bot) {
     final pnlColor = bot.unrealizedPct >= 0 ? Colors.greenAccent : Colors.redAccent;
     final isRunning = bot.status == 'running';
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.white12),
       ),
-      child: Column(children: [
-        // ── Header row ──────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-          child: Row(children: [
-            Text(bot.statusEmoji),
-            const SizedBox(width: 6),
-            Text(bot.symbol,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: pnlColor.withAlpha(25), borderRadius: BorderRadius.circular(4),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          leading: CircleAvatar(
+            backgroundColor: pnlColor.withAlpha(20),
+            child: Text(bot.statusEmoji, style: const TextStyle(fontSize: 18)),
+          ),
+          title: Row(
+            children: [
+              Text(bot.symbol, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: pnlColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${bot.unrealizedPct >= 0 ? "+" : ""}${bot.unrealizedPct.toStringAsFixed(2)}%',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: pnlColor),
+                ),
               ),
-              child: Text(
-                '${bot.unrealizedPct >= 0 ? "+" : ""}${bot.unrealizedPct.toStringAsFixed(2)}%',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pnlColor),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                _metricCell('Precio Actual', '\$${bot.currentPrice.toStringAsFixed(2)}'),
+                _metricCell('Vol. de Compra', '\$${bot.buyVolume.toStringAsFixed(1)}'),
+                _metricCell('Target', '${bot.targetProfitPct.toStringAsFixed(1)}%'),
+              ],
+            ),
+          ),
+          children: [
+            const Divider(height: 1, color: Colors.white10),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Extended metrics
+                  Row(
+                    children: [
+                      _metricCell('Posición Activa', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
+                      _metricCell('PNL Acumulado', (bot.unrealizedPnl >= 0 ? '+' : '') + '\$${bot.unrealizedPnl.toStringAsFixed(2)}', color: pnlColor),
+                      _metricCell('Trades de Ciclo', '${bot.tradesToday}'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Progress
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Progreso hacia Take Profit: ${bot.progressPercent.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                      Text('Objetivo: ${bot.targetProfitPct.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: (bot.progressPercent / 100).clamp(0, 1),
+                      minHeight: 8,
+                      backgroundColor: Colors.white10,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Actions Strip (Gestionar, Monitorear, Cancelar, Editar)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _actionBtn(
+                        icon: isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        label: isRunning ? 'Pausar' : 'Reanudar',
+                        color: isRunning ? Colors.orangeAccent : Colors.greenAccent,
+                        onTap: () => isRunning ? _pauseBot(bot.id) : _resumeBot(bot.id),
+                      ),
+                      _actionBtn(
+                        icon: Icons.auto_graph_rounded,
+                        label: 'Monitorear',
+                        color: Colors.blueAccent,
+                        onTap: () {
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Monitoreo en desarrollo...')));
+                        },
+                      ),
+                      _actionBtn(
+                        icon: Icons.edit_rounded,
+                        label: 'Editar',
+                        color: Colors.white70,
+                        onTap: () => _showEditDialog(bot),
+                      ),
+                      _actionBtn(
+                        icon: Icons.cancel_rounded,
+                        label: 'Cancelar Instancia',
+                        color: Colors.redAccent,
+                        isDestructive: true,
+                        onTap: () => _showDeleteDialog(bot),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const Spacer(),
-            // Pause / Resume
-            _iconBtn(
-              icon: isRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
-              tooltip: isRunning ? 'Pausar bot' : 'Reanudar bot',
-              color: isRunning ? Colors.orangeAccent : Colors.greenAccent,
-              onTap: () => isRunning ? _pauseBot(bot.id) : _resumeBot(bot.id),
-            ),
-            _iconBtn(icon: Icons.edit_outlined, tooltip: 'Editar configuración',
-                color: Colors.white70, onTap: () => _showEditDialog(bot)),
-            _iconBtn(icon: Icons.delete_outline, tooltip: 'Eliminar bot',
-                color: Colors.redAccent.withAlpha(200), onTap: () => _showDeleteDialog(bot)),
-          ]),
+          ],
         ),
-        // ── Metrics grid ─────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          child: Row(children: [
-            _metricCell('Precio', '\$${bot.currentPrice.toStringAsFixed(2)}'),
-            _metricCell('Posición', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
-            _metricCell('Vol. DCA', '\$${bot.buyVolume.toStringAsFixed(1)}'),
-            _metricCell('Trades', '${bot.tradesToday}'),
-            _metricCell('PNL \$', (bot.unrealizedPnl >= 0 ? '+' : '') + '\$${bot.unrealizedPnl.toStringAsFixed(2)}',
-                color: pnlColor),
-          ]),
-        ),
-        // ── Progress bar ─────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Progreso ciclo: ${bot.progressPercent.toStringAsFixed(1)}%',
-                  style: const TextStyle(fontSize: 9, color: Colors.white54)),
-              Text('Target: ${bot.targetProfitPct.toStringAsFixed(1)}%',
-                  style: const TextStyle(fontSize: 9, color: Colors.white54)),
-            ]),
-            const SizedBox(height: 3),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: (bot.progressPercent / 100).clamp(0, 1),
-                minHeight: 5,
-                backgroundColor: Colors.white10,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blueAccent),
-              ),
-            ),
-          ]),
-        ),
-      ]),
+      ),
     );
   }
 
   Widget _metricCell(String label, String value, {Color? color}) => Expanded(
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 8, color: Colors.white54)),
+      Text(label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+      const SizedBox(height: 4),
       Text(value, style: TextStyle(
-          fontSize: 10, fontWeight: FontWeight.bold,
+          fontSize: 14, fontWeight: FontWeight.bold,
           fontFamily: 'monospace', color: color)),
     ]),
   );
 
-  Widget _iconBtn({required IconData icon, required String tooltip,
-      required Color color, required VoidCallback onTap}) =>
-    Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18, color: color),
-        ),
+  Widget _actionBtn({required IconData icon, required String label, required Color color, required VoidCallback onTap, bool isDestructive = false}) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18, color: color),
+      label: Text(label, style: TextStyle(color: isDestructive ? Colors.redAccent : Colors.white70, fontSize: 13)),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: color.withAlpha(isDestructive ? 100 : 50)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: color.withAlpha(isDestructive ? 20 : 10),
       ),
     );
+  }
 
   Widget _buildErrorBar() => Container(
     margin: const EdgeInsets.all(16),
