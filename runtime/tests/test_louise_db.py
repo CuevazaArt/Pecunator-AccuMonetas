@@ -3,21 +3,23 @@ import pytest
 from pathlib import Path
 from runtime.core.louise_db import LouiseDB
 
+import uuid
+
 @pytest.fixture
 def test_db():
-    # Use a temporary database for testing
-    db_path = "runtime/data/test_louise_hub.sqlite"
+    # Use a unique temporary database for testing
+    db_path = f"runtime/data/test_louise_hub_{uuid.uuid4().hex}.sqlite"
     db = LouiseDB(db_path=db_path)
     yield db
+    
     # Cleanup after test
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    wal_path = db_path + "-wal"
-    shm_path = db_path + "-shm"
-    if os.path.exists(wal_path):
-        os.remove(wal_path)
-    if os.path.exists(shm_path):
-        os.remove(shm_path)
+    import glob
+    for f in glob.glob(f"{db_path}*"):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+
 
 def test_create_and_get_bot(test_db):
     bot_id = "bot_001"
