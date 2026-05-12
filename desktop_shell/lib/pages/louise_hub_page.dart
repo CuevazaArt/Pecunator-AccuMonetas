@@ -30,6 +30,10 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   List<WeightHistory> _weightHistory = [];
   final List<double> _pnlHistory = [];
 
+  double _totalEquity = 0.0;
+  double _freeUsdt = 0.0;
+  final Map<String, double> _holdings = {}; // {asset: quantity}
+
   bool _wsConnected = false;
   bool _loading = true;
   String? _error;
@@ -93,7 +97,36 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         weightZone: snap.weightPct < 0.5 ? 'GREEN' : snap.weightPct < 0.8 ? 'YELLOW' : 'RED',
         statusMessage: '${(snap.weightPct * 100).toStringAsFixed(1)}% del límite usado.',
       );
+
+      // Account data from gateway_snapshot
+      _totalEquity = snap.equity;
+      _freeUsdt = snap.freeUsdt;
+
+      // Extract holdings from gateway snapshot
+      _parseAccountHoldings(snap.gatewaySnapshot);
     });
+  }
+
+  void _parseAccountHoldings(Map<String, dynamic>? gws) {
+    _holdings.clear();
+    if (gws == null) return;
+
+    final balances = gws['balances'] as List<dynamic>?;
+    if (balances == null) return;
+
+    // Target assets for display: BTC, ETH, BNB, SOL
+    const targetAssets = {'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'BTC', 'ETH', 'BNB', 'SOL'};
+
+    for (final bal in balances.whereType<Map<String, dynamic>>()) {
+      final asset = (bal['asset'] as String?)?.toUpperCase() ?? '';
+      final free = double.tryParse(bal['free'].toString()) ?? 0.0;
+      final locked = double.tryParse(bal['locked'].toString()) ?? 0.0;
+      final quantity = free + locked;
+
+      if (quantity > 0 && targetAssets.contains(asset)) {
+        _holdings[asset] = quantity;
+      }
+    }
   }
 
   void _startRestFallback() {
@@ -391,6 +424,8 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _buildConnectionBar()),
+            SliverToBoxAdapter(child: _buildAccountStatus()),
+            SliverToBoxAdapter(child: const SizedBox(height: 4)),
             if (_hubMetrics != null) SliverToBoxAdapter(child: _buildHubSummary()),
             SliverToBoxAdapter(child: const SizedBox(height: 4)),
             SliverToBoxAdapter(child: _buildChartsRow()),
@@ -455,6 +490,99 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildAccountStatus() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.purple.withAlpha(20), Colors.blue.withAlpha(10)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.purple.withAlpha(80)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Cuenta Binance', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+        ]),
+        const SizedBox(height: 10),
+        // Account equity and balance row
+        Row(children: [
+          Expanded(flex: 1, child: _accountCard('Equity', '\$${_totalEquity.toStringAsFixed(2)}', Colors.blueAccent)),
+          const SizedBox(width: 8),
+          Expanded(flex: 1, child: _accountCard('USDT Libre', '\$${_freeUsdt.toStringAsFixed(2)}', Colors.greenAccent)),
+        ]),
+        const SizedBox(height: 10),
+        // Holdings
+        if (_holdings.isNotEmpty) ...[
+          const Text('Activos', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
+          const SizedBox(height: 6),
+          GridView.count(
+            crossAxisCount: 4,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 2.0,
+            children: _buildHoldingCards(),
+          ),
+        ] else
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text('Sin activos', style: TextStyle(fontSize: 9, color: Colors.white54)),
+          ),
+      ]),
+    );
+  }
+
+  List<Widget> _buildHoldingCards() {
+    final assetOrder = ['BTC', 'ETH', 'BNB', 'SOL'];
+    final cards = <Widget>[];
+    for (final asset in assetOrder) {
+      final qty = _holdings[asset] ?? 0.0;
+      if (qty > 0) {
+        cards.add(_holdingCard(asset, qty));
+      }
+    }
+    return cards;
+  }
+
+  Widget _accountCard(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: color.withAlpha(15),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withAlpha(60)),
+    ),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
+      const SizedBox(height: 2),
+      Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+    ]),
+  );
+
+  Widget _holdingCard(String asset, double qty) => Container(
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      color: Colors.cyan.withAlpha(15),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: Colors.cyanAccent.withAlpha(60)),
+    ),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(asset, style: const TextStyle(fontSize: 8, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 2),
+      Text(_formatQty(qty), style: const TextStyle(fontSize: 9, color: Colors.white70, fontFamily: 'monospace')),
+    ]),
+  );
+
+  String _formatQty(double qty) {
+    if (qty >= 1) return qty.toStringAsFixed(4);
+    if (qty >= 0.001) return qty.toStringAsFixed(6);
+    return qty.toStringAsExponential(2);
   }
 
   Widget _buildHubSummary() {

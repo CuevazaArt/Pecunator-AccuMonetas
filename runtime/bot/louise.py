@@ -10,6 +10,7 @@ from runtime.core.event_bus import EventBus
 from runtime.core.api_governor import get_api_governor, P_TRADING
 from runtime.core.api_fuse import get_api_fuse
 from runtime.core.exchange_filters import get_exchange_filters
+from runtime.core.alert_dispatcher import get_alert_dispatcher
 
 logger = logging.getLogger("louise_bot")
 
@@ -124,18 +125,31 @@ class LouiseBotRunner:
         logger.info(f"Bot {self.bot_id} started loop.")
 
     async def _main_loop(self):
-        """Main loop that runs every poll_interval_seconds."""
+        """Main loop that runs every poll_interval_seconds. Respects shutdown flag."""
         while self._running:
+            # Check if graceful shutdown was requested
+            try:
+                from runtime.api.lifespan import is_shutdown_requested
+                if is_shutdown_requested():
+                    logger.info(f"Shutdown flag detected, stopping {self.bot_id}")
+                    break
+            except Exception:
+                pass
+
             try:
                 await self.poll_market()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in {self.bot_id} main loop: {e}")
-            
+
             # Sleep for the configured interval
             interval = self.config.get('poll_interval_seconds', 300)
-            await asyncio.sleep(interval)
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info(f"{self.bot_id} sleep interrupted by cancellation")
+                break
 
     async def poll_market(self):
         """
@@ -251,23 +265,24 @@ class LouiseBotRunner:
 
     async def _execute_buy(self, epoch: Dict[str, Any], cost_usdt: Decimal):
         symbol = self.config["symbol"]
-        
+        alerts = get_alert_dispatcher()
+
         logger.info(f"{self.bot_id}: Executing MARKET BUY of {cost_usdt} USDT on {symbol}")
         client_oid = f"l_{self.bot_id}_{int(time.time())}"
-        
+
         try:
             is_simulation = os.environ.get("LOUISE_PAPER_TRADE", "true").lower() == "true"
-            
+
             if self.gateway and getattr(self.gateway, "_client", None):
                 client = self.gateway._client
-                
+
                 # Register intent for WS confirmation
                 self.pending_orders[client_oid] = {
                     'type': 'BUY',
                     'epoch_id': epoch['epoch_id'],
                     'epoch': epoch,
                 }
-                
+
                 if is_simulation:
                     logger.info(f"{self.bot_id}: [SIMULATION] Paper-trading MARKET BUY of {cost_usdt} USDT")
                     qty = cost_usdt / self.current_price
@@ -295,31 +310,44 @@ class LouiseBotRunner:
                 self.usdt_free_balance -= cost_usdt
             else:
                 logger.error(f"{self.bot_id}: No gateway available to execute BUY")
+                alerts.warning(
+                    "NO_GATEWAY",
+                    f"Bot {self.bot_id}: Gateway not available, cannot execute buy",
+                    payload={"bot_id": self.bot_id, "symbol": symbol, "amount_usdt": float(cost_usdt)},
+                    silent=True  # Don't spam if gateway is temporarily disconnecting
+                )
                 self.cooldown_until = int(time.time()) + 60
-                
+
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute buy: {e}")
+            alerts.warning(
+                "BUY_FAILED",
+                f"Bot {self.bot_id} failed to execute BUY on {symbol}: {str(e)[:100]}",
+                payload={"bot_id": self.bot_id, "symbol": symbol, "amount_usdt": float(cost_usdt), "error": str(e)[:100]},
+                silent=False
+            )
             self.cooldown_until = int(time.time()) + 300
 
     async def _execute_sell(self, epoch: Dict[str, Any], final_value: Decimal, profit_usdt: Decimal, profit_pct: Decimal, status: str = "CLOSED_SUCCESSFUL"):
         symbol = self.config["symbol"]
         total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
-        
+        alerts = get_alert_dispatcher()
+
         filters = get_exchange_filters().get(symbol)
         if filters:
             quantized_vol = filters.quantize_qty(total_vol)
         else:
             quantized_vol = round(total_vol, 5)
-            
+
         logger.info(f"{self.bot_id}: Target reached! Executing MARKET SELL of {quantized_vol} {symbol}")
         client_oid = f"ls_{self.bot_id}_{int(time.time())}"
-        
+
         try:
             is_simulation = os.environ.get("LOUISE_PAPER_TRADE", "true").lower() == "true"
-            
+
             if self.gateway and getattr(self.gateway, "_client", None):
                 client = self.gateway._client
-                
+
                 self.pending_orders[client_oid] = {
                     'type': 'SELL',
                     'epoch_id': epoch['epoch_id'],
@@ -329,7 +357,7 @@ class LouiseBotRunner:
                     'profit_pct': profit_pct,
                     'status': status
                 }
-                
+
                 if is_simulation:
                     logger.info(f"{self.bot_id}: [SIMULATION] Paper-trading MARKET SELL of {quantized_vol} {symbol}")
                     sim_payload = {
@@ -354,10 +382,35 @@ class LouiseBotRunner:
                     )
             else:
                 logger.error(f"{self.bot_id}: No gateway available to execute SELL")
+                alerts.critical(
+                    "SELL_BLOCKED_NO_GATEWAY",
+                    f"CRITICAL: Bot {self.bot_id} reached take-profit but gateway unavailable. Position STUCK with {quantized_vol} {symbol} at {self.current_price}",
+                    payload={
+                        "bot_id": self.bot_id,
+                        "symbol": symbol,
+                        "quantity": float(quantized_vol),
+                        "current_price": float(self.current_price),
+                        "target_pnl_pct": float(profit_pct),
+                        "epoch_id": epoch['epoch_id']
+                    },
+                    silent=False
+                )
                 self.cooldown_until = int(time.time()) + 60
-            
+
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute sell: {e}")
+            alerts.critical(
+                "SELL_EXECUTION_FAILED",
+                f"CRITICAL: Bot {self.bot_id} reached take-profit on {symbol} but SELL execution failed. Position STUCK: {str(e)[:80]}",
+                payload={
+                    "bot_id": self.bot_id,
+                    "symbol": symbol,
+                    "quantity": float(quantized_vol),
+                    "error": str(e)[:100],
+                    "epoch_id": epoch['epoch_id']
+                },
+                silent=False
+            )
             self.cooldown_until = int(time.time()) + 300
 
     async def _delay_sim(self, payload):
