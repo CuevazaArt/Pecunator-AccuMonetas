@@ -68,11 +68,14 @@ async def lifespan(app: FastAPI):
     if os.environ.get("PECUNATOR_API_AUTH_DISABLED", "").strip() in ("1", "true"):
         _LOG.critical("⚠️ PECUNATOR_API_AUTH_DISABLED is active! The API is exposed without authentication. DO NOT USE IN PRODUCTION.")
 
-    # Register signal handlers for graceful shutdown
+    # Register signal handlers for graceful shutdown (not supported on Windows)
     loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, set_shutdown_flag)
-    loop.add_signal_handler(signal.SIGINT, set_shutdown_flag)
-    _LOG.info("Signal handlers registered (SIGTERM, SIGINT)")
+    try:
+        loop.add_signal_handler(signal.SIGTERM, set_shutdown_flag)
+        loop.add_signal_handler(signal.SIGINT, set_shutdown_flag)
+        _LOG.info("Signal handlers registered (SIGTERM, SIGINT)")
+    except NotImplementedError:
+        _LOG.info("Signal handlers not supported on this platform (Windows) — graceful shutdown via Ctrl+C only")
 
     deps.init_context()
     ctx = deps.get_ctx()
