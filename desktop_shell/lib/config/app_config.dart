@@ -7,7 +7,7 @@ class AppConfig {
 
   // Engine API
   static const String engineDefaultHost = '127.0.0.1';
-  static const int engineDefaultPort = 8000;
+  static const int engineDefaultPort = 8001;
 
   // Network
   static const Duration networkTimeout = Duration(seconds: 10);
@@ -55,6 +55,9 @@ class AppConfig {
     String host = engineDefaultHost,
     int port = engineDefaultPort,
   }) {
-    return 'ws://$host:$port/ws/telemetry';
+    // Inject token for auth if available
+    String url = 'ws://$host:$port/ws/telemetry';
+    // We cannot read ApiTokenReader here without top-level import, so we let TelemetryHub append it.
+    return url;
   }
 }

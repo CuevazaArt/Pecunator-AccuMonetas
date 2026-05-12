@@ -10,6 +10,7 @@ class BotMetrics {
   final double unrealizedPct;
   final double freeBalance;
   final double targetProfitPct;
+  final double buyVolume;
   final double progressPercent;
   final double dailyBudget;
   final int tradesToday;
@@ -26,6 +27,7 @@ class BotMetrics {
     required this.unrealizedPct,
     required this.freeBalance,
     required this.targetProfitPct,
+    required this.buyVolume,
     required this.progressPercent,
     required this.dailyBudget,
     required this.tradesToday,
@@ -43,6 +45,7 @@ class BotMetrics {
     unrealizedPct: (json['unrealized_pct'] as num?)?.toDouble() ?? 0.0,
     freeBalance: (json['free_balance'] as num?)?.toDouble() ?? 0.0,
     targetProfitPct: (json['target_profit_pct'] as num?)?.toDouble() ?? 0.0,
+    buyVolume: (json['buy_volume'] as num?)?.toDouble() ?? 10.0,
     progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
     dailyBudget: (json['daily_budget'] as num?)?.toDouble() ?? 0.0,
     tradesToday: (json['trades_today'] as int?) ?? 0,
