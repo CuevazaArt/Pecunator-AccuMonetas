@@ -414,20 +414,24 @@ class EngineApi {
     required String symbol,
     double dailyBudget = 500.0,
     double targetProfitPct = 5.0,
+    double buyVolume = 10.0,
   }) => _client.post('/api/louise/bots', body: {
     'symbol': symbol,
     'daily_budget': dailyBudget,
     'target_profit_pct': targetProfitPct,
+    'buy_volume': buyVolume,
   });
 
   Future<Map<String, dynamic>> louiseUpdateBot(
     String botId, {
     double? dailyBudget,
     double? targetProfitPct,
+    double? buyVolume,
     String? symbol,
   }) => _client.patch('/api/louise/bots/$botId', body: {
     if (dailyBudget != null) 'daily_budget': dailyBudget,
     if (targetProfitPct != null) 'target_profit_pct': targetProfitPct,
+    if (buyVolume != null) 'buy_volume': buyVolume,
     if (symbol != null) 'symbol': symbol,
   });
 

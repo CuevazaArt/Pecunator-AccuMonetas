@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from runtime.bot.dorothy import DorothyConfig, DorothyRunner
+from runtime.bot.louise import LouiseBotRunner
 
-__all__ = ["DorothyConfig", "DorothyRunner"]
+__all__ = ["LouiseBotRunner"]

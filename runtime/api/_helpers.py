@@ -120,13 +120,16 @@ def build_snapshot(ctx: AppContext) -> GatewaySnapshotOut:
     )
     try:
         from runtime.core.rest_usage_log import get_rest_usage_log
-
-        st = deps.get_bot().hub_stats()
+        from runtime.core.louise_db import LouiseDB
+        from runtime.api.routers.louise import _hub_metrics
+        
+        louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
+        st = _hub_metrics(louise_db)
         get_rest_usage_log(ctx.config.data_dir).maybe_record(
             used=getattr(ctx.state, "api_weight_used_1m", None),
             limit=api_weight_limit_1m_display(),
-            hub_bots_total=int(st.get("hub_bots_total", 0)),
-            hub_bots_running=int(st.get("hub_bots_running", 0)),
+            hub_bots_total=int(st.get("active_bots", 0)),
+            hub_bots_running=int(st.get("active_bots", 0)),
             poll_sec=account_poll_interval_sec(),
             gateway_running=ctx.gateway is not None,
             last_error=ctx.state.last_error,
@@ -238,7 +241,7 @@ async def _sync_binance_time(
     api_key: str | None = None,
     api_secret: str | None = None,
 ) -> dict[str, Any]:
-    bot = deps.get_bot()
+    from datetime import datetime, timezone
     if ctx.gateway:
         payload = await ctx.gateway.sync_time()
         ctx.state.binance_server_time_ms = int(payload.get("server_time_ms", 0) or 0)
@@ -249,10 +252,4 @@ async def _sync_binance_time(
         ctx.state.binance_time_synced_at_utc = datetime.now(
             timezone.utc
         ).isoformat()
-        if bot.runner.running:
-            try:
-                await bot.runner.sync_time()
-            except Exception:
-                pass
         return payload
-

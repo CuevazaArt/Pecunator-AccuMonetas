@@ -169,13 +169,13 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     await _loadSupplementaryData();
   });
 
-  Future<void> _createBot(String symbol, double budget, double targetPct) => _mutate(() async {
-    await _api.louiseCreateBot(symbol: symbol, dailyBudget: budget, targetProfitPct: targetPct);
+  Future<void> _createBot(String symbol, double budget, double targetPct, double buyVol) => _mutate(() async {
+    await _api.louiseCreateBot(symbol: symbol, dailyBudget: budget, targetProfitPct: targetPct, buyVolume: buyVol);
     await _loadSupplementaryData();
   });
 
-  Future<void> _editBot(String botId, double budget, double targetPct) => _mutate(() async {
-    await _api.louiseUpdateBot(botId, dailyBudget: budget, targetProfitPct: targetPct);
+  Future<void> _editBot(String botId, double budget, double targetPct, double buyVol) => _mutate(() async {
+    await _api.louiseUpdateBot(botId, dailyBudget: budget, targetProfitPct: targetPct, buyVolume: buyVol);
     await _loadSupplementaryData();
   });
 
@@ -185,6 +185,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     final symbolCtrl = TextEditingController(text: 'BTC/USDT');
     final budgetCtrl = TextEditingController(text: '500');
     final targetCtrl = TextEditingController(text: '5.0');
+    final buyVolCtrl = TextEditingController(text: '10.0');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -194,9 +195,11 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
           children: [
             TextField(controller: symbolCtrl, decoration: const InputDecoration(labelText: 'Símbolo (ej. ETH/USDT)')),
             const SizedBox(height: 12),
-            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT')),
+            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT (Límite)')),
             const SizedBox(height: 12),
             TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            const SizedBox(height: 12),
+            TextField(controller: buyVolCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Volumen de Compra USDT (DCA)')),
           ],
         ),
         actions: [
@@ -206,8 +209,9 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
               final sym = symbolCtrl.text.trim().toUpperCase();
               final budget = double.tryParse(budgetCtrl.text) ?? 500;
               final target = double.tryParse(targetCtrl.text) ?? 5.0;
+              final buyVol = double.tryParse(buyVolCtrl.text) ?? 10.0;
               Navigator.pop(ctx);
-              _createBot(sym, budget, target);
+              _createBot(sym, budget, target, buyVol);
             },
             child: const Text('Crear'),
           ),
@@ -219,6 +223,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   void _showEditDialog(BotMetrics bot) {
     final budgetCtrl = TextEditingController(text: bot.dailyBudget.toStringAsFixed(0));
     final targetCtrl = TextEditingController(text: bot.targetProfitPct.toStringAsFixed(1));
+    final buyVolCtrl = TextEditingController(text: bot.buyVolume.toStringAsFixed(1));
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -229,6 +234,8 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT')),
             const SizedBox(height: 12),
             TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            const SizedBox(height: 12),
+            TextField(controller: buyVolCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Volumen de Compra USDT (DCA)')),
           ],
         ),
         actions: [
@@ -237,8 +244,9 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             onPressed: () {
               final budget = double.tryParse(budgetCtrl.text) ?? bot.dailyBudget;
               final target = double.tryParse(targetCtrl.text) ?? bot.targetProfitPct;
+              final buyVol = double.tryParse(buyVolCtrl.text) ?? bot.buyVolume;
               Navigator.pop(ctx);
-              _editBot(bot.id, budget, target);
+              _editBot(bot.id, budget, target, buyVol);
             },
             child: const Text('Guardar'),
           ),
@@ -272,44 +280,49 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(child: _buildConnectionBar()),
-        if (_hubMetrics != null) SliverToBoxAdapter(child: _buildHubSummary()),
-        SliverToBoxAdapter(child: const SizedBox(height: 4)),
-        SliverToBoxAdapter(child: _buildChartsRow()),
-        SliverToBoxAdapter(child: const SizedBox(height: 8)),
-        if (_weightStatus != null) SliverToBoxAdapter(child: _buildTelemetryRow()),
-        SliverToBoxAdapter(child: const SizedBox(height: 8)),
-        SliverToBoxAdapter(child: _buildBotListHeader()),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (ctx, i) => i < _bots.length ? _buildBotCard(_bots[i]) : null,
-            childCount: _bots.length,
-          ),
-        ),
-        if (_bots.isEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(children: [
-                  const Icon(Icons.smart_toy_outlined, size: 48, color: Colors.white24),
-                  const SizedBox(height: 8),
-                  const Text('Sin bots activos', style: TextStyle(color: Colors.white54)),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _showCreateDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Crear primer bot'),
-                  ),
-                ]),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 960),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _buildConnectionBar()),
+            if (_hubMetrics != null) SliverToBoxAdapter(child: _buildHubSummary()),
+            SliverToBoxAdapter(child: const SizedBox(height: 4)),
+            SliverToBoxAdapter(child: _buildChartsRow()),
+            SliverToBoxAdapter(child: const SizedBox(height: 8)),
+            if (_weightStatus != null) SliverToBoxAdapter(child: _buildTelemetryRow()),
+            SliverToBoxAdapter(child: const SizedBox(height: 8)),
+            SliverToBoxAdapter(child: _buildBotListHeader()),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => i < _bots.length ? _buildBotCard(_bots[i]) : null,
+                childCount: _bots.length,
               ),
             ),
-          ),
-        if (_error != null) SliverToBoxAdapter(child: _buildErrorBar()),
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-      ],
+            if (_bots.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Center(
+                    child: Column(children: [
+                      const Icon(Icons.smart_toy_outlined, size: 48, color: Colors.white24),
+                      const SizedBox(height: 8),
+                      const Text('Sin bots activos', style: TextStyle(color: Colors.white54)),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _showCreateDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Crear primer bot'),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            if (_error != null) SliverToBoxAdapter(child: _buildErrorBar()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -344,34 +357,45 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     final pnlColor = m.hubPnlPercent >= 0 ? Colors.greenAccent : Colors.redAccent;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.withAlpha(20), Colors.cyan.withAlpha(10)],
+          colors: [const Color(0xFF161B22), const Color(0xFF0D1117)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withAlpha(80)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(50),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ]
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Louise Hub', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-          Chip(
-            label: Text('${m.hubPnlPercent >= 0 ? "+" : ""}${m.hubPnlPercent.toStringAsFixed(2)}%',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pnlColor)),
-            backgroundColor: pnlColor.withAlpha(25),
-            padding: EdgeInsets.zero,
+          const Text('Louise Hub Overview', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: pnlColor.withAlpha(20),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: pnlColor.withAlpha(50)),
+            ),
+            child: Text('${m.hubPnlPercent >= 0 ? "+" : ""}${m.hubPnlPercent.toStringAsFixed(2)}%',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: pnlColor)),
           ),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         GridView.count(
-          crossAxisCount: 4, crossAxisSpacing: 8, mainAxisSpacing: 0,
+          crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 0,
           shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.4,
+          childAspectRatio: 1.5,
           children: [
             _summaryCard('Activos', '${m.activeBots}', Colors.blueAccent),
             _summaryCard('Portfolio', '\$${m.totalPortfolio.toStringAsFixed(0)}', Colors.greenAccent),
-            _summaryCard('Libre', '\$${m.totalFreeBalance.toStringAsFixed(0)}', Colors.orangeAccent),
+            _summaryCard('Libre', '\$${m.totalFreeBalance.toStringAsFixed(0)}', Colors.amber),
             _summaryCard('PNL \$', (m.totalUnrealizedPnl >= 0 ? '+' : '') + '\$${m.totalUnrealizedPnl.toStringAsFixed(2)}', pnlColor),
           ],
         ),
@@ -380,16 +404,16 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   }
 
   Widget _summaryCard(String label, String value, Color color) => Container(
-    padding: const EdgeInsets.all(8),
+    padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: color.withAlpha(15),
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: color.withAlpha(60)),
+      color: color.withAlpha(10),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withAlpha(30)),
     ),
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
-      const SizedBox(height: 2),
-      Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      Text(label, style: const TextStyle(fontSize: 10, color: Colors.white60, letterSpacing: 0.3)),
+      const SizedBox(height: 4),
+      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color)),
     ]),
   );
 
@@ -455,15 +479,15 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   );
 
   Widget _chartCard({required String title, required Widget child}) => Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.white12),
+      color: const Color(0xFF161B22),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.white10),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 8),
+      Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
       SizedBox(height: 110, child: child),
     ]),
   );
@@ -570,12 +594,11 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         ),
         // ── Metrics grid ─────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
           child: Row(children: [
             _metricCell('Precio', '\$${bot.currentPrice.toStringAsFixed(2)}'),
             _metricCell('Posición', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
-            _metricCell('Libre', '\$${bot.freeBalance.toStringAsFixed(2)}'),
-            _metricCell('Presupuesto', '\$${bot.dailyBudget.toStringAsFixed(0)}/día'),
+            _metricCell('Vol. DCA', '\$${bot.buyVolume.toStringAsFixed(1)}'),
             _metricCell('Trades', '${bot.tradesToday}'),
             _metricCell('PNL \$', (bot.unrealizedPnl >= 0 ? '+' : '') + '\$${bot.unrealizedPnl.toStringAsFixed(2)}',
                 color: pnlColor),
