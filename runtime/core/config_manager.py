@@ -89,22 +89,23 @@ class ConfigManager:
 
     def _write_manifest_from_payload(self, payload: dict[str, Any]) -> None:
         items = payload.get("items") if isinstance(payload.get("items"), list) else []
-        rows: List[dict[str, str]] = []
+        rows: List[dict[str, Any]] = []
         for it in items:
             if not isinstance(it, dict):
                 continue
             cid = str(it.get("id", "")).strip()
             ak = str(it.get("api_key", "")).strip()
             label = str(it.get("label", "")).strip()
+            enabled = bool(it.get("enabled", True))
             if cid and ak:
-                rows.append({"id": cid, "public_key": ak, "label": label})
+                rows.append({"id": cid, "public_key": ak, "label": label, "enabled": enabled})
         tmp = self._manifest_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(rows, indent=0), encoding="utf-8")
         tmp.replace(self._manifest_path)
         restrict_secret_file(self._manifest_path)
 
-    def list_public_credentials(self) -> List[dict[str, str]]:
-        """Ids and public API keys only (no secrets)."""
+    def list_public_credentials(self) -> List[dict[str, Any]]:
+        """Ids, public API keys, labels and enabled state (no secrets)."""
         if not self._manifest_path.is_file():
             return []
         try:
@@ -113,7 +114,7 @@ class ConfigManager:
             return []
         if not isinstance(raw, list):
             return []
-        out: List[dict[str, str]] = []
+        out: List[dict[str, Any]] = []
         for row in raw:
             if isinstance(row, dict) and row.get("id") and row.get("public_key"):
                 out.append(
@@ -121,6 +122,7 @@ class ConfigManager:
                         "id": str(row["id"]),
                         "public_key": str(row["public_key"]),
                         "label": str(row.get("label", "")),
+                        "enabled": bool(row.get("enabled", True)),
                     }
                 )
         return out
@@ -278,7 +280,7 @@ class ConfigManager:
         return str(it["api_key"]).strip(), str(it["api_secret"]).strip()
 
     def get_pair_for_active(self) -> Optional[Tuple[str, str]]:
-        """Return key pair for active id, or first item."""
+        """Return key pair for active id (must be enabled), or first enabled item."""
         if not self.exists():
             return None
         payload = self._load_payload()
@@ -287,12 +289,14 @@ class ConfigManager:
         items_raw = payload.get("items")
         if not isinstance(items_raw, list):
             return None
+        # Only consider enabled credentials with both key and secret
         items = [
             it
             for it in items_raw
             if isinstance(it, dict)
             and str(it.get("api_key", "")).strip()
             and str(it.get("api_secret", "")).strip()
+            and bool(it.get("enabled", True))
         ]
         if not items:
             return None
@@ -301,6 +305,7 @@ class ConfigManager:
         if aid:
             chosen = next((it for it in items if str(it.get("id")) == str(aid)), None)
         if chosen is None:
+            # Active credential is disabled or not found — fall back to first enabled
             chosen = items[0]
             cid = str(chosen.get("id", "")).strip()
             if cid:
@@ -310,6 +315,46 @@ class ConfigManager:
         if not ak or not sec:
             return None
         return ak, sec
+
+    def set_credential_enabled(self, credential_id: str, enabled: bool) -> bool:
+        """Enable or disable a credential. Returns True if found and updated."""
+        vault_existed = self.exists()
+        try:
+            payload = self._load_payload()
+        except ValueError:
+            if vault_existed:
+                self._reset_unreadable_vault()
+            return False
+        if payload is None:
+            return False
+        items = payload.get("items")
+        if not isinstance(items, list):
+            return False
+        target = self._find_item(items, credential_id)
+        if target is None:
+            return False
+        target["enabled"] = enabled
+        payload["items"] = items
+        self._encrypt_and_write(payload)
+        # If disabling the active credential, auto-switch to first enabled
+        if not enabled and self.get_active_credential_id() == credential_id:
+            first_enabled = next(
+                (it for it in items if it.get("id") != credential_id and bool(it.get("enabled", True))),
+                None,
+            )
+            self.set_active_credential_id(first_enabled["id"] if first_enabled else None)
+        return True
+
+    def activate_credential(self, credential_id: str) -> bool:
+        """Set a credential as active. Only works if the credential exists and is enabled."""
+        pubs = self.list_public_credentials()
+        row = next((p for p in pubs if p["id"] == credential_id), None)
+        if row is None:
+            return False
+        if not row.get("enabled", True):
+            return False
+        self.set_active_credential_id(credential_id)
+        return True
 
     def save_credentials(self, api_key: str, api_secret: str) -> None:
         """Backward-compatible: replace vault with a single credential."""
