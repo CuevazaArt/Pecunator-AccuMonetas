@@ -125,18 +125,31 @@ class LouiseBotRunner:
         logger.info(f"Bot {self.bot_id} started loop.")
 
     async def _main_loop(self):
-        """Main loop that runs every poll_interval_seconds."""
+        """Main loop that runs every poll_interval_seconds. Respects shutdown flag."""
         while self._running:
+            # Check if graceful shutdown was requested
+            try:
+                from runtime.api.lifespan import is_shutdown_requested
+                if is_shutdown_requested():
+                    logger.info(f"Shutdown flag detected, stopping {self.bot_id}")
+                    break
+            except Exception:
+                pass
+
             try:
                 await self.poll_market()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in {self.bot_id} main loop: {e}")
-            
+
             # Sleep for the configured interval
             interval = self.config.get('poll_interval_seconds', 300)
-            await asyncio.sleep(interval)
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info(f"{self.bot_id} sleep interrupted by cancellation")
+                break
 
     async def poll_market(self):
         """
