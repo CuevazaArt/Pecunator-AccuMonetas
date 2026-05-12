@@ -104,9 +104,10 @@ class LouiseBotRunner:
                 logger.info(f"{self.bot_id}: Buy WS confirmed. New avg price: {new_avg_price:.4f}")
             
             elif meta['type'] == 'SELL':
-                self.db.close_epoch(meta['epoch_id'], float(meta['current_price']), float(meta['final_value']), float(meta['profit_usdt']), float(meta['profit_pct']))
+                status = meta.get('status', 'CLOSED_SUCCESSFUL')
+                self.db.close_epoch(meta['epoch_id'], float(meta['current_price']), float(meta['final_value']), float(meta['profit_usdt']), float(meta['profit_pct']), status=status)
                 self.active_epoch = None
-                logger.info(f"{self.bot_id}: Sell WS confirmed. Epoch closed with {meta['profit_pct']:.2f}% profit!")
+                logger.info(f"{self.bot_id}: Sell WS confirmed. Epoch closed with status {status} ({meta['profit_pct']:.2f}%)!")
 
     async def start(self):
         if not self.config:
@@ -196,14 +197,28 @@ class LouiseBotRunner:
             
             logger.info(f"{self.bot_id}: Current PnL: {profit_pct:.2f}% (Target: {target_profit:.2f}%)")
             
+            # 1. Take Profit Check
             if profit_pct >= target_profit:
                 # Execute Market Sell to close epoch
                 await self._execute_sell(epoch, current_value, profit_usdt, profit_pct)
                 return
+                
+            # 2. Hard Stop Loss / Drawdown limit
+            max_drawdown = Decimal(str(self.config.get("max_drawdown_pct", -10.0)))
+            if max_drawdown < 0 and profit_pct <= max_drawdown:
+                logger.error(f"{self.bot_id}: CRITICAL: Stop loss reached ({profit_pct:.2f}% <= {max_drawdown:.2f}%). Liquidating position.")
+                await self._execute_sell(epoch, current_value, profit_usdt, profit_pct, status="CLOSED_STOP_LOSS")
+                return
 
         # If not exiting, check if we can buy
-        # DCA purely on time interval (every loop) for now, as it's a pure DCA.
-        # Check spot balance instead of budget guard
+        daily_budget = Decimal(str(self.config.get("daily_budget_usdt", 500.0)))
+        total_cost_so_far = Decimal(str(epoch.get('total_cost', 0.0)))
+        
+        if total_cost_so_far + buy_volume > daily_budget:
+            logger.warning(f"{self.bot_id}: Daily budget reached ({daily_budget} USDT). Pausing DCA until target reached.")
+            return
+
+        # Check spot balance
         if self.usdt_free_balance < buy_volume:
             logger.warning(f"{self.bot_id}: Insufficient USDT in spot wallet. Need {buy_volume}, have {self.usdt_free_balance}.")
             return
@@ -270,7 +285,7 @@ class LouiseBotRunner:
             logger.error(f"{self.bot_id}: Failed to execute buy: {e}")
             self.cooldown_until = int(time.time()) + 300
 
-    async def _execute_sell(self, epoch: Dict[str, Any], final_value: Decimal, profit_usdt: Decimal, profit_pct: Decimal):
+    async def _execute_sell(self, epoch: Dict[str, Any], final_value: Decimal, profit_usdt: Decimal, profit_pct: Decimal, status: str = "CLOSED_SUCCESSFUL"):
         symbol = self.config["symbol"]
         total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
         
@@ -295,7 +310,8 @@ class LouiseBotRunner:
                     'current_price': self.current_price,
                     'final_value': final_value,
                     'profit_usdt': profit_usdt,
-                    'profit_pct': profit_pct
+                    'profit_pct': profit_pct,
+                    'status': status
                 }
                 
                 if is_simulation:
@@ -332,11 +348,12 @@ class LouiseBotRunner:
         await asyncio.sleep(1.5)
         await self.handle_order_update(payload)
 
-    async def stop(self):
+    async def stop(self, shutdown_db=True):
         """Clean shutdown of the bot."""
         logger.info(f"Shutting down LouiseBot {self.bot_id}")
         self._running = False
         if self._task:
             self._task.cancel()
-        self.db.update_bot_status(self.bot_id, "SHUTDOWN")
-        self.config['status'] = "SHUTDOWN"
+        if shutdown_db:
+            self.db.update_bot_status(self.bot_id, "SHUTDOWN")
+            self.config['status'] = "SHUTDOWN"

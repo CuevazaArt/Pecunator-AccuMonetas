@@ -5,6 +5,7 @@ import 'dart:developer' as dev;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/app_config.dart';
+import 'api_token.dart';
 
 /// Central WebSocket service for receiving push telemetry.
 ///
@@ -67,7 +68,12 @@ class TelemetrySocketService {
     if (_disposed) return;
 
     try {
-      final uri = Uri.parse(wsUrl);
+      String url = wsUrl;
+      final token = ApiTokenReader.readToken();
+      if (token != null && token.isNotEmpty) {
+        url += '?token=$token';
+      }
+      final uri = Uri.parse(url);
       _channel = WebSocketChannel.connect(uri);
 
       _subscription = _channel!.stream.listen(

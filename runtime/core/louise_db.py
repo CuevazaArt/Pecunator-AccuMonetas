@@ -107,6 +107,15 @@ class LouiseDB:
             cursor = conn.execute("SELECT * FROM louise_bots ORDER BY created_at DESC")
             return [dict(row) for row in cursor.fetchall()]
 
+    def update_bot_config(self, bot_id: str, daily_budget_usdt: float, target_profit_pct: float) -> None:
+        with open_db(self.db_path) as conn:
+            conn.execute("""
+                UPDATE louise_bots 
+                SET daily_budget_usdt = ?, target_profit_pct = ?
+                WHERE bot_id = ?
+            """, (daily_budget_usdt, target_profit_pct, bot_id))
+            conn.commit()
+
     def create_epoch(self, epoch_id: str, bot_id: str, status: str = "RUNNING") -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
@@ -157,3 +166,9 @@ class LouiseDB:
             cursor = conn.execute("SELECT * FROM louise_epochs WHERE bot_id = ? AND status = 'RUNNING' ORDER BY created_at DESC LIMIT 1", (bot_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    def get_completed_epochs_count(self) -> int:
+        with open_db(self.db_path) as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM louise_epochs WHERE status = 'CLOSED_SUCCESSFUL'")
+            row = cursor.fetchone()
+            return row[0] if row else 0

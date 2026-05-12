@@ -28,6 +28,8 @@ class ApiTokenReader {
         File('runtime/data/api.token'),
         // When running built exe from desktop_shell
         File('../runtime/data/api.token'),
+        // Absolute path fallback
+        File('c:\\Users\\lexar\\Desktop\\Pecunator-AccuMonetas\\runtime\\data\\api.token'),
         // Absolute path (common dev setup)
         ...(_resolveFromScript()),
       ];
