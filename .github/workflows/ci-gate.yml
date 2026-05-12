@@ -28,9 +28,9 @@ jobs:
       - name: Ruff lint (errors only)
         run: ruff check runtime/ --select=E,W,F --config "line-length=120"
 
-      - name: Pytest (core modules)
+      - name: Pytest (core + e2e modules)
         run: |
-          pytest runtime/tests/ -v --tb=short -x
+          pytest runtime/tests/ tests/ -v --tb=short -x
 
   flutter-analyze:
     name: "Flutter Analyze"
