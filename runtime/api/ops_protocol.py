@@ -24,22 +24,8 @@ from runtime.core.security_util import sanitize_log_message
 
 
 async def _stop_dorothy_for_protocol() -> tuple[int, list[str]]:
-    svc = deps.get_bot()
-    stopped = 0
-    errors: list[str] = []
-    for row in svc.list_instances():
-        bot_id = str(row.get("bot_id", "")).strip()
-        if not bot_id:
-            continue
-        should_stop = bool(row.get("running")) or bool(row.get("desired_running"))
-        if not should_stop:
-            continue
-        try:
-            await svc.stop_instance(bot_id)
-            stopped += 1
-        except Exception as e:
-            errors.append(f"{bot_id}: {sanitize_log_message(str(e))}")
-    return stopped, errors
+    # Dorothy is deprecated, no instances to stop
+    return 0, []
 
 
 def _format_lot_quantity(symbol_info: dict[str, Any] | None, raw_qty: Decimal) -> Decimal | None:

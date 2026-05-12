@@ -198,40 +198,14 @@ class TelemetryCollector:
         snapshot["order_limit_10s"] = order_limit
 
         # -- Fleet state --
-        d_running = 0
-        d_total = 0
-        e_running = 0
-        e_total = 0
-        dorothy_bots_list: list[dict[str, Any]] = []
-        elphaba_bots_list: list[dict[str, Any]] = []
-        try:
-            from runtime.api import deps
-            bot_svc = deps.get_bot()
-            dorothy_bots_list = bot_svc.list_instances()
-            for b in dorothy_bots_list:
-                d_total += 1
-                if b.get("running"):
-                    d_running += 1
-        except Exception:
-            pass
-        try:
-            from runtime.api import deps
-            eph_svc = deps.get_elphaba()
-            elphaba_bots_list = eph_svc.list_instances()
-            for b in elphaba_bots_list:
-                e_total += 1
-                if b.get("running"):
-                    e_running += 1
-        except Exception:
-            pass
-        snapshot["dorothy_running"] = d_running
-        snapshot["dorothy_total"] = d_total
-        snapshot["elphaba_running"] = e_running
-        snapshot["elphaba_total"] = e_total
-        snapshot["bots_running"] = d_running + e_running
-        snapshot["bots_total"] = d_total + e_total
-        snapshot["dorothy_bots"] = dorothy_bots_list
-        snapshot["elphaba_bots"] = elphaba_bots_list
+        snapshot["dorothy_running"] = 0
+        snapshot["dorothy_total"] = 0
+        snapshot["elphaba_running"] = 0
+        snapshot["elphaba_total"] = 0
+        snapshot["bots_running"] = 0  # Replaced by louise stats below
+        snapshot["bots_total"] = 0
+        snapshot["dorothy_bots"] = []
+        snapshot["elphaba_bots"] = []
 
         # -- Fuse status --
         snapshot["api_fuse_ok"] = 1

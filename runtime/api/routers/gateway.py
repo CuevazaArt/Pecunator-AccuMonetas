@@ -77,53 +77,7 @@ async def gateway_snapshot(ctx: AppContext = Depends(deps.get_ctx)) -> Any:
     return build_snapshot(ctx)
 
 
-# ── Bot (Dorothy legacy singleton) start/stop/run_once ──────────────
-
-@router.post("/bot/start", response_model=BotStatusOut)
-async def bot_start(
-    body: GatewayStartBody = GatewayStartBody(),
-    ctx: AppContext = Depends(deps.get_ctx),
-) -> Any:
-    svc = deps.get_bot()
-    pair = resolve_pair(ctx, body.api_key, body.api_secret)
-    if not pair:
-        raise HTTPException(status_code=400, detail="No API credentials available")
-    svc.runner.set_credentials(pair[0], pair[1])
-    try:
-        await svc.runner.sync_time()
-        await svc.runner.start()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=sanitize_log_message(str(e))) from None
-    return BotStatusOut(**svc.status_payload())
-
-
-@router.post("/bot/stop", response_model=BotStatusOut)
-async def bot_stop() -> Any:
-    svc = deps.get_bot()
-    await svc.runner.stop()
-    return BotStatusOut(**svc.status_payload())
-
-
-@router.post("/bot/run_once", response_model=BotStatusOut)
-async def bot_run_once(
-    body: GatewayStartBody = GatewayStartBody(),
-    ctx: AppContext = Depends(deps.get_ctx),
-) -> Any:
-    svc = deps.get_bot()
-    pair = resolve_pair(ctx, body.api_key, body.api_secret)
-    if not pair:
-        raise HTTPException(status_code=400, detail="No API credentials available")
-    svc.runner.set_credentials(pair[0], pair[1])
-    try:
-        await svc.runner.sync_time()
-        rep = await svc.runner.run_once()
-        svc.mark_run_once(rep, error=None)
-    except Exception as e:
-        msg = sanitize_log_message(str(e))
-        svc.mark_run_once({}, error=msg)
-        raise HTTPException(status_code=502, detail=msg) from None
-    return BotStatusOut(**svc.status_payload())
-
+# ── Legacy Bot endpoints removed ────────────────────────────────────
 
 # ── Terminal + time sync ────────────────────────────────────────────
 
