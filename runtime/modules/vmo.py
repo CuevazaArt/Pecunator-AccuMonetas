@@ -117,7 +117,6 @@ class VisualMarketObserver:
         double-call ``request_token`` here.
         """
         intervals = ["4h", "1d", "1w"]
-        loop = asyncio.get_running_loop()
 
         results = {}
         for iv in intervals:
