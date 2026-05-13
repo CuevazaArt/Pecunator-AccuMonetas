@@ -279,7 +279,7 @@ class TestEmailIntegration:
         dispatcher._send_email_async("CRITICAL", "TEST", "Email test message")
 
         # Give thread time to send
-        time.sleep(0.5)
+        time.sleep(1.0)
 
         # Verify SMTP was called
         assert mock_smtp_class.called

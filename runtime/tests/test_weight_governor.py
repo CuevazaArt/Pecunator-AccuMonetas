@@ -162,7 +162,7 @@ class TestStatus:
     def test_last_update_age_is_recent(self):
         g = WeightGovernor()
         g.update_weight(0)
-        time.sleep(0.05)
+        time.sleep(0.2)
         age = g.status()["last_update_age_sec"]
         assert age is not None
         assert 0.0 < age < 2.0
