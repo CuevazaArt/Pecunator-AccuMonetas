@@ -94,8 +94,13 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         currentWeight: snap.usedWeight,
         weightPerMinute: snap.usedWeight,
         weightLimit: snap.weightLimit,
-        weightZone: snap.weightPct < 0.5 ? 'GREEN' : snap.weightPct < 0.8 ? 'YELLOW' : 'RED',
-        statusMessage: '${(snap.weightPct * 100).toStringAsFixed(1)}% del límite usado.',
+        weightZone: snap.weightPct < 0.5
+            ? 'GREEN'
+            : snap.weightPct < 0.8
+            ? 'YELLOW'
+            : 'RED',
+        statusMessage:
+            '${(snap.weightPct * 100).toStringAsFixed(1)}% del límite usado.',
       );
 
       // Account data from gateway_snapshot
@@ -115,7 +120,16 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     if (balances == null) return;
 
     // Target assets for display: BTC, ETH, BNB, SOL
-    const targetAssets = {'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'BTC', 'ETH', 'BNB', 'SOL'};
+    const targetAssets = {
+      'BTCUSDT',
+      'ETHUSDT',
+      'BNBUSDT',
+      'SOLUSDT',
+      'BTC',
+      'ETH',
+      'BNB',
+      'SOL',
+    };
 
     for (final bal in balances.whereType<Map<String, dynamic>>()) {
       final asset = (bal['asset'] as String?)?.toUpperCase() ?? '';
@@ -154,14 +168,16 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         _loading = false;
         _error = null;
         final botList = results[0] as List<Map<String, dynamic>>;
-        if (botList.isNotEmpty) _bots = botList.map(BotMetrics.fromJson).toList();
+        if (botList.isNotEmpty)
+          _bots = botList.map(BotMetrics.fromJson).toList();
 
         final metricsMap = results[1] as Map<String, dynamic>;
         if (metricsMap.isNotEmpty) {
           _hubMetrics = HubMetrics.fromJson(metricsMap);
         }
         final weightMap = results[2] as Map<String, dynamic>;
-        if (weightMap.isNotEmpty) _weightStatus = WeightStatus.fromJson(weightMap);
+        if (weightMap.isNotEmpty)
+          _weightStatus = WeightStatus.fromJson(weightMap);
 
         final histList = (results[3] as List<Map<String, dynamic>>);
         if (histList.isNotEmpty) {
@@ -169,7 +185,11 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         }
       });
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = '$e'; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = '$e';
+        });
     }
   }
 
@@ -181,7 +201,10 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -202,13 +225,33 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     await _loadSupplementaryData();
   });
 
-  Future<void> _createBot(String symbol, double budget, double targetPct, double buyVol) => _mutate(() async {
-    await _api.louiseCreateBot(symbol: symbol, dailyBudget: budget, targetProfitPct: targetPct, buyVolume: buyVol);
+  Future<void> _createBot(
+    String symbol,
+    double budget,
+    double targetPct,
+    double buyVol,
+  ) => _mutate(() async {
+    await _api.louiseCreateBot(
+      symbol: symbol,
+      dailyBudget: budget,
+      targetProfitPct: targetPct,
+      buyVolume: buyVol,
+    );
     await _loadSupplementaryData();
   });
 
-  Future<void> _editBot(String botId, double budget, double targetPct, double buyVol) => _mutate(() async {
-    await _api.louiseUpdateBot(botId, dailyBudget: budget, targetProfitPct: targetPct, buyVolume: buyVol);
+  Future<void> _editBot(
+    String botId,
+    double budget,
+    double targetPct,
+    double buyVol,
+  ) => _mutate(() async {
+    await _api.louiseUpdateBot(
+      botId,
+      dailyBudget: budget,
+      targetProfitPct: targetPct,
+      buyVolume: buyVol,
+    );
     await _loadSupplementaryData();
   });
 
@@ -226,17 +269,43 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: symbolCtrl, decoration: const InputDecoration(labelText: 'Símbolo (ej. ETH/USDT)')),
+            TextField(
+              controller: symbolCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Símbolo (ej. ETH/USDT)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT (Límite)')),
+            TextField(
+              controller: budgetCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Presupuesto diario USDT (Límite)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            TextField(
+              controller: targetCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Target PNL% por ciclo',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: buyVolCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Volumen de Compra USDT (DCA)')),
+            TextField(
+              controller: buyVolCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Volumen de Compra USDT (DCA)',
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             onPressed: () {
               final sym = symbolCtrl.text.trim().toUpperCase();
@@ -254,9 +323,15 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   }
 
   void _showEditDialog(BotMetrics bot) {
-    final budgetCtrl = TextEditingController(text: bot.dailyBudget.toStringAsFixed(0));
-    final targetCtrl = TextEditingController(text: bot.targetProfitPct.toStringAsFixed(1));
-    final buyVolCtrl = TextEditingController(text: bot.buyVolume.toStringAsFixed(1));
+    final budgetCtrl = TextEditingController(
+      text: bot.dailyBudget.toStringAsFixed(0),
+    );
+    final targetCtrl = TextEditingController(
+      text: bot.targetProfitPct.toStringAsFixed(1),
+    );
+    final buyVolCtrl = TextEditingController(
+      text: bot.buyVolume.toStringAsFixed(1),
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -264,19 +339,42 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: budgetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Presupuesto diario USDT')),
+            TextField(
+              controller: budgetCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Presupuesto diario USDT',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: targetCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target PNL% por ciclo')),
+            TextField(
+              controller: targetCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Target PNL% por ciclo',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: buyVolCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Volumen de Compra USDT (DCA)')),
+            TextField(
+              controller: buyVolCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Volumen de Compra USDT (DCA)',
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             onPressed: () {
-              final budget = double.tryParse(budgetCtrl.text) ?? bot.dailyBudget;
-              final target = double.tryParse(targetCtrl.text) ?? bot.targetProfitPct;
+              final budget =
+                  double.tryParse(budgetCtrl.text) ?? bot.dailyBudget;
+              final target =
+                  double.tryParse(targetCtrl.text) ?? bot.targetProfitPct;
               final buyVol = double.tryParse(buyVolCtrl.text) ?? bot.buyVolume;
               Navigator.pop(ctx);
               _editBot(bot.id, budget, target, buyVol);
@@ -293,12 +391,20 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar Bot'),
-        content: Text('¿Eliminar ${bot.symbol} (${bot.id})?\nEsta acción no se puede deshacer.'),
+        content: Text(
+          '¿Eliminar ${bot.symbol} (${bot.id})?\nEsta acción no se puede deshacer.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () { Navigator.pop(ctx); _deleteBot(bot.id); },
+            onPressed: () {
+              Navigator.pop(ctx);
+              _deleteBot(bot.id);
+            },
             child: const Text('Eliminar'),
           ),
         ],
@@ -307,10 +413,14 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   }
 
   void _showMonitorDialog(BotMetrics bot) {
-    final avgPrice = bot.positionSize > 0 ? bot.costBasis / bot.positionSize : 0.0;
+    final avgPrice = bot.positionSize > 0
+        ? bot.costBasis / bot.positionSize
+        : 0.0;
     final targetPrice = avgPrice * (1 + bot.targetProfitPct / 100);
-    final distanceToTarget = targetPrice > 0 ? ((bot.currentPrice - targetPrice) / targetPrice * 100) : 0.0;
-    
+    final distanceToTarget = targetPrice > 0
+        ? ((bot.currentPrice - targetPrice) / targetPrice * 100)
+        : 0.0;
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -328,48 +438,89 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                 children: [
                   Row(
                     children: [
-                      Text(bot.statusEmoji, style: const TextStyle(fontSize: 24)),
+                      Text(
+                        bot.statusEmoji,
+                        style: const TextStyle(fontSize: 24),
+                      ),
                       const SizedBox(width: 12),
-                      Text('Monitor: ${bot.symbol}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                      Text(
+                        'Monitor: ${bot.symbol}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
                     ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white54),
                     onPressed: () => Navigator.pop(ctx),
-                  )
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               // Top metrics
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _monitorMetric('Precio Promedio', '\$${avgPrice.toStringAsFixed(4)}'),
-                  _monitorMetric('Precio Actual', '\$${bot.currentPrice.toStringAsFixed(4)}', color: Colors.amber),
-                  _monitorMetric('Precio Objetivo', '\$${targetPrice.toStringAsFixed(4)}', color: Colors.greenAccent),
+                  _monitorMetric(
+                    'Precio Promedio',
+                    '\$${avgPrice.toStringAsFixed(4)}',
+                  ),
+                  _monitorMetric(
+                    'Precio Actual',
+                    '\$${bot.currentPrice.toStringAsFixed(4)}',
+                    color: Colors.amber,
+                  ),
+                  _monitorMetric(
+                    'Precio Objetivo',
+                    '\$${targetPrice.toStringAsFixed(4)}',
+                    color: Colors.greenAccent,
+                  ),
                 ],
               ),
               const SizedBox(height: 24),
               const Divider(color: Colors.white10),
               const SizedBox(height: 16),
-              
+
               // Portfolio View
-              const Text('Estado del Ciclo DCA (Epoch)', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const Text(
+                'Estado del Ciclo DCA (Epoch)',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
               const SizedBox(height: 12),
-              
-              _monitorRow('Capital Invertido', '\$${bot.costBasis.toStringAsFixed(2)}'),
-              _monitorRow('Valor Actual', '\$${(bot.costBasis + bot.unrealizedPnl).toStringAsFixed(2)}'),
-              _monitorRow('Posición Acumulada', '${bot.positionSize.toStringAsFixed(6)} ${bot.symbol.split("/")[0]}'),
+
+              _monitorRow(
+                'Capital Invertido',
+                '\$${bot.costBasis.toStringAsFixed(2)}',
+              ),
+              _monitorRow(
+                'Valor Actual',
+                '\$${(bot.costBasis + bot.unrealizedPnl).toStringAsFixed(2)}',
+              ),
+              _monitorRow(
+                'Posición Acumulada',
+                '${bot.positionSize.toStringAsFixed(6)} ${bot.symbol.split("/")[0]}',
+              ),
               _monitorRow('Compras (Trades)', '${bot.tradesToday}'),
               const SizedBox(height: 8),
-              _monitorRow('Beneficio/Pérdida (PNL)', '\$${bot.unrealizedPnl.toStringAsFixed(2)} (${bot.unrealizedPct.toStringAsFixed(2)}%)', 
-                  valueColor: bot.unrealizedPnl >= 0 ? Colors.greenAccent : Colors.redAccent),
-                  
+              _monitorRow(
+                'Beneficio/Pérdida (PNL)',
+                '\$${bot.unrealizedPnl.toStringAsFixed(2)} (${bot.unrealizedPct.toStringAsFixed(2)}%)',
+                valueColor: bot.unrealizedPnl >= 0
+                    ? Colors.greenAccent
+                    : Colors.redAccent,
+              ),
+
               const SizedBox(height: 24),
-              
+
               // Distance to target graphic
-              Text('Distancia al Take Profit: ${distanceToTarget.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+              Text(
+                'Distancia al Take Profit: ${distanceToTarget.toStringAsFixed(2)}%',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
@@ -377,7 +528,11 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                   value: (bot.progressPercent / 100).clamp(0, 1),
                   minHeight: 12,
                   backgroundColor: Colors.white10,
-                  valueColor: AlwaysStoppedAnimation<Color>(bot.progressPercent >= 100 ? Colors.greenAccent : Colors.blueAccent),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    bot.progressPercent >= 100
+                        ? Colors.greenAccent
+                        : Colors.blueAccent,
+                  ),
                 ),
               ),
             ],
@@ -391,9 +546,20 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.white54),
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: color ?? Colors.white)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            color: color ?? Colors.white,
+          ),
+        ),
       ],
     );
   }
@@ -405,7 +571,14 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.white70)),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace', color: valueColor ?? Colors.white)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+              color: valueColor ?? Colors.white,
+            ),
+          ),
         ],
       ),
     );
@@ -426,11 +599,13 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             SliverToBoxAdapter(child: _buildConnectionBar()),
             SliverToBoxAdapter(child: _buildAccountStatus()),
             SliverToBoxAdapter(child: const SizedBox(height: 4)),
-            if (_hubMetrics != null) SliverToBoxAdapter(child: _buildHubSummary()),
+            if (_hubMetrics != null)
+              SliverToBoxAdapter(child: _buildHubSummary()),
             SliverToBoxAdapter(child: const SizedBox(height: 4)),
             SliverToBoxAdapter(child: _buildChartsRow()),
             SliverToBoxAdapter(child: const SizedBox(height: 8)),
-            if (_weightStatus != null) SliverToBoxAdapter(child: _buildTelemetryRow()),
+            if (_weightStatus != null)
+              SliverToBoxAdapter(child: _buildTelemetryRow()),
             SliverToBoxAdapter(child: const SizedBox(height: 8)),
             SliverToBoxAdapter(child: _buildBotListHeader()),
             SliverList(
@@ -444,17 +619,26 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(32),
                   child: Center(
-                    child: Column(children: [
-                      const Icon(Icons.smart_toy_outlined, size: 48, color: Colors.white24),
-                      const SizedBox(height: 8),
-                      const Text('Sin bots activos', style: TextStyle(color: Colors.white54)),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _showCreateDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Crear primer bot'),
-                      ),
-                    ]),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.smart_toy_outlined,
+                          size: 48,
+                          color: Colors.white24,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Sin bots activos',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _showCreateDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Crear primer bot'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -476,16 +660,28 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       decoration: BoxDecoration(
         color: isWs ? Colors.green.withAlpha(20) : Colors.orange.withAlpha(20),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: isWs ? Colors.greenAccent.withAlpha(80) : Colors.orangeAccent.withAlpha(80)),
+        border: Border.all(
+          color: isWs
+              ? Colors.greenAccent.withAlpha(80)
+              : Colors.orangeAccent.withAlpha(80),
+        ),
       ),
       child: Row(
         children: [
-          Icon(isWs ? Icons.wifi : Icons.wifi_off, size: 12,
-              color: isWs ? Colors.greenAccent : Colors.orangeAccent),
+          Icon(
+            isWs ? Icons.wifi : Icons.wifi_off,
+            size: 12,
+            color: isWs ? Colors.greenAccent : Colors.orangeAccent,
+          ),
           const SizedBox(width: 6),
           Text(
-            isWs ? 'WebSocket conectado — datos en tiempo real' : 'WebSocket desconectado — REST polling activo',
-            style: TextStyle(fontSize: 10, color: isWs ? Colors.greenAccent : Colors.orangeAccent),
+            isWs
+                ? 'WebSocket conectado — datos en tiempo real'
+                : 'WebSocket desconectado — REST polling activo',
+            style: TextStyle(
+              fontSize: 10,
+              color: isWs ? Colors.greenAccent : Colors.orangeAccent,
+            ),
           ),
         ],
       ),
@@ -499,43 +695,79 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.purple.withAlpha(20), Colors.blue.withAlpha(10)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.purple.withAlpha(80)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Cuenta Binance', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 4),
-        ]),
-        const SizedBox(height: 10),
-        // Account equity and balance row
-        Row(children: [
-          Expanded(flex: 1, child: _accountCard('Equity', '\$${_totalEquity.toStringAsFixed(2)}', Colors.blueAccent)),
-          const SizedBox(width: 8),
-          Expanded(flex: 1, child: _accountCard('USDT Libre', '\$${_freeUsdt.toStringAsFixed(2)}', Colors.greenAccent)),
-        ]),
-        const SizedBox(height: 10),
-        // Holdings
-        if (_holdings.isNotEmpty) ...[
-          const Text('Activos', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
-          const SizedBox(height: 6),
-          GridView.count(
-            crossAxisCount: 4,
-            crossAxisSpacing: 6,
-            mainAxisSpacing: 6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 2.0,
-            children: _buildHoldingCards(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Cuenta Binance',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 4),
+            ],
           ),
-        ] else
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text('Sin activos', style: TextStyle(fontSize: 9, color: Colors.white54)),
+          const SizedBox(height: 10),
+          // Account equity and balance row
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: _accountCard(
+                  'Equity',
+                  '\$${_totalEquity.toStringAsFixed(2)}',
+                  Colors.blueAccent,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: _accountCard(
+                  'USDT Libre',
+                  '\$${_freeUsdt.toStringAsFixed(2)}',
+                  Colors.greenAccent,
+                ),
+              ),
+            ],
           ),
-      ]),
+          const SizedBox(height: 10),
+          // Holdings
+          if (_holdings.isNotEmpty) ...[
+            const Text(
+              'Activos',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 6),
+            GridView.count(
+              crossAxisCount: 4,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 2.0,
+              children: _buildHoldingCards(),
+            ),
+          ] else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'Sin activos',
+                style: TextStyle(fontSize: 9, color: Colors.white54),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -558,11 +790,21 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       borderRadius: BorderRadius.circular(6),
       border: Border.all(color: color.withAlpha(60)),
     ),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
-      const SizedBox(height: 2),
-      Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
-    ]),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 9, color: Colors.white70)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _holdingCard(String asset, double qty) => Container(
@@ -572,11 +814,28 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       borderRadius: BorderRadius.circular(4),
       border: Border.all(color: Colors.cyanAccent.withAlpha(60)),
     ),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(asset, style: const TextStyle(fontSize: 8, color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 2),
-      Text(_formatQty(qty), style: const TextStyle(fontSize: 9, color: Colors.white70, fontFamily: 'monospace')),
-    ]),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          asset,
+          style: const TextStyle(
+            fontSize: 8,
+            color: Colors.cyanAccent,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          _formatQty(qty),
+          style: const TextStyle(
+            fontSize: 9,
+            color: Colors.white70,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
   );
 
   String _formatQty(double qty) {
@@ -587,14 +846,17 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
 
   Widget _buildHubSummary() {
     final m = _hubMetrics!;
-    final pnlColor = m.hubPnlPercent >= 0 ? Colors.greenAccent : Colors.redAccent;
+    final pnlColor = m.hubPnlPercent >= 0
+        ? Colors.greenAccent
+        : Colors.redAccent;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [const Color(0xFF161B22), const Color(0xFF0D1117)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
@@ -603,36 +865,73 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             color: Colors.black.withAlpha(50),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
-        ]
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Louise Hub Overview', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: pnlColor.withAlpha(20),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: pnlColor.withAlpha(50)),
-            ),
-            child: Text('${m.hubPnlPercent >= 0 ? "+" : ""}${m.hubPnlPercent.toStringAsFixed(2)}%',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: pnlColor)),
           ),
-        ]),
-        const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 4, crossAxisSpacing: 12, mainAxisSpacing: 0,
-          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.5,
-          children: [
-            _summaryCard('Activos', '${m.activeBots}', Colors.blueAccent),
-            _summaryCard('Portfolio', '\$${m.totalPortfolio.toStringAsFixed(0)}', Colors.greenAccent),
-            _summaryCard('Libre', '\$${m.totalFreeBalance.toStringAsFixed(0)}', Colors.amber),
-            _summaryCard('PNL \$', '${m.totalUnrealizedPnl >= 0 ? '+' : ''}\$${m.totalUnrealizedPnl.toStringAsFixed(2)}', pnlColor),
-          ],
-        ),
-      ]),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Louise Hub Overview',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: pnlColor.withAlpha(20),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: pnlColor.withAlpha(50)),
+                ),
+                child: Text(
+                  '${m.hubPnlPercent >= 0 ? "+" : ""}${m.hubPnlPercent.toStringAsFixed(2)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: pnlColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 4,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 0,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.5,
+            children: [
+              _summaryCard('Activos', '${m.activeBots}', Colors.blueAccent),
+              _summaryCard(
+                'Portfolio',
+                '\$${m.totalPortfolio.toStringAsFixed(0)}',
+                Colors.greenAccent,
+              ),
+              _summaryCard(
+                'Libre',
+                '\$${m.totalFreeBalance.toStringAsFixed(0)}',
+                Colors.amber,
+              ),
+              _summaryCard(
+                'PNL \$',
+                '${m.totalUnrealizedPnl >= 0 ? '+' : ''}\$${m.totalUnrealizedPnl.toStringAsFixed(2)}',
+                pnlColor,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -643,92 +942,172 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       borderRadius: BorderRadius.circular(8),
       border: Border.all(color: color.withAlpha(30)),
     ),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(label, style: const TextStyle(fontSize: 10, color: Colors.white60, letterSpacing: 0.3)),
-      const SizedBox(height: 4),
-      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color)),
-    ]),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.white60,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _buildChartsRow() => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16),
-    child: Row(children: [
-      Expanded(flex: 2, child: _buildWeightHistoryChart()),
-      const SizedBox(width: 8),
-      Expanded(flex: 2, child: _buildPnlChart()),
-    ]),
+    child: Row(
+      children: [
+        Expanded(flex: 2, child: _buildWeightHistoryChart()),
+        const SizedBox(width: 8),
+        Expanded(flex: 2, child: _buildPnlChart()),
+      ],
+    ),
   );
 
   Widget _buildWeightHistoryChart() => _chartCard(
     title: '⚡ API Weight (24h)',
     child: _weightHistory.isEmpty
-        ? const Center(child: Text('Sin datos', style: TextStyle(color: Colors.white38, fontSize: 11)))
-        : LineChart(LineChartData(
-            lineTouchData: LineTouchData(enabled: false),
-            gridData: const FlGridData(show: false),
-            titlesData: const FlTitlesData(show: false),
-            borderData: FlBorderData(show: false),
-            lineBarsData: [LineChartBarData(
-              spots: _weightHistory.asMap().entries
-                  .map((e) => FlSpot(e.key.toDouble(), e.value.total.toDouble())).toList(),
-              isCurved: true,
-              gradient: const LinearGradient(colors: [Colors.blueAccent, Colors.cyanAccent]),
-              barWidth: 2, isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(show: true, gradient: LinearGradient(
-                colors: [Colors.blueAccent.withAlpha(50), Colors.blueAccent.withAlpha(5)],
-                begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              )),
-            )],
-          )),
+        ? const Center(
+            child: Text(
+              'Sin datos',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+          )
+        : LineChart(
+            LineChartData(
+              lineTouchData: LineTouchData(enabled: false),
+              gridData: const FlGridData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: _weightHistory
+                      .asMap()
+                      .entries
+                      .map(
+                        (e) =>
+                            FlSpot(e.key.toDouble(), e.value.total.toDouble()),
+                      )
+                      .toList(),
+                  isCurved: true,
+                  gradient: const LinearGradient(
+                    colors: [Colors.blueAccent, Colors.cyanAccent],
+                  ),
+                  barWidth: 2,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.blueAccent.withAlpha(50),
+                        Colors.blueAccent.withAlpha(5),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
   );
 
   Widget _buildPnlChart() => _chartCard(
     title: '📈 Hub PNL%',
     child: _pnlHistory.length < 2
-        ? const Center(child: Text('Acumulando...', style: TextStyle(color: Colors.white38, fontSize: 11)))
-        : LineChart(LineChartData(
-            lineTouchData: LineTouchData(enabled: false),
-            gridData: const FlGridData(show: false),
-            titlesData: const FlTitlesData(show: false),
-            borderData: FlBorderData(show: false),
-            lineBarsData: [LineChartBarData(
-              spots: _pnlHistory.asMap().entries
-                  .map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
-              isCurved: true,
-              gradient: LinearGradient(
-                colors: _pnlHistory.last >= 0 ? [Colors.greenAccent, Colors.green] : [Colors.redAccent, Colors.red],
-              ),
-              barWidth: 2, isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(show: true, gradient: LinearGradient(
-                colors: _pnlHistory.last >= 0
-                    ? [Colors.greenAccent.withAlpha(50), Colors.greenAccent.withAlpha(5)]
-                    : [Colors.redAccent.withAlpha(50), Colors.redAccent.withAlpha(5)],
-                begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              )),
-            )],
-          )),
+        ? const Center(
+            child: Text(
+              'Acumulando...',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+          )
+        : LineChart(
+            LineChartData(
+              lineTouchData: LineTouchData(enabled: false),
+              gridData: const FlGridData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: _pnlHistory
+                      .asMap()
+                      .entries
+                      .map((e) => FlSpot(e.key.toDouble(), e.value))
+                      .toList(),
+                  isCurved: true,
+                  gradient: LinearGradient(
+                    colors: _pnlHistory.last >= 0
+                        ? [Colors.greenAccent, Colors.green]
+                        : [Colors.redAccent, Colors.red],
+                  ),
+                  barWidth: 2,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      colors: _pnlHistory.last >= 0
+                          ? [
+                              Colors.greenAccent.withAlpha(50),
+                              Colors.greenAccent.withAlpha(5),
+                            ]
+                          : [
+                              Colors.redAccent.withAlpha(50),
+                              Colors.redAccent.withAlpha(5),
+                            ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
   );
 
-  Widget _chartCard({required String title, required Widget child}) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: const Color(0xFF161B22),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.white10),
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 12),
-      SizedBox(height: 110, child: child),
-    ]),
-  );
+  Widget _chartCard({required String title, required Widget child}) =>
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(height: 110, child: child),
+          ],
+        ),
+      );
 
   Widget _buildTelemetryRow() {
     final w = _weightStatus!;
     final pct = w.weightPercentage;
-    final barColor = pct < 70 ? Colors.greenAccent : pct < 90 ? Colors.orangeAccent : Colors.redAccent;
+    final barColor = pct < 70
+        ? Colors.greenAccent
+        : pct < 90
+        ? Colors.orangeAccent
+        : Colors.redAccent;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -738,53 +1117,75 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.white12),
         ),
-        child: Row(children: [
-          const Icon(Icons.speed, size: 14, color: Colors.white70),
-          const SizedBox(width: 6),
-          const Text('API Weight', style: TextStyle(fontSize: 11)),
-          const SizedBox(width: 6),
-          Text(w.zoneEmoji),
-          const SizedBox(width: 8),
-          Text('${w.currentWeight}/${w.weightLimit}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-          const SizedBox(width: 12),
-          Expanded(child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: pct / 100,
-              minHeight: 6,
-              backgroundColor: Colors.white10,
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+        child: Row(
+          children: [
+            const Icon(Icons.speed, size: 14, color: Colors.white70),
+            const SizedBox(width: 6),
+            const Text('API Weight', style: TextStyle(fontSize: 11)),
+            const SizedBox(width: 6),
+            Text(w.zoneEmoji),
+            const SizedBox(width: 8),
+            Text(
+              '${w.currentWeight}/${w.weightLimit}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+              ),
             ),
-          )),
-          const SizedBox(width: 8),
-          Text('${pct.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 10, color: Colors.white70)),
-        ]),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: pct / 100,
+                  minHeight: 6,
+                  backgroundColor: Colors.white10,
+                  valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${pct.toStringAsFixed(1)}%',
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBotListHeader() => Padding(
     padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text('Louise Bots (${_bots.length})',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-      ElevatedButton.icon(
-        onPressed: _showCreateDialog,
-        icon: const Icon(Icons.add, size: 15),
-        label: const Text('Crear', style: TextStyle(fontSize: 12)),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          visualDensity: VisualDensity.compact,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Louise Bots (${_bots.length})',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
-      ),
-    ]),
+        ElevatedButton.icon(
+          onPressed: _showCreateDialog,
+          icon: const Icon(Icons.add, size: 15),
+          label: const Text('Crear', style: TextStyle(fontSize: 12)),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _buildBotCard(BotMetrics bot) {
-    final pnlColor = bot.unrealizedPct >= 0 ? Colors.greenAccent : Colors.redAccent;
+    final pnlColor = bot.unrealizedPct >= 0
+        ? Colors.greenAccent
+        : Colors.redAccent;
     final isRunning = bot.status == 'running';
-    
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Theme.of(context).colorScheme.surface,
@@ -802,7 +1203,14 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
           ),
           title: Row(
             children: [
-              Text(bot.symbol, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text(
+                bot.symbol,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
+              ),
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -812,7 +1220,11 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                 ),
                 child: Text(
                   '${bot.unrealizedPct >= 0 ? "+" : ""}${bot.unrealizedPct.toStringAsFixed(2)}%',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: pnlColor),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: pnlColor,
+                  ),
                 ),
               ),
             ],
@@ -821,9 +1233,18 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                _metricCell('Precio Actual', '\$${bot.currentPrice.toStringAsFixed(2)}'),
-                _metricCell('Vol. de Compra', '\$${bot.buyVolume.toStringAsFixed(1)}'),
-                _metricCell('Target', '${bot.targetProfitPct.toStringAsFixed(1)}%'),
+                _metricCell(
+                  'Precio Actual',
+                  '\$${bot.currentPrice.toStringAsFixed(2)}',
+                ),
+                _metricCell(
+                  'Vol. de Compra',
+                  '\$${bot.buyVolume.toStringAsFixed(1)}',
+                ),
+                _metricCell(
+                  'Target',
+                  '${bot.targetProfitPct.toStringAsFixed(1)}%',
+                ),
               ],
             ),
           ),
@@ -837,8 +1258,15 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                   // Extended metrics
                   Row(
                     children: [
-                      _metricCell('Posición Activa', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
-                      _metricCell('PNL Acumulado', '${bot.unrealizedPnl >= 0 ? '+' : ''}\$${bot.unrealizedPnl.toStringAsFixed(2)}', color: pnlColor),
+                      _metricCell(
+                        'Posición Activa',
+                        '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}',
+                      ),
+                      _metricCell(
+                        'PNL Acumulado',
+                        '${bot.unrealizedPnl >= 0 ? '+' : ''}\$${bot.unrealizedPnl.toStringAsFixed(2)}',
+                        color: pnlColor,
+                      ),
                       _metricCell('Trades de Ciclo', '${bot.tradesToday}'),
                     ],
                   ),
@@ -847,8 +1275,20 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Progreso hacia Take Profit: ${bot.progressPercent.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                      Text('Objetivo: ${bot.targetProfitPct.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                      Text(
+                        'Progreso hacia Take Profit: ${bot.progressPercent.toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      Text(
+                        'Objetivo: ${bot.targetProfitPct.toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -858,7 +1298,9 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                       value: (bot.progressPercent / 100).clamp(0, 1),
                       minHeight: 8,
                       backgroundColor: Colors.white10,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.blueAccent,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -868,10 +1310,15 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                     runSpacing: 12,
                     children: [
                       _actionBtn(
-                        icon: isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        icon: isRunning
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                         label: isRunning ? 'Pausar' : 'Reanudar',
-                        color: isRunning ? Colors.orangeAccent : Colors.greenAccent,
-                        onTap: () => isRunning ? _pauseBot(bot.id) : _resumeBot(bot.id),
+                        color: isRunning
+                            ? Colors.orangeAccent
+                            : Colors.greenAccent,
+                        onTap: () =>
+                            isRunning ? _pauseBot(bot.id) : _resumeBot(bot.id),
                       ),
                       _actionBtn(
                         icon: Icons.auto_graph_rounded,
@@ -904,20 +1351,44 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
   }
 
   Widget _metricCell(String label, String value, {Color? color}) => Expanded(
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
-      const SizedBox(height: 4),
-      Text(value, style: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.bold,
-          fontFamily: 'monospace', color: color)),
-    ]),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.white54),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            color: color,
+          ),
+        ),
+      ],
+    ),
   );
 
-  Widget _actionBtn({required IconData icon, required String label, required Color color, required VoidCallback onTap, bool isDestructive = false}) {
+  Widget _actionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18, color: color),
-      label: Text(label, style: TextStyle(color: isDestructive ? Colors.redAccent : Colors.white70, fontSize: 13)),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isDestructive ? Colors.redAccent : Colors.white70,
+          fontSize: 13,
+        ),
+      ),
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: color.withAlpha(isDestructive ? 100 : 50)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -935,10 +1406,21 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       borderRadius: BorderRadius.circular(6),
       border: Border.all(color: Colors.redAccent.withAlpha(80)),
     ),
-    child: Row(children: [
-      const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 16),
-      const SizedBox(width: 8),
-      Expanded(child: Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 11))),
-    ]),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.redAccent,
+          size: 16,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _error!,
+            style: const TextStyle(color: Colors.redAccent, fontSize: 11),
+          ),
+        ),
+      ],
+    ),
   );
 }

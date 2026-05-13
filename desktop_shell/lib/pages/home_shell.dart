@@ -23,7 +23,8 @@ class _PecunatorShellState extends State<PecunatorShell> {
   Timer? _timer;
   Timer? _clockTimer;
   StreamSubscription<TelemetrySnapshot>? _telemetrySub;
-  final GlobalKey<State<LouiseHubPage>> _hubKey = GlobalKey<State<LouiseHubPage>>();
+  final GlobalKey<State<LouiseHubPage>> _hubKey =
+      GlobalKey<State<LouiseHubPage>>();
 
   // AppBar state
   bool _loading = false;
@@ -45,8 +46,14 @@ class _PecunatorShellState extends State<PecunatorShell> {
     _api = EngineApi(_engineBase);
     _refresh();
     // REST polling reduced to 60s fallback — WebSocket handles real-time
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) => _refreshSilent());
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+    _timer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _refreshSilent(),
+    );
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateClock(),
+    );
     // Subscribe to WebSocket telemetry for gateway state
     _telemetrySub = TelemetryHub.instance.stream.listen(_onTelemetryTick);
   }
@@ -68,7 +75,8 @@ class _PecunatorShellState extends State<PecunatorShell> {
   void _updateClock() {
     if (!mounted) return;
     final now = DateTime.now().toUtc();
-    final text = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')} UTC';
+    final text =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')} UTC';
     setState(() => _clockText = text);
   }
 
@@ -96,7 +104,8 @@ class _PecunatorShellState extends State<PecunatorShell> {
       final vault = await _api.vaultCredentials();
       if (!mounted) return;
       setState(() {
-        _vaultCredentials = (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        _vaultCredentials =
+            (vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       });
     } catch (_) {}
 
@@ -114,7 +123,9 @@ class _PecunatorShellState extends State<PecunatorShell> {
     // Louise doesn't have gateway toggle (it's always connected to Binance via credentials)
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Louise opera continuamente con el API de Binance')),
+        const SnackBar(
+          content: Text('Louise opera continuamente con el API de Binance'),
+        ),
       );
     }
   }
@@ -124,13 +135,19 @@ class _PecunatorShellState extends State<PecunatorShell> {
       await _api.syncTimestamp();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Timestamp synced'), duration: Duration(seconds: 1)),
+          const SnackBar(
+            content: Text('Timestamp synced'),
+            duration: Duration(seconds: 1),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Sync failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -158,28 +175,47 @@ class _PecunatorShellState extends State<PecunatorShell> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.trending_up, size: 14, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.trending_up,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 4),
-                  const Text('Louise Hub',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  const Text(
+                    'Louise Hub',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Text(AppConfig.appVersion, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.3))),
+            Text(
+              AppConfig.appVersion,
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
+            ),
           ],
         ),
         automaticallyImplyLeading: false,
         actions: [
           // Credential management
           Tooltip(
-            message: 'Credenciales — Administra API keys y sub-cuentas del vault',
+            message:
+                'Credenciales — Administra API keys y sub-cuentas del vault',
             waitDuration: const Duration(milliseconds: 300),
             textStyle: _tooltipStyle,
             decoration: _tooltipDecoration,
@@ -205,7 +241,8 @@ class _PecunatorShellState extends State<PecunatorShell> {
           ),
           // Clock + sync
           Tooltip(
-            message: 'Reloj Binance (UTC) — Click para re-sincronizar timestamp',
+            message:
+                'Reloj Binance (UTC) — Click para re-sincronizar timestamp',
             waitDuration: const Duration(milliseconds: 300),
             textStyle: _tooltipStyle,
             decoration: _tooltipDecoration,
@@ -216,9 +253,19 @@ class _PecunatorShellState extends State<PecunatorShell> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.public, size: 13, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.public,
+                      size: 13,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 3),
-                    Text(_clockText, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                    Text(
+                      _clockText,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -226,7 +273,8 @@ class _PecunatorShellState extends State<PecunatorShell> {
           ),
           // Refresh
           Tooltip(
-            message: 'Refrescar — Actualiza gateway, credenciales y estado de servicios',
+            message:
+                'Refrescar — Actualiza gateway, credenciales y estado de servicios',
             waitDuration: const Duration(milliseconds: 300),
             textStyle: _tooltipStyle,
             decoration: _tooltipDecoration,

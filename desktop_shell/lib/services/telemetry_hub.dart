@@ -137,9 +137,7 @@ class TelemetrySnapshot {
       weightLimit > 0 ? (usedWeight / weightLimit).clamp(0.0, 1.0) : 0.0;
 
   double get orderRatePct =>
-      orderLimit10s > 0
-          ? (orderCount10s / orderLimit10s).clamp(0.0, 1.0)
-          : 0.0;
+      orderLimit10s > 0 ? (orderCount10s / orderLimit10s).clamp(0.0, 1.0) : 0.0;
 
   bool get fuseTripped => !apiFuseOk || !orderFuseOk;
 
@@ -160,9 +158,7 @@ class TelemetrySnapshot {
   static List<Map<String, dynamic>> _toBotList(dynamic v) {
     if (v == null) return [];
     if (v is List) {
-      return v
-          .whereType<Map<String, dynamic>>()
-          .toList();
+      return v.whereType<Map<String, dynamic>>().toList();
     }
     return [];
   }
@@ -218,16 +214,20 @@ class TelemetryHub {
         _fallbackTimer?.cancel();
         _fallbackTimer = null;
         assert(() {
-          dev.log('TelemetryHub: WS connected, fallback polling disabled',
-              name: 'pecunator.hub');
+          dev.log(
+            'TelemetryHub: WS connected, fallback polling disabled',
+            name: 'pecunator.hub',
+          );
           return true;
         }());
       } else {
         // WebSocket lost — enable fallback REST polling
         _startFallbackPolling();
         assert(() {
-          dev.log('TelemetryHub: WS lost, fallback polling enabled',
-              name: 'pecunator.hub');
+          dev.log(
+            'TelemetryHub: WS lost, fallback polling enabled',
+            name: 'pecunator.hub',
+          );
           return true;
         }());
       }
@@ -267,8 +267,10 @@ class TelemetryHub {
         freeUsdt: TelemetrySnapshot._toDouble(snap['free_usdt']),
         lockedUsdt: TelemetrySnapshot._toDouble(snap['locked_usdt']),
         usedWeight: TelemetrySnapshot._toInt(snap['used_weight_1m']),
-        weightLimit: TelemetrySnapshot._toInt(snap['weight_limit_1m'],
-            fallback: 6000),
+        weightLimit: TelemetrySnapshot._toInt(
+          snap['weight_limit_1m'],
+          fallback: 6000,
+        ),
         gatewayRunning: snap['gateway_running'] == true,
       );
       _last = snapshot;
@@ -297,8 +299,8 @@ class TelemetryHubProvider extends InheritedWidget {
   });
 
   static TelemetryHub of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<TelemetryHubProvider>();
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<TelemetryHubProvider>();
     return provider?.hub ?? TelemetryHub.instance;
   }
 

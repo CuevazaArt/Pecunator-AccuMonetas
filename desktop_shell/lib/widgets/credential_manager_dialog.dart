@@ -3,10 +3,30 @@ import '../api_client.dart';
 
 /// Known sub-account registry (no secrets, display-only).
 const _subAccountRegistry = [
-  {'account_id': 'bluechip', 'role': 'bot', 'description': 'Louise Hub — active strategy account', 'enabled': true},
-  {'account_id': 'reserve', 'role': 'reserve', 'description': 'Emergency reserve', 'enabled': false},
-  {'account_id': 'dorothy', 'role': 'legacy', 'description': 'Migrated to Louise Hub', 'enabled': false},
-  {'account_id': 'elphaba', 'role': 'legacy', 'description': 'Migrated to Louise Hub', 'enabled': false},
+  {
+    'account_id': 'bluechip',
+    'role': 'bot',
+    'description': 'Louise Hub — active strategy account',
+    'enabled': true,
+  },
+  {
+    'account_id': 'reserve',
+    'role': 'reserve',
+    'description': 'Emergency reserve',
+    'enabled': false,
+  },
+  {
+    'account_id': 'dorothy',
+    'role': 'legacy',
+    'description': 'Migrated to Louise Hub',
+    'enabled': false,
+  },
+  {
+    'account_id': 'elphaba',
+    'role': 'legacy',
+    'description': 'Migrated to Louise Hub',
+    'enabled': false,
+  },
 ];
 
 /// Opens the credential vault + sub-account registry dialog.
@@ -36,8 +56,10 @@ void showCredentialManagerDialog({
               const SizedBox(width: 8),
               const Text('Credenciales & Sub-Cuentas'),
               const Spacer(),
-              Text('Activa: $activeCredential',
-                  style: const TextStyle(fontSize: 10, color: Colors.white38)),
+              Text(
+                'Activa: $activeCredential',
+                style: const TextStyle(fontSize: 10, color: Colors.white38),
+              ),
             ],
           ),
           content: SizedBox(
@@ -48,38 +70,71 @@ void showCredentialManagerDialog({
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Section: Vault Credentials ──
-                  const Text('VAULT (API Keys)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1, color: Colors.white38)),
+                  const Text(
+                    'VAULT (API Keys)',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                      color: Colors.white38,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   // Add new credential
                   Row(
                     children: [
-                      SizedBox(width: 80, child: TextField(
-                        controller: credLabelCtrl,
-                        style: const TextStyle(fontSize: 11),
-                        decoration: const InputDecoration(
-                          labelText: 'Label', isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      SizedBox(
+                        width: 80,
+                        child: TextField(
+                          controller: credLabelCtrl,
+                          style: const TextStyle(fontSize: 11),
+                          decoration: const InputDecoration(
+                            labelText: 'Label',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 6,
+                            ),
+                          ),
                         ),
-                      )),
+                      ),
                       const SizedBox(width: 4),
-                      Expanded(child: TextField(
-                        controller: credKeyCtrl,
-                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                        decoration: const InputDecoration(
-                          labelText: 'API Key', isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      Expanded(
+                        child: TextField(
+                          controller: credKeyCtrl,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'API Key',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 6,
+                            ),
+                          ),
                         ),
-                      )),
+                      ),
                       const SizedBox(width: 4),
-                      Expanded(child: TextField(
-                        controller: credSecretCtrl,
-                        obscureText: true,
-                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                        decoration: const InputDecoration(
-                          labelText: 'Secret', isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      Expanded(
+                        child: TextField(
+                          controller: credSecretCtrl,
+                          obscureText: true,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Secret',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 6,
+                            ),
+                          ),
                         ),
-                      )),
+                      ),
                       const SizedBox(width: 4),
                       FilledButton(
                         onPressed: () async {
@@ -100,17 +155,27 @@ void showCredentialManagerDialog({
                             setDialogState(() {
                               vaultCredentials
                                 ..clear()
-                                ..addAll((vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? []);
+                                ..addAll(
+                                  (vault['items'] as List?)
+                                          ?.cast<Map<String, dynamic>>() ??
+                                      [],
+                                );
                             });
                           } catch (e) {
                             if (ctx.mounted) {
                               ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
+                                SnackBar(
+                                  content: Text('$e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
                               );
                             }
                           }
                         },
-                        child: const Text('Add', style: TextStyle(fontSize: 11)),
+                        child: const Text(
+                          'Add',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                   ),
@@ -119,15 +184,21 @@ void showCredentialManagerDialog({
                   if (vaultCredentials.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(8),
-                      child: Text('Sin credenciales en vault', style: TextStyle(color: Colors.white24, fontSize: 10)),
+                      child: Text(
+                        'Sin credenciales en vault',
+                        style: TextStyle(color: Colors.white24, fontSize: 10),
+                      ),
                     )
                   else
                     ...(vaultCredentials.map((cred) {
                       final id = '${cred['id'] ?? cred['credential_id'] ?? ''}';
                       final label = '${cred['label'] ?? 'unnamed'}';
                       final pubKeyShort = '${cred['public_key_short'] ?? ''}';
-                      final last4 = pubKeyShort.isNotEmpty ? pubKeyShort : '${cred['api_key_last4'] ?? ''}';
-                      final isActive = cred['is_active'] == true || id == activeCredentialId;
+                      final last4 = pubKeyShort.isNotEmpty
+                          ? pubKeyShort
+                          : '${cred['api_key_last4'] ?? ''}';
+                      final isActive =
+                          cred['is_active'] == true || id == activeCredentialId;
                       final isEnabled = cred['enabled'] != false;
 
                       return _CredentialTile(
@@ -136,24 +207,35 @@ void showCredentialManagerDialog({
                         keyHint: last4,
                         isActive: isActive,
                         isEnabled: isEnabled,
-                        onActivate: isEnabled && !isActive ? () async {
-                          try {
-                            await api.activateVaultCredential(id);
-                            onRefresh();
-                            final vault = await api.vaultCredentials();
-                            setDialogState(() {
-                              vaultCredentials
-                                ..clear()
-                                ..addAll((vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? []);
-                            });
-                          } catch (e) {
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
-                              );
-                            }
-                          }
-                        } : null,
+                        onActivate: isEnabled && !isActive
+                            ? () async {
+                                try {
+                                  await api.activateVaultCredential(id);
+                                  onRefresh();
+                                  final vault = await api.vaultCredentials();
+                                  setDialogState(() {
+                                    vaultCredentials
+                                      ..clear()
+                                      ..addAll(
+                                        (vault['items'] as List?)
+                                                ?.cast<
+                                                  Map<String, dynamic>
+                                                >() ??
+                                            [],
+                                      );
+                                  });
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text('$e'),
+                                        backgroundColor: Colors.redAccent,
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            : null,
                         onToggleEnabled: () async {
                           try {
                             if (isEnabled) {
@@ -166,12 +248,19 @@ void showCredentialManagerDialog({
                             setDialogState(() {
                               vaultCredentials
                                 ..clear()
-                                ..addAll((vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? []);
+                                ..addAll(
+                                  (vault['items'] as List?)
+                                          ?.cast<Map<String, dynamic>>() ??
+                                      [],
+                                );
                             });
                           } catch (e) {
                             if (ctx.mounted) {
                               ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text('$e'), backgroundColor: Colors.redAccent),
+                                SnackBar(
+                                  content: Text('$e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
                               );
                             }
                           }
@@ -183,7 +272,11 @@ void showCredentialManagerDialog({
                           setDialogState(() {
                             vaultCredentials
                               ..clear()
-                              ..addAll((vault['items'] as List?)?.cast<Map<String, dynamic>>() ?? []);
+                              ..addAll(
+                                (vault['items'] as List?)
+                                        ?.cast<Map<String, dynamic>>() ??
+                                    [],
+                              );
                           });
                         },
                       );
@@ -192,7 +285,15 @@ void showCredentialManagerDialog({
                   const Divider(height: 16),
 
                   // ── Section: Sub-Account Registry ──
-                  const Text('SUB-CUENTAS (Registry)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 1, color: Colors.white38)),
+                  const Text(
+                    'SUB-CUENTAS (Registry)',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                      color: Colors.white38,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   ...(_subAccountRegistry.map((sa) {
                     final enabled = sa['enabled'] == true;
@@ -248,8 +349,8 @@ class _CredentialTile extends StatelessWidget {
     final Color stateColor = isActive && isEnabled
         ? Colors.greenAccent
         : isEnabled
-            ? Colors.amber
-            : Colors.grey;
+        ? Colors.amber
+        : Colors.grey;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -268,8 +369,8 @@ class _CredentialTile extends StatelessWidget {
             message: isActive && isEnabled
                 ? 'Activa y en uso'
                 : isEnabled
-                    ? 'Habilitada (no activa)'
-                    : 'Deshabilitada',
+                ? 'Habilitada (no activa)'
+                : 'Deshabilitada',
             child: Container(
               width: 8,
               height: 8,
@@ -277,7 +378,12 @@ class _CredentialTile extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: stateColor,
                 boxShadow: (isActive && isEnabled)
-                    ? [BoxShadow(color: stateColor.withValues(alpha: 0.5), blurRadius: 4)]
+                    ? [
+                        BoxShadow(
+                          color: stateColor.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                        ),
+                      ]
                     : null,
               ),
             ),
@@ -289,34 +395,55 @@ class _CredentialTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
-                      color: isEnabled ? Colors.white : Colors.white38,
-                    ),
-                  ),
-                  if (isActive) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(3),
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isActive
+                            ? FontWeight.w700
+                            : FontWeight.normal,
+                        color: isEnabled ? Colors.white : Colors.white38,
                       ),
-                      child: const Text('ACTIVE', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.greenAccent)),
                     ),
+                    if (isActive) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: const Text(
+                          'ACTIVE',
+                          style: TextStyle(
+                            fontSize: 7,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.greenAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (!isEnabled) ...[
+                      const SizedBox(width: 4),
+                      const Text(
+                        'DISABLED',
+                        style: TextStyle(fontSize: 7, color: Colors.white24),
+                      ),
+                    ],
                   ],
-                  if (!isEnabled) ...[
-                    const SizedBox(width: 4),
-                    const Text('DISABLED', style: TextStyle(fontSize: 7, color: Colors.white24)),
-                  ],
-                ]),
+                ),
                 Text(
                   keyHint.isEmpty ? 'key not loaded' : keyHint,
-                  style: const TextStyle(fontSize: 9, color: Colors.white38, fontFamily: 'monospace'),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    color: Colors.white38,
+                    fontFamily: 'monospace',
+                  ),
                 ),
               ],
             ),
@@ -390,20 +517,36 @@ class _SubAccountTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: enabled ? Colors.white.withValues(alpha: 0.04) : Colors.white.withValues(alpha: 0.01),
+        color: enabled
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.white.withValues(alpha: 0.01),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: enabled ? Colors.greenAccent.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: enabled
+              ? Colors.greenAccent.withValues(alpha: 0.2)
+              : Colors.grey.withValues(alpha: 0.1),
+        ),
       ),
       child: Row(
         children: [
           Tooltip(
             message: enabled ? 'Cuenta activa' : 'Cuenta inactiva',
             child: Container(
-              width: 8, height: 8,
+              width: 8,
+              height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: enabled ? Colors.greenAccent : Colors.grey.withValues(alpha: 0.3),
-                boxShadow: enabled ? [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.4), blurRadius: 4)] : null,
+                color: enabled
+                    ? Colors.greenAccent
+                    : Colors.grey.withValues(alpha: 0.3),
+                boxShadow: enabled
+                    ? [
+                        BoxShadow(
+                          color: Colors.greenAccent.withValues(alpha: 0.4),
+                          blurRadius: 4,
+                        ),
+                      ]
+                    : null,
               ),
             ),
           ),
@@ -412,54 +555,75 @@ class _SubAccountTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text(
-                    accountId.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700,
-                      color: enabled ? Colors.white : Colors.white38,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: role == 'bot'
-                          ? const Color(0xFF00E676).withValues(alpha: 0.1)
-                          : role == 'legacy'
-                              ? Colors.white.withValues(alpha: 0.05)
-                              : Colors.blueAccent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      role,
+                Row(
+                  children: [
+                    Text(
+                      accountId.toUpperCase(),
                       style: TextStyle(
-                        fontSize: 7,
-                        fontWeight: FontWeight.w600,
-                        color: role == 'bot'
-                            ? const Color(0xFF00E676)
-                            : role == 'legacy'
-                                ? Colors.white24
-                                : Colors.blueAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: enabled ? Colors.white : Colors.white38,
                       ),
                     ),
-                  ),
-                  if (!enabled) ...[
-                    const SizedBox(width: 4),
-                    const Text('DISABLED', style: TextStyle(fontSize: 7, color: Colors.white24)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: role == 'bot'
+                            ? const Color(0xFF00E676).withValues(alpha: 0.1)
+                            : role == 'legacy'
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.blueAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        role,
+                        style: TextStyle(
+                          fontSize: 7,
+                          fontWeight: FontWeight.w600,
+                          color: role == 'bot'
+                              ? const Color(0xFF00E676)
+                              : role == 'legacy'
+                              ? Colors.white24
+                              : Colors.blueAccent,
+                        ),
+                      ),
+                    ),
+                    if (!enabled) ...[
+                      const SizedBox(width: 4),
+                      const Text(
+                        'DISABLED',
+                        style: TextStyle(fontSize: 7, color: Colors.white24),
+                      ),
+                    ],
                   ],
-                ]),
-                Text(description, style: const TextStyle(fontSize: 9, color: Colors.white38)),
+                ),
+                Text(
+                  description,
+                  style: const TextStyle(fontSize: 9, color: Colors.white38),
+                ),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
-              color: (enabled ? Colors.greenAccent : Colors.grey).withValues(alpha: 0.1),
+              color: (enabled ? Colors.greenAccent : Colors.grey).withValues(
+                alpha: 0.1,
+              ),
               borderRadius: BorderRadius.circular(3),
             ),
-            child: Text(enabled ? 'ACTIVE' : 'IDLE', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: enabled ? Colors.greenAccent : Colors.grey)),
+            child: Text(
+              enabled ? 'ACTIVE' : 'IDLE',
+              style: TextStyle(
+                fontSize: 7,
+                fontWeight: FontWeight.w700,
+                color: enabled ? Colors.greenAccent : Colors.grey,
+              ),
+            ),
           ),
         ],
       ),

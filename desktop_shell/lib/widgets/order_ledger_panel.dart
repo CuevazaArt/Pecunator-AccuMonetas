@@ -44,7 +44,8 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
     if (!mounted) return;
     final wsStats = snap.orderLedgerStats;
     final wsRecent = snap.orderLedgerRecent;
-    if (wsStats == null && wsRecent.isEmpty) return; // no ledger data in this tick
+    if (wsStats == null && wsRecent.isEmpty)
+      return; // no ledger data in this tick
     setState(() {
       if (wsStats != null) _stats = wsStats;
       if (wsRecent.isNotEmpty) _orders = wsRecent;
@@ -56,7 +57,9 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
     try {
       final results = await Future.wait([
         widget.api.orderLedgerStats().catchError((_) => <String, dynamic>{}),
-        widget.api.orderLedgerRecent(limit: 20).catchError((_) => <String, dynamic>{}),
+        widget.api
+            .orderLedgerRecent(limit: 20)
+            .catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       setState(() {
@@ -85,8 +88,11 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
           // Header
           Row(
             children: [
-              Icon(Icons.receipt_long, size: 12,
-                  color: Colors.purpleAccent.withValues(alpha: 0.7)),
+              Icon(
+                Icons.receipt_long,
+                size: 12,
+                color: Colors.purpleAccent.withValues(alpha: 0.7),
+              ),
               const SizedBox(width: 5),
               Text(
                 'ORDER LEDGER',
@@ -99,8 +105,11 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
               ),
               const Spacer(),
               // Stats chips
-              _statChip('Activas', '$live',
-                  live > 0 ? Colors.orangeAccent : Colors.white30),
+              _statChip(
+                'Activas',
+                '$live',
+                live > 0 ? Colors.orangeAccent : Colors.white30,
+              ),
               const SizedBox(width: 6),
               _statChip('Total', '$total', Colors.white38),
             ],
@@ -139,9 +148,20 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 7, color: color.withValues(alpha: 0.6))),
+          Text(
+            label,
+            style: TextStyle(fontSize: 7, color: color.withValues(alpha: 0.6)),
+          ),
           const SizedBox(width: 3),
-          Text(value, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: color, fontFamily: 'monospace')),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w800,
+              color: color,
+              fontFamily: 'monospace',
+            ),
+          ),
         ],
       ),
     );
@@ -221,7 +241,10 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
                 const SizedBox(width: 6),
                 // Bot type chip
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(2),
@@ -271,7 +294,10 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
                     _detailRow('Quantity', qty),
                     _detailRow('Status', status),
                     _detailRow('Timestamp', _formatTime(timestamp)),
-                    _detailRow('Order ID', id.length > 20 ? '${id.substring(0, 20)}...' : id),
+                    _detailRow(
+                      'Order ID',
+                      id.length > 20 ? '${id.substring(0, 20)}...' : id,
+                    ),
                   ],
                 ),
               ),

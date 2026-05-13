@@ -29,7 +29,7 @@ class AppConfig {
 
   // WebSocket
   static const Duration wsReconnectDelay = Duration(seconds: 3);
-  static const int wsMaxReconnectAttempts = 50;  // ~2.5 min then reset
+  static const int wsMaxReconnectAttempts = 50; // ~2.5 min then reset
   static const String defaultQuoteQty = '8';
   static const String defaultProfit = '0.05';
   static const String defaultDrop = '0.004';
