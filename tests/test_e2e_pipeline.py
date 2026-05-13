@@ -189,7 +189,7 @@ class TestTransferServiceDryRun:
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
         loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(ts.fund_bot("dorothy", "USDT", "100", dry_run=True))
+        result = loop.run_until_complete(ts.fund_bot("bluechip", "USDT", "100", dry_run=True))
         assert result["ok"] is True
         assert result["dry_run"] is True
 
@@ -198,7 +198,7 @@ class TestTransferServiceDryRun:
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
         loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(ts.fund_bot("dorothy", "USDT", "99999", dry_run=True))
+        result = loop.run_until_complete(ts.fund_bot("bluechip", "USDT", "99999", dry_run=True))
         assert result["ok"] is False
         assert "exceeds" in result["error"].lower()
 
@@ -294,18 +294,18 @@ class TestEndToEndFlow:
             decision="TRENDING", action_taken=False,
             symbol="BTCUSDT",
             reason="Classified as TRENDING with 85% confidence",
-            context={"regime": "TRENDING", "confidence": 0.85, "bot": "dorothy"},
+            context={"regime": "TRENDING", "confidence": 0.85, "bot": "louise"},
         )
 
         # 6. Record account snapshot
         m.record_snapshot(
-            account_id="dorothy",
+            account_id="bluechip",
             total_equity="500",
             free_usdt="20",  # Low liquidity
         )
 
         # 7. Check signals generated
-        signals = m.get_pending_signals("dorothy")
+        signals = m.get_pending_signals("bluechip")
         assert len(signals) > 0
 
         # 8. Verify governor state
@@ -318,6 +318,6 @@ class TestEndToEndFlow:
         zoo_summary = z.summary()
         assert zoo_summary["unique_exceptions"] >= 0  # Just verify it runs
 
-        # 10. Verify registry resolves dorothy
-        dorothy = r.get_bot_account("dorothy")
-        assert dorothy is not None
+        # 10. Verify registry resolves louise (bluechip)
+        louise = r.get_bot_account("louise")
+        assert louise is not None
