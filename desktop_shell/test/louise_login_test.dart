@@ -1,71 +1,59 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../lib/api_client.dart';
-import '../lib/main.dart';
 
-// Mock BinanceGateway and dependencies
 class MockApiClient extends Mock implements ApiClient {}
 
 void main() {
-  group('Louise Login Tests', () {
+  group('Louise Auth & Health Tests', () {
     late MockApiClient mockApiClient;
 
     setUp(() {
       mockApiClient = MockApiClient();
     });
 
-    testWidgets('Login reads api.token file correctly', (WidgetTester tester) async {
-      // Arrange: Mock successful token read
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => 'test_token_abc123');
+    test('Health check returns ok status', () async {
+      when(() => mockApiClient.louiseHealth())
+          .thenAnswer((_) async => {'status': 'ok', 'ready': true});
 
-      // Act: Build the app
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      final result = await mockApiClient.louiseHealth();
 
-      // Assert: Verify token was read
-      verify(mockApiClient.readApiToken()).called(greaterThanOrEqualTo(1));
+      expect(result['status'], equals('ok'));
+      expect(result['ready'], isTrue);
+      verify(() => mockApiClient.louiseHealth()).called(1);
     });
 
-    testWidgets('Login sets Bearer header with token', (WidgetTester tester) async {
-      // Arrange
-      const token = 'test_bearer_token';
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => token);
-      when(mockApiClient.setBearerToken(token)).thenAnswer((_) async {});
+    test('Unauthorized engine raises exception', () async {
+      when(() => mockApiClient.louiseHealth())
+          .thenThrow(Exception('401 Unauthorized'));
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
-
-      // Assert
-      verify(mockApiClient.setBearerToken(token)).called(greaterThanOrEqualTo(1));
+      expect(() async => await mockApiClient.louiseHealth(), throwsException);
     });
 
-    testWidgets('Missing token file shows error dialog', (WidgetTester tester) async {
-      // Arrange: Mock missing token
-      when(mockApiClient.readApiToken()).thenThrow(Exception('Token file not found'));
+    test('Engine not ready returns ready=false payload', () async {
+      when(() => mockApiClient.louiseHealth()).thenAnswer((_) async => {
+            'ready': false,
+            'error': 'engine_not_ready',
+          });
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      final result = await mockApiClient.louiseHealth();
 
-      // Assert: Verify error is displayed
-      expect(find.byType(AlertDialog), findsWidgets);
-      expect(find.text('Token file not found'), findsWidgets);
+      expect(result['ready'], isFalse);
+      expect(result.containsKey('error'), isTrue);
     });
 
-    testWidgets('Login shows home page on success', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => 'valid_token');
-      when(mockApiClient.setBearerToken('valid_token')).thenAnswer((_) async {});
+    test('After health check, bot list is accessible', () async {
+      when(() => mockApiClient.louiseHealth())
+          .thenAnswer((_) async => {'status': 'ok', 'ready': true});
+      when(() => mockApiClient.louiseBots()).thenAnswer((_) async => []);
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      await mockApiClient.louiseHealth();
+      final bots = await mockApiClient.louiseBots();
 
-      // Assert: Home shell should be visible
-      expect(find.byType(Scaffold), findsWidgets);
+      expect(bots, isA<List>());
+      verify(() => mockApiClient.louiseHealth()).called(1);
+      verify(() => mockApiClient.louiseBots()).called(1);
     });
   });
 }

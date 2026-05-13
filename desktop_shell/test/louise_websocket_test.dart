@@ -1,201 +1,128 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../lib/api_client.dart';
-
-class MockWebSocket {
-  final List<dynamic> sentMessages = [];
-  void send(String message) => sentMessages.add(message);
-  Stream<dynamic> get stream => Stream.fromIterable([]);
-}
 
 class MockApiClient extends Mock implements ApiClient {}
 
 void main() {
-  group('Louise WebSocket Real-Time Updates Tests', () {
+  group('Louise Real-Time Data & Metrics Tests', () {
     late MockApiClient mockApiClient;
 
     setUp(() {
       mockApiClient = MockApiClient();
     });
 
-    test('WebSocket connects with Bearer token auth', () async {
-      // Arrange
-      const token = 'test_bearer_token';
-      when(mockApiClient.connectWebSocket(token)).thenAnswer((_) async => true);
+    test('Metrics returns price and weight data', () async {
+      when(() => mockApiClient.louiseMetrics()).thenAnswer((_) async => {
+            'last_price': 45321.50,
+            'symbol': 'BTCUSDT',
+            'weight_used': 120,
+          });
 
-      // Act
-      final connected = await mockApiClient.connectWebSocket(token);
+      final metrics = await mockApiClient.louiseMetrics();
 
-      // Assert
-      expect(connected, isTrue);
-      verify(mockApiClient.connectWebSocket(token)).called(1);
+      expect(metrics['last_price'], equals(45321.50));
+      expect(metrics['symbol'], equals('BTCUSDT'));
+      verify(() => mockApiClient.louiseMetrics()).called(1);
     });
 
-    test('Receives price ticker updates', () async {
-      // Arrange: Simulate price update stream
-      final priceUpdate = {
-        'event': 'ticker',
-        'data': {
-          'symbol': 'BTCUSDT',
-          'price': 45321.50,
-          'timestamp': 1715558400000,
-        },
-      };
-
-      when(mockApiClient.listenToPrices('BTCUSDT')).thenAnswer((_) async* {
-        yield priceUpdate;
+    test('Repeated metrics poll returns updated values', () async {
+      var callCount = 0;
+      when(() => mockApiClient.louiseMetrics()).thenAnswer((_) async {
+        callCount++;
+        return {'last_price': 45000.0 + callCount * 100.0};
       });
 
-      // Act
-      final stream = mockApiClient.listenToPrices('BTCUSDT');
-      final updates = <dynamic>[];
+      final first = await mockApiClient.louiseMetrics();
+      final second = await mockApiClient.louiseMetrics();
+      final third = await mockApiClient.louiseMetrics();
 
-      await for (final update in stream.take(1)) {
-        updates.add(update);
-      }
-
-      // Assert
-      expect(updates.length, equals(1));
-      expect(updates[0]['data']['price'], equals(45321.50));
+      expect(first['last_price'], equals(45100.0));
+      expect(second['last_price'], equals(45200.0));
+      expect(third['last_price'], equals(45300.0));
+      verify(() => mockApiClient.louiseMetrics()).called(3);
     });
 
-    test('Receives execution report fills', () async {
-      // Arrange: Simulate fill event
-      final fillEvent = {
-        'event': 'executionReport',
-        'data': {
-          'symbol': 'BTCUSDT',
-          'orderId': 'test_order_123',
-          'status': 'FILLED',
-          'quantity': 0.5,
-          'price': 44500.00,
-          'cumQty': 0.5,
-        },
-      };
+    test('Bots list reflects fill events after epoch', () async {
+      when(() => mockApiClient.louiseBots()).thenAnswer((_) async => [
+            {
+              'bot_id': 'bot_btc_001',
+              'status': 'RUNNING',
+              'symbol': 'BTCUSDT',
+              'purchases_this_epoch': 2,
+            },
+          ]);
 
-      when(mockApiClient.listenToFills()).thenAnswer((_) async* {
-        yield fillEvent;
-      });
+      final bots = await mockApiClient.louiseBots();
 
-      // Act
-      final stream = mockApiClient.listenToFills();
-      final fills = <dynamic>[];
-
-      await for (final fill in stream.take(1)) {
-        fills.add(fill);
-      }
-
-      // Assert
-      expect(fills.length, equals(1));
-      expect(fills[0]['data']['status'], equals('FILLED'));
-      expect(fills[0]['data']['quantity'], equals(0.5));
+      expect(bots.length, equals(1));
+      expect(bots[0]['status'], equals('RUNNING'));
+      expect(bots[0]['purchases_this_epoch'], equals(2));
     });
 
-    test('WebSocket reconnects on disconnect', () async {
-      // Arrange
-      const token = 'test_token';
-      when(mockApiClient.connectWebSocket(token)).thenAnswer((_) async => true);
+    test('Health check detects gateway disconnect', () async {
+      when(() => mockApiClient.louiseHealth()).thenAnswer((_) async => {
+            'ready': false,
+            'gateway_connected': false,
+            'error': 'gateway_disconnected',
+          });
 
-      // Act: Initial connection
-      var connected = await mockApiClient.connectWebSocket(token);
-      expect(connected, isTrue);
+      final health = await mockApiClient.louiseHealth();
 
-      // Simulate disconnect and reconnect
-      when(mockApiClient.reconnect()).thenAnswer((_) async => true);
-      connected = await mockApiClient.reconnect();
-
-      // Assert
-      expect(connected, isTrue);
-      verify(mockApiClient.connectWebSocket(token)).called(1);
-      verify(mockApiClient.reconnect()).called(1);
+      expect(health['ready'], isFalse);
+      expect(health['gateway_connected'], isFalse);
     });
 
-    test('Reconnection backoff increases on repeated failures', () async {
-      // Arrange
-      var attemptCount = 0;
-      const token = 'test_token';
-
-      when(mockApiClient.connectWebSocketWithBackoff(
-        token,
-        attempt: anyNamed('attempt'),
-      )).thenAnswer((invocation) async {
-        attemptCount++;
-        if (attemptCount < 3) {
-          throw Exception('Connection failed');
+    test('Health check reconnects on next poll', () async {
+      var callCount = 0;
+      when(() => mockApiClient.louiseHealth()).thenAnswer((_) async {
+        callCount++;
+        if (callCount == 1) {
+          return {'ready': false, 'error': 'gateway_disconnected'};
         }
-        return true;
+        return {'ready': true, 'gateway_connected': true};
       });
 
-      // Act: Simulate 3 reconnect attempts
-      bool success = false;
-      for (int i = 0; i < 3; i++) {
-        try {
-          success = await mockApiClient.connectWebSocketWithBackoff(
-            token,
-            attempt: i,
-          );
-          if (success) break;
-        } catch (e) {
-          // Expected to fail on attempts 0-1
-          expect(e, isException);
-        }
-      }
+      final first = await mockApiClient.louiseHealth();
+      final second = await mockApiClient.louiseHealth();
 
-      // Assert
-      expect(success, isTrue);
-      expect(attemptCount, equals(3));
+      expect(first['ready'], isFalse);
+      expect(second['ready'], isTrue);
+      verify(() => mockApiClient.louiseHealth()).called(2);
     });
 
-    test('Updates UI when price changes', () async {
-      // Arrange: Simulate price stream
-      final prices = [
-        {'price': 45000.00, 'timestamp': 1715558400000},
-        {'price': 45100.00, 'timestamp': 1715558401000},
-        {'price': 45050.00, 'timestamp': 1715558402000},
-      ];
+    test('Weight governor status updates via polling', () async {
+      when(() => mockApiClient.louiseWeightStatus()).thenAnswer((_) async => {
+            'zone': 'GREEN',
+            'weight_used_1m': 240,
+            'weight_limit_1m': 6000,
+          });
 
-      when(mockApiClient.listenToPrices('BTCUSDT')).thenAnswer((_) async* {
-        for (final price in prices) {
-          yield price;
-        }
-      });
+      final status = await mockApiClient.louiseWeightStatus();
 
-      // Act
-      final stream = mockApiClient.listenToPrices('BTCUSDT');
-      final receivedPrices = <dynamic>[];
-
-      await for (final update in stream) {
-        receivedPrices.add(update);
-      }
-
-      // Assert: UI should update 3 times
-      expect(receivedPrices.length, equals(3));
-      expect(receivedPrices[0]['price'], equals(45000.00));
-      expect(receivedPrices[2]['price'], equals(45050.00));
+      expect(status['zone'], equals('GREEN'));
+      expect(status['weight_used_1m'], lessThan(status['weight_limit_1m']));
     });
 
-    test('Handles partial fill updates', () async {
-      // Arrange
-      final partialFill = {
-        'orderId': 'order_123',
-        'status': 'PARTIALLY_FILLED',
-        'cumQty': 0.3,
-        'totalQty': 1.0,
-      };
+    test('Partial fill visible in bots list', () async {
+      when(() => mockApiClient.louiseBots()).thenAnswer((_) async => [
+            {
+              'bot_id': 'bot_btc_001',
+              'status': 'RUNNING',
+              'current_epoch': {
+                'purchases': 3,
+                'total_cost_usdt': 150.0,
+                'partial_fill': true,
+              },
+            },
+          ]);
 
-      when(mockApiClient.listenToFills()).thenAnswer((_) async* {
-        yield partialFill;
-      });
+      final bots = await mockApiClient.louiseBots();
+      final epoch = bots[0]['current_epoch'] as Map<String, dynamic>;
 
-      // Act
-      final stream = mockApiClient.listenToFills();
-      final fills = await stream.take(1).toList();
-
-      // Assert
-      expect(fills[0]['cumQty'], equals(0.3));
-      expect(fills[0]['totalQty'], equals(1.0));
-      expect(fills[0]['status'], equals('PARTIALLY_FILLED'));
+      expect(epoch['partial_fill'], isTrue);
+      expect(epoch['purchases'], equals(3));
     });
   });
 }

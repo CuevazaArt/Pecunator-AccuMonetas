@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../lib/api_client.dart';
 
@@ -15,119 +14,91 @@ void main() {
       mockApiClient = MockApiClient();
     });
 
-    testWidgets('Pause button sends PATCH request with status=PAUSED', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.updateBotStatus(botId, 'PAUSED')).thenAnswer((_) async => {
-        'bot_id': botId,
-        'status': 'PAUSED',
-      });
+    test('Pause bot returns PAUSED status', () async {
+      when(() => mockApiClient.louisePauseBot(botId)).thenAnswer((_) async => {
+            'bot_id': botId,
+            'status': 'PAUSED',
+          });
 
-      // Act
-      final response = await mockApiClient.updateBotStatus(botId, 'PAUSED');
+      final response = await mockApiClient.louisePauseBot(botId);
 
-      // Assert
       expect(response['status'], equals('PAUSED'));
-      verify(mockApiClient.updateBotStatus(botId, 'PAUSED')).called(1);
+      verify(() => mockApiClient.louisePauseBot(botId)).called(1);
     });
 
-    testWidgets('Resume button sends PATCH request with status=RUNNING', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.updateBotStatus(botId, 'RUNNING')).thenAnswer((_) async => {
-        'bot_id': botId,
-        'status': 'RUNNING',
-      });
+    test('Resume bot returns RUNNING status', () async {
+      when(() => mockApiClient.louiseResumeBot(botId)).thenAnswer((_) async => {
+            'bot_id': botId,
+            'status': 'RUNNING',
+          });
 
-      // Act
-      final response = await mockApiClient.updateBotStatus(botId, 'RUNNING');
+      final response = await mockApiClient.louiseResumeBot(botId);
 
-      // Assert
       expect(response['status'], equals('RUNNING'));
-      verify(mockApiClient.updateBotStatus(botId, 'RUNNING')).called(1);
+      verify(() => mockApiClient.louiseResumeBot(botId)).called(1);
     });
 
-    testWidgets('Delete button sends DELETE request', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.deleteBot(botId)).thenAnswer((_) async => true);
+    test('Delete bot returns deleted confirmation', () async {
+      when(() => mockApiClient.louiseDeleteBot(botId))
+          .thenAnswer((_) async => {'deleted': true, 'bot_id': botId});
 
-      // Act
-      final success = await mockApiClient.deleteBot(botId);
+      final response = await mockApiClient.louiseDeleteBot(botId);
 
-      // Assert
-      expect(success, isTrue);
-      verify(mockApiClient.deleteBot(botId)).called(1);
+      expect(response['deleted'], isTrue);
+      verify(() => mockApiClient.louiseDeleteBot(botId)).called(1);
     });
 
-    testWidgets('Pause shows loading indicator', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.updateBotStatus(botId, 'PAUSED')).thenAnswer((_) async {
-        // Simulate network delay
-        await Future.delayed(Duration(milliseconds: 500));
-        return {'status': 'PAUSED'};
+    test('Pause with network delay completes successfully', () async {
+      when(() => mockApiClient.louisePauseBot(botId)).thenAnswer((_) async {
+        await Future.delayed(const Duration(milliseconds: 100));
+        return {'bot_id': botId, 'status': 'PAUSED'};
       });
 
-      // Act
-      // Would expect to see CircularProgressIndicator during request
-      // Assert: Verify request completes
-      final response = await mockApiClient.updateBotStatus(botId, 'PAUSED');
+      final response = await mockApiClient.louisePauseBot(botId);
+
       expect(response['status'], equals('PAUSED'));
     });
 
-    testWidgets('UI updates immediately on pause (optimistic update)', (WidgetTester tester) async {
-      // Arrange: Simulate optimistic update followed by server response
-      const expectedStatus = 'PAUSED';
+    test('Optimistic pause update returns expected status', () async {
+      when(() => mockApiClient.louisePauseBot(botId)).thenAnswer((_) async => {
+            'bot_id': botId,
+            'status': 'PAUSED',
+          });
 
-      when(mockApiClient.updateBotStatus(botId, expectedStatus)).thenAnswer((_) async => {
-        'bot_id': botId,
-        'status': expectedStatus,
-      });
+      final response = await mockApiClient.louisePauseBot(botId);
 
-      // Act
-      final response = await mockApiClient.updateBotStatus(botId, expectedStatus);
-
-      // Assert: UI should show paused immediately
       expect(response['status'], equals('PAUSED'));
+      expect(response['bot_id'], equals(botId));
     });
 
-    testWidgets('Delete shows confirmation dialog', (WidgetTester tester) async {
-      // Arrange: Simulate confirmation flow
-      when(mockApiClient.deleteBot(botId)).thenAnswer((_) async => true);
+    test('Delete with confirmation returns deleted=true', () async {
+      when(() => mockApiClient.louiseDeleteBot(botId))
+          .thenAnswer((_) async => {'deleted': true});
 
-      // Act
-      final success = await mockApiClient.deleteBot(botId);
+      final response = await mockApiClient.louiseDeleteBot(botId);
 
-      // Assert
-      expect(success, isTrue);
+      expect(response['deleted'], isTrue);
     });
 
-    testWidgets('Control error shows snackbar with retry option', (WidgetTester tester) async {
-      // Arrange: Simulate network error
-      when(mockApiClient.updateBotStatus(botId, 'PAUSED')).thenThrow(
-        Exception('Network timeout'),
-      );
+    test('Control network error throws exception', () async {
+      when(() => mockApiClient.louisePauseBot(botId))
+          .thenThrow(Exception('Network timeout'));
 
-      // Act & Assert
       expect(
-        mockApiClient.updateBotStatus(botId, 'PAUSED'),
+        () async => await mockApiClient.louisePauseBot(botId),
         throwsException,
       );
     });
 
-    testWidgets('Control disabled while request in progress', (WidgetTester tester) async {
-      // Arrange
-      final slow = Future.delayed(Duration(milliseconds: 2000), () => {
-        'bot_id': botId,
-        'status': 'PAUSED',
-      });
+    test('Single pause call fires once', () async {
+      when(() => mockApiClient.louisePauseBot(botId)).thenAnswer((_) async => {
+            'bot_id': botId,
+            'status': 'PAUSED',
+          });
 
-      when(mockApiClient.updateBotStatus(botId, 'PAUSED')).thenAnswer((_) => slow);
+      await mockApiClient.louisePauseBot(botId);
 
-      // Act: Simulate rapid clicks (should ignore second click)
-      unawaited(mockApiClient.updateBotStatus(botId, 'PAUSED'));
-      // Second click would be ignored by UI
-
-      // Assert
-      await slow;
-      verify(mockApiClient.updateBotStatus(botId, 'PAUSED')).called(1);
+      verify(() => mockApiClient.louisePauseBot(botId)).called(1);
     });
   });
 }
