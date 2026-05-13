@@ -1,6 +1,5 @@
 """Security tests for API authentication and WebSocket protection."""
 
-import os
 import pytest
 from fastapi.testclient import TestClient
 from runtime.api.app import create_app
@@ -105,7 +104,7 @@ class TestWebSocketAuth:
         with pytest.raises(Exception):
             # TestClient doesn't support full WebSocket flow, but connection
             # without token should fail at handshake
-            with client.websocket_connect("/ws/telemetry") as ws:
+            with client.websocket_connect("/ws/telemetry"):
                 pass
 
     def test_websocket_requires_valid_token(self, client, valid_token):
@@ -114,7 +113,7 @@ class TestWebSocketAuth:
         # Invalid or missing token causes close with code 1008 (Policy Violation)
         invalid_token_url = "/ws/telemetry?token=invalid_token_xyz"
         with pytest.raises(Exception):
-            with client.websocket_connect(invalid_token_url) as ws:
+            with client.websocket_connect(invalid_token_url) as _:
                 pass
 
     def test_websocket_accepts_valid_token_via_query(self, client, valid_token):
@@ -124,7 +123,7 @@ class TestWebSocketAuth:
         url = f"/ws/telemetry?token={valid_token}"
         # This may raise due to AppContext, but NOT due to auth (1008)
         try:
-            with client.websocket_connect(url) as ws:
+            with client.websocket_connect(url) as _:
                 pass
         except Exception as e:
             # Auth should not reject with 1008; other errors OK
