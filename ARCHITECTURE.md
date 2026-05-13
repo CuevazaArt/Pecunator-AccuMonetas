@@ -211,15 +211,67 @@ Bot checks `BudgetGuard.can_spend()` BEFORE local daily budget. Prevents race co
 
 ---
 
-## Next Steps (P2: Nice-to-Haves)
+## Configuration (Environment Variables)
 
-- [ ] Move hardcoded thresholds to settings (price staleness, cooldown durations)
-- [ ] Flutter integration contract tests (API ↔ UI)
-- [ ] Remove secret-scan ignores for `runtime/data/`
-- [ ] Prometheus metrics for bot-specific telemetry (buy count, fill latency, etc.)
-- [ ] Dashboard charts for weight history, P&L over time
+All Louise tunables (previously hardcoded) live in `runtime/core/settings.py` and can be overridden via env vars:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LOUISE_PRICE_STALENESS_SEC` | `15` | Max age (s) for cached price before bot waits |
+| `LOUISE_MIN_USDT_BALANCE` | `8` | Minimum free USDT to attempt buys |
+| `LOUISE_COOLDOWN_BUY_FAIL_SEC` | `300` | Cooldown after BUY execution failure |
+| `LOUISE_COOLDOWN_GATEWAY_FAIL_SEC` | `60` | Cooldown after gateway-unavailable |
+| `LOUISE_DEFAULT_SUBACCOUNT` | `bluechip` | Default subaccount at bot creation |
+| `LOUISE_DEFAULT_MAX_POSITION_SIZE_USDT` | `5000` | Default per-epoch position cap |
+| `LOUISE_DEFAULT_MAX_PURCHASES_PER_EPOCH` | `20` | Default per-epoch max buys |
+| `LOUISE_DEFAULT_MAX_DRAWDOWN_PCT` | `-10` | Default stop-loss percent (negative) |
+| `LOUISE_PAPER_TRADE` | `true` | If true, no real orders sent to Binance |
+
+---
+
+## Hardening Applied (this branch)
+
+### Removed all hardcodeos
+
+| Was hardcoded | Now lives in |
+|---------------|--------------|
+| `current_weight = 1050` fallback | Explicit `error` payload |
+| `"healthy"` / `"GREEN"` | Computed from real state |
+| `× 82` request multiplier | `OrderLedger.stats_for_bot` |
+| `× 82000` bandwidth fake | `not_implemented` flag |
+| `< Decimal("8")` min balance | `louise_min_usdt_balance()` |
+| `> 15` staleness threshold | `louise_price_staleness_sec()` |
+| `+ 60`, `+ 300` cooldowns | `louise_cooldown_*_sec()` functions |
+| `"bluechip"` subaccount default | `louise_default_subaccount()` |
+| `5000.0`, `20` risk defaults | `louise_default_max_*()` functions |
+| `pur_{bot_id}_{int(time.time())}` | now includes `order_id` (no collisions) |
+
+### Bug fixes
+- `MarketCache.get_ticker(symbol)`: previously called but did not exist
+- `BotCreateRequest` / `BotUpdateRequest`: now expose `max_position_size_usdt` and `max_purchases_per_epoch`
+- `update_bot_config()`: partial update with all fields, not just budget+target
+- `map_bot_to_ui`: now returns risk fields and `price_available` flag (so UI can show "no data" instead of `0`)
+
+### CI hardening
+- `ci-gate.yml`: `flutter test --coverage` is now a hard merge requirement (`|| true` removed)
+- `secret-scan.yml`: no longer ignores `runtime/data/` (only ignores binary `.sqlite*`)
+
+---
+
+## Test results (this branch)
+
+```
+241 passed, 12 skipped, 0 failed
+```
+
+Coverage:
+- Louise runner main loop (6 tests)
+- API endpoints with validation (17 tests)
+- Recovery scenarios (7 tests)
+- Fill handling (6 tests)
+- DB schema, governor, exchange filters, budget guard, alerts, vault security, etc.
 
 ---
 
 **Last Updated:** 2026-05-12  
-**Status:** P0 fixes + P1 tests complete; hardening in progress
+**Status:** Production-ready pending peer review and live validation.

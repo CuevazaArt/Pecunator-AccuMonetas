@@ -45,6 +45,14 @@ class CacheEntry:
         return (time.monotonic() - self.fetched_at) >= self.ttl_sec
 
 
+@dataclass
+class Ticker:
+    """Synchronous read-model for a symbol ticker."""
+    symbol: str
+    last_price: float
+    timestamp: float
+
+
 # Default TTL and weight config per cache tier
 _TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     "tickers":       {"ttl_sec": 3,    "weight": 2,  "desc": "All symbol tickers"},
@@ -175,6 +183,44 @@ class MarketCache:
             self._evict_if_needed()
 
             return data
+
+    def get_ticker(self, symbol: str) -> Optional[Ticker]:
+        """Synchronous accessor: return cached ticker for symbol, or None if not cached.
+
+        Used by API routers that need to expose current price WITHOUT triggering
+        a fresh fetch (which would require async + weight budget).
+
+        Symbol is normalized: 'BTC/USDT' → 'BTCUSDT'.
+        """
+        normalized = symbol.replace("/", "").upper()
+        key = f"symbol_ticker:{normalized}"
+        entry = self._entries.get(key)
+        if entry is None or entry.expired:
+            return None
+
+        data = entry.data
+        if isinstance(data, dict):
+            price = data.get("price") or data.get("lastPrice") or data.get("last_price")
+            if price is None:
+                return None
+            return Ticker(symbol=normalized, last_price=float(price), timestamp=entry.fetched_at)
+        # Already a Ticker-like
+        if hasattr(data, "last_price"):
+            return data
+        return None
+
+    def set_ticker(self, symbol: str, last_price: float, ttl_sec: float = 2.0) -> None:
+        """Synchronous setter: populate ticker cache (used by WS feeds)."""
+        normalized = symbol.replace("/", "").upper()
+        key = f"symbol_ticker:{normalized}"
+        ticker = Ticker(symbol=normalized, last_price=float(last_price), timestamp=time.monotonic())
+        self._entries[key] = CacheEntry(
+            data=ticker,
+            fetched_at=time.monotonic(),
+            ttl_sec=ttl_sec,
+            api_weight=0,
+            size_bytes=sys.getsizeof(ticker),
+        )
 
     def invalidate(self, key: str) -> None:
         """Force-expire a specific cache key."""

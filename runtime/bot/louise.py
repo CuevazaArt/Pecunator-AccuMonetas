@@ -11,6 +11,16 @@ from runtime.core.api_governor import get_api_governor, P_TRADING
 from runtime.core.api_fuse import get_api_fuse
 from runtime.core.exchange_filters import get_exchange_filters
 from runtime.core.alert_dispatcher import get_alert_dispatcher
+from runtime.core.budget_guard import get_budget_guard
+from runtime.core.settings import (
+    louise_price_staleness_sec,
+    louise_min_usdt_balance,
+    louise_cooldown_buy_fail_sec,
+    louise_cooldown_gateway_fail_sec,
+    louise_default_max_position_size_usdt,
+    louise_default_max_purchases_per_epoch,
+    louise_default_max_drawdown_pct,
+)
 
 logger = logging.getLogger("louise_bot")
 
@@ -82,7 +92,8 @@ class LouiseBotRunner:
                 cost_usdt = Decimal(str(event.get('Z', '0'))) # Cumulative quote asset transacted qty
                 price_at_buy = cost_usdt / volume if volume > Decimal("0") else Decimal(str(event.get('p', '0')))
 
-                purchase_id = f"pur_{self.bot_id}_{int(time.time())}"
+                # order_id makes this unique even if two fills arrive in the same second
+                purchase_id = f"pur_{self.bot_id}_{int(time.time())}_{order_id or client_oid}"
                 self.db.add_purchase(
                     purchase_id, self.bot_id, meta['epoch_id'],
                     float(price_at_buy), float(volume), float(cost_usdt), order_id, "FILLED"
@@ -172,13 +183,18 @@ class LouiseBotRunner:
             except Exception as e:
                 logger.warning(f"{self.bot_id}: Failed to load exchange filters: {e}")
 
-        # Check for stale data (price older than 15s)
-        if self.current_price <= Decimal("0") or (now - self.last_price_timestamp > 15):
-            logger.debug(f"{self.bot_id}: Waiting for fresh price feed from WebSocket...")
+        # Check for stale price data (env-tunable, default 15s)
+        staleness_sec = louise_price_staleness_sec()
+        if self.current_price <= Decimal("0") or (now - self.last_price_timestamp > staleness_sec):
+            logger.debug(f"{self.bot_id}: Waiting for fresh price feed (>{staleness_sec}s stale)...")
             return
 
-        if self.usdt_free_balance < Decimal("8"):
-            logger.warning(f"{self.bot_id}: Insufficient global USDT in spot wallet (< 8 USDT). Currently have {self.usdt_free_balance}.")
+        min_balance = Decimal(str(louise_min_usdt_balance()))
+        if self.usdt_free_balance < min_balance:
+            logger.warning(
+                f"{self.bot_id}: Insufficient USDT in spot wallet (< {min_balance}). "
+                f"Currently have {self.usdt_free_balance}."
+            )
             return
 
         fuse = get_api_fuse()
@@ -222,14 +238,17 @@ class LouiseBotRunner:
                 return
 
             # 2. Hard Stop Loss / Drawdown limit
-            max_drawdown = Decimal(str(self.config.get("max_drawdown_pct", -10.0)))
+            max_drawdown = Decimal(str(self.config.get("max_drawdown_pct", louise_default_max_drawdown_pct())))
             if max_drawdown < 0 and profit_pct <= max_drawdown:
-                logger.error(f"{self.bot_id}: CRITICAL: Stop loss reached ({profit_pct:.2f}% <= {max_drawdown:.2f}%). Liquidating position.")
+                logger.error(
+                    f"{self.bot_id}: CRITICAL: Stop loss reached "
+                    f"({profit_pct:.2f}% <= {max_drawdown:.2f}%). Liquidating position."
+                )
                 await self._execute_sell(epoch, current_value, profit_usdt, profit_pct, status="CLOSED_STOP_LOSS")
                 return
 
             # 3. Max purchases per epoch limit (preventive position control)
-            max_purchases = self.config.get("max_purchases_per_epoch", 20)
+            max_purchases = self.config.get("max_purchases_per_epoch") or louise_default_max_purchases_per_epoch()
             if epoch['num_purchases'] >= max_purchases:
                 logger.info(f"{self.bot_id}: Max purchases per epoch ({max_purchases}) reached. Force-selling.")
                 await self._execute_sell(epoch, current_value, profit_usdt, profit_pct, status="CLOSED_MAX_PURCHASES")
@@ -244,13 +263,16 @@ class LouiseBotRunner:
 
         # Check max position size (preventive position limit)
         current_exposure = Decimal(str(epoch.get('total_cost', 0.0)))
-        max_exposure = Decimal(str(self.config.get("max_position_size_usdt", 5000.0)))
+        max_exposure_raw = self.config.get("max_position_size_usdt") or louise_default_max_position_size_usdt()
+        max_exposure = Decimal(str(max_exposure_raw))
         if current_exposure >= max_exposure:
-            logger.info(f"{self.bot_id}: Max position size reached ({max_exposure} USDT). Waiting for target or stop-loss.")
+            logger.info(
+                f"{self.bot_id}: Max position size reached ({max_exposure} USDT). "
+                f"Waiting for target or stop-loss."
+            )
             return
 
         # BudgetGuard is the source of truth for global spend limits (checked first)
-        from runtime.core.budget_guard import get_budget_guard
         bg = get_budget_guard()
         if not bg.can_spend(buy_volume, self.bot_id):
             logger.warning(f"{self.bot_id}: Global BudgetGuard rejected buy of {buy_volume} USDT. Throttling.")
@@ -274,7 +296,7 @@ class LouiseBotRunner:
         if filters:
             if buy_volume < filters.min_notional:
                 logger.warning(f"{self.bot_id}: buy_volume {buy_volume} is below MIN_NOTIONAL {filters.min_notional}")
-                self.cooldown_until = now + 300
+                self.cooldown_until = now + louise_cooldown_buy_fail_sec()
                 return
 
         await self._execute_buy(epoch, buy_volume)
@@ -332,7 +354,7 @@ class LouiseBotRunner:
                     payload={"bot_id": self.bot_id, "symbol": symbol, "amount_usdt": float(cost_usdt)},
                     silent=True  # Don't spam if gateway is temporarily disconnecting
                 )
-                self.cooldown_until = int(time.time()) + 60
+                self.cooldown_until = int(time.time()) + louise_cooldown_gateway_fail_sec()
 
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute buy: {e}")
@@ -342,7 +364,7 @@ class LouiseBotRunner:
                 payload={"bot_id": self.bot_id, "symbol": symbol, "amount_usdt": float(cost_usdt), "error": str(e)[:100]},
                 silent=False
             )
-            self.cooldown_until = int(time.time()) + 300
+            self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
 
     async def _execute_sell(self, epoch: Dict[str, Any], final_value: Decimal, profit_usdt: Decimal, profit_pct: Decimal, status: str = "CLOSED_SUCCESSFUL"):
         symbol = self.config["symbol"]
@@ -411,7 +433,7 @@ class LouiseBotRunner:
                     },
                     silent=False
                 )
-                self.cooldown_until = int(time.time()) + 60
+                self.cooldown_until = int(time.time()) + louise_cooldown_gateway_fail_sec()
 
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute sell: {e}")
@@ -427,7 +449,7 @@ class LouiseBotRunner:
                 },
                 silent=False
             )
-            self.cooldown_until = int(time.time()) + 300
+            self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
 
     async def _delay_sim(self, payload):
         await asyncio.sleep(1.5)

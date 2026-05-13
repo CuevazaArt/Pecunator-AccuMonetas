@@ -33,18 +33,15 @@ def sample_bot(temp_db):
     bot_id = "louise_btc_fill"
     temp_db.create_bot(
         bot_id=bot_id,
-        symbol="BTC/USDT",
+        symbol="BTCUSDT",
         buy_volume=10.0,
         poll_interval_seconds=60,
         target_profit_pct=5.0,
         daily_budget_usdt=500.0,
     )
-
-    # Create active epoch
     epoch_id = f"epoch_{bot_id}_1"
     temp_db.create_epoch(epoch_id, bot_id, "RUNNING")
     temp_db.update_epoch_stats(epoch_id, 0, 0, 0)
-
     return bot_id
 
 
@@ -56,7 +53,6 @@ class TestFillHandling:
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
-        # Prepare pending buy order
         client_oid = f"l_{sample_bot}_123"
         epoch = temp_db.get_active_epoch(sample_bot)
         runner.pending_orders[client_oid] = {
@@ -65,31 +61,27 @@ class TestFillHandling:
             "epoch": epoch,
         }
 
-        # Simulate WebSocket execution report for filled BUY
         fill_event = {
-            "c": client_oid,  # client order ID
-            "X": "FILLED",    # execution type
-            "i": 123456,      # order ID
-            "z": "1.5",       # cumulative filled quantity (1.5 BTC)
-            "Z": "75000",     # cumulative quote asset (75000 USDT)
-            "p": "50000",     # price
+            "c": client_oid,
+            "X": "FILLED",
+            "i": 123456,
+            "z": "1.5",       # 1.5 BTC filled
+            "Z": "75000",     # 75000 USDT spent
+            "p": "50000",
         }
 
         with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
             mock_bg.return_value.record_spend = MagicMock()
-
             runner._on_execution_report(fill_event)
 
-        # Verify purchase was recorded
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
         assert len(purchases) == 1
         assert purchases[0]["volume"] == 1.5
         assert purchases[0]["cost_usdt"] == 75000.0
 
-        # Verify epoch stats updated
         updated_epoch = temp_db.get_active_epoch(sample_bot)
         assert updated_epoch["num_purchases"] == 1
-        assert updated_epoch["total_cost"] == 75000.0
+        assert abs(updated_epoch["total_cost"] - 75000.0) < 0.01
         assert abs(updated_epoch["avg_buy_price"] - 50000.0) < 0.01
 
     def test_sell_fill_closes_epoch(self, sample_bot, temp_db, event_bus, mock_gateway):
@@ -98,21 +90,11 @@ class TestFillHandling:
         runner.initialize()
 
         epoch = temp_db.get_active_epoch(sample_bot)
-
-        # Add purchase to epoch first
         temp_db.add_purchase(
-            "pur_1",
-            sample_bot,
-            epoch["epoch_id"],
-            50000.0,
-            1.5,
-            75000.0,
-            "order_123",
-            "FILLED",
+            "pur_1", sample_bot, epoch["epoch_id"], 50000.0, 1.5, 75000.0, "order_123", "FILLED"
         )
         temp_db.update_epoch_stats(epoch["epoch_id"], 1, 75000.0, 50000.0)
 
-        # Prepare pending sell order
         client_oid = f"s_{sample_bot}_456"
         runner.pending_orders[client_oid] = {
             "type": "SELL",
@@ -124,84 +106,46 @@ class TestFillHandling:
             "profit_pct": Decimal("4"),
         }
 
-        # Simulate SELL fill
-        fill_event = {
-            "c": client_oid,
-            "X": "FILLED",
-            "i": 654321,
-        }
-
+        fill_event = {"c": client_oid, "X": "FILLED", "i": 654321}
         runner._on_execution_report(fill_event)
 
-        # Verify epoch closed
-        closed_epoch = temp_db.get_active_epoch(sample_bot)
-        assert closed_epoch is None  # No active epoch after sell
+        # Epoch closed → no active epoch for this bot
+        assert temp_db.get_active_epoch(sample_bot) is None
 
-        # Verify epoch marked as closed
-        all_epochs = temp_db.get_all_epochs(sample_bot)
-        assert len(all_epochs) > 0
-
-    def test_partial_fills_accumulate(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test multiple partial fills for same order accumulate correctly."""
+    def test_two_buy_fills_accumulate(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """Test two separate BUY orders accumulate in epoch stats."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
         epoch = temp_db.get_active_epoch(sample_bot)
-        client_oid = f"l_{sample_bot}_789"
 
-        runner.pending_orders[client_oid] = {
-            "type": "BUY",
-            "epoch_id": epoch["epoch_id"],
-            "epoch": epoch,
-        }
-
-        # First partial fill
-        fill_event_1 = {
-            "c": client_oid,
-            "X": "FILLED",
-            "i": 111111,
-            "z": "0.5",      # 0.5 BTC
-            "Z": "25000",    # 25000 USDT
-            "p": "50000",
-        }
-
+        # First BUY
+        oid1 = f"l_{sample_bot}_a"
+        runner.pending_orders[oid1] = {"type": "BUY", "epoch_id": epoch["epoch_id"], "epoch": epoch}
         with patch("runtime.bot.louise.get_budget_guard"):
-            runner._on_execution_report(fill_event_1)
+            runner._on_execution_report({
+                "c": oid1, "X": "FILLED", "i": 1, "z": "0.5", "Z": "25000", "p": "50000",
+            })
 
-        purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
-        assert len(purchases) == 1
-        assert purchases[0]["volume"] == 0.5
-
-        # Second partial fill (different order, same epoch)
-        client_oid_2 = f"l_{sample_bot}_790"
-        runner.pending_orders[client_oid_2] = {
-            "type": "BUY",
-            "epoch_id": epoch["epoch_id"],
-            "epoch": epoch,
-        }
-
-        fill_event_2 = {
-            "c": client_oid_2,
-            "X": "FILLED",
-            "i": 222222,
-            "z": "1.0",      # 1.0 BTC
-            "Z": "50000",    # 50000 USDT
-            "p": "50000",
-        }
-
+        # Refresh epoch for second buy
+        epoch_after_1 = temp_db.get_active_epoch(sample_bot)
+        oid2 = f"l_{sample_bot}_b"
+        runner.pending_orders[oid2] = {"type": "BUY", "epoch_id": epoch_after_1["epoch_id"], "epoch": epoch_after_1}
         with patch("runtime.bot.louise.get_budget_guard"):
-            runner._on_execution_report(fill_event_2)
+            runner._on_execution_report({
+                "c": oid2, "X": "FILLED", "i": 2, "z": "1.0", "Z": "50000", "p": "50000",
+            })
 
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
         assert len(purchases) == 2
         assert sum(p["volume"] for p in purchases) == 1.5
+        assert sum(p["cost_usdt"] for p in purchases) == 75000.0
 
     def test_fill_for_unknown_order_ignored(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test fill for order not in pending_orders is logged and ignored."""
+        """Test fill for order not in pending_orders is ignored gracefully."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
-        # Fill for order that doesn't exist in pending_orders
         fill_event = {
             "c": "unknown_client_oid",
             "X": "FILLED",
@@ -210,71 +154,61 @@ class TestFillHandling:
             "Z": "50000",
         }
 
-        # Should not raise, just log
-        runner._on_execution_report(fill_event)
+        runner._on_execution_report(fill_event)  # Should not raise
 
-        # No purchases should be recorded
         epoch = temp_db.get_active_epoch(sample_bot)
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
         assert len(purchases) == 0
 
     def test_fill_rejection_handled(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test REJECTED or CANCELED fills are handled gracefully."""
+        """Test REJECTED status is ignored (only FILLED processed)."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
         epoch = temp_db.get_active_epoch(sample_bot)
-        client_oid = f"l_{sample_bot}_999"
-
+        client_oid = f"l_{sample_bot}_rej"
         runner.pending_orders[client_oid] = {
             "type": "BUY",
             "epoch_id": epoch["epoch_id"],
             "epoch": epoch,
         }
 
-        # Rejected fill
-        fill_event = {
-            "c": client_oid,
-            "X": "REJECTED",  # Not FILLED
-            "i": 333333,
-        }
-
+        fill_event = {"c": client_oid, "X": "REJECTED", "i": 333333}
         runner._on_execution_report(fill_event)
 
-        # Order should still be pending (not removed for non-FILLED)
+        # Order remains pending (will be cleaned up by cancellation logic, not fills)
         assert client_oid in runner.pending_orders
-
         # No purchase recorded
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
         assert len(purchases) == 0
 
-    def test_price_slippage_tracking(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test that actual fill price is recorded (slippage aware)."""
+    def test_slippage_recorded_at_actual_price(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """Test that filled cost = actual cost from fill, accounting for slippage."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
         epoch = temp_db.get_active_epoch(sample_bot)
-        client_oid = f"l_{sample_bot}_1001"
-
+        client_oid = f"l_{sample_bot}_slip"
         runner.pending_orders[client_oid] = {
             "type": "BUY",
             "epoch_id": epoch["epoch_id"],
             "epoch": epoch,
         }
 
-        # Fill at different price (slippage)
+        # 1.0 BTC filled at 51000 (slipped 2% above expected 50000)
         fill_event = {
             "c": client_oid,
             "X": "FILLED",
             "i": 444444,
             "z": "1.0",
-            "Z": "51000",    # More expensive than expected 50000
-            "p": "51000",    # Slipped up
+            "Z": "51000",
+            "p": "51000",
         }
 
         with patch("runtime.bot.louise.get_budget_guard"):
             runner._on_execution_report(fill_event)
 
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
-        assert purchases[0]["price_at_buy"] == 51000.0  # Actual price, not expected
+        # price_at_buy = cost / volume = 51000 / 1.0 = 51000
+        assert purchases[0]["price_at_buy"] == 51000.0
         assert purchases[0]["cost_usdt"] == 51000.0

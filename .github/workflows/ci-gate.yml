@@ -52,7 +52,7 @@ jobs:
 
       - name: Flutter tests
         working-directory: desktop_shell
-        run: flutter test test/ -v --coverage || true  # Report but don't block if no tests yet
+        run: flutter test test/ --coverage
 
   gate:
     name: "CI Gate"

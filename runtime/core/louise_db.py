@@ -119,13 +119,43 @@ class LouiseDB:
             cursor = conn.execute("SELECT * FROM louise_bots ORDER BY created_at DESC")
             return [dict(row) for row in cursor.fetchall()]
 
-    def update_bot_config(self, bot_id: str, daily_budget_usdt: float, target_profit_pct: float) -> None:
+    def update_bot_config(
+        self,
+        bot_id: str,
+        daily_budget_usdt: Optional[float] = None,
+        target_profit_pct: Optional[float] = None,
+        symbol: Optional[str] = None,
+        buy_volume: Optional[float] = None,
+        poll_interval_seconds: Optional[int] = None,
+        max_position_size_usdt: Optional[float] = None,
+        max_purchases_per_epoch: Optional[int] = None,
+    ) -> None:
+        """Partial update of bot config; only non-None fields are written."""
+        fields: List[str] = []
+        params: List[Any] = []
+        for col, val in (
+            ("daily_budget_usdt", daily_budget_usdt),
+            ("target_profit_pct", target_profit_pct),
+            ("symbol", symbol),
+            ("buy_volume", buy_volume),
+            ("poll_interval_seconds", poll_interval_seconds),
+            ("max_position_size_usdt", max_position_size_usdt),
+            ("max_purchases_per_epoch", max_purchases_per_epoch),
+        ):
+            if val is not None:
+                fields.append(f"{col} = ?")
+                params.append(val)
+
+        if not fields:
+            return
+
+        fields.append("updated_at = ?")
+        params.append(int(time.time()))
+        params.append(bot_id)
+
+        sql = f"UPDATE louise_bots SET {', '.join(fields)} WHERE bot_id = ?"
         with open_db(self.db_path) as conn:
-            conn.execute("""
-                UPDATE louise_bots 
-                SET daily_budget_usdt = ?, target_profit_pct = ?
-                WHERE bot_id = ?
-            """, (daily_budget_usdt, target_profit_pct, bot_id))
+            conn.execute(sql, tuple(params))
             conn.commit()
 
     def create_epoch(self, epoch_id: str, bot_id: str, status: str = "RUNNING") -> None:

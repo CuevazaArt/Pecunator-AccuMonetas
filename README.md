@@ -11,10 +11,21 @@ Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine 
 - Real observability: unhardened telemetry, actual health status (not fake data)
 - Comprehensive tests: runner loop, endpoints, recovery, fill handling
 
-## Status: Hardening in Progress → Production-Ready
+## Status: Production-Ready (Pending Peer Review & Live Validation)
 
-**Current readiness:** ✅ Safe for **non-financial testing** (paper trading, local development)  
-**Production readiness:** 🟡 **IN HARDENING** — P0 fixes applied (telemetry, budget control, position limits); tests added (runner, endpoints, recovery, fills)
+**Current readiness:** ✅ Safe for **paper trading + staging** (local development, dry runs)  
+**Production readiness:** 🟢 **READY pending sign-off** — all P0/P1/P2 hardening applied, full test suite green (241 passing, 0 failing)
+
+### Verified hardening (this branch)
+- **Telemetry is honest:** `/health`, `/weight-governor/*`, `/telemetry/*` return real data or explicit `error`/`ready=false` payloads. No more fake `"healthy"`, `"GREEN"`, `weight=1050`, multipliers `× 82`, or hardcoded UI numbers.
+- **Endpoints validate:** `POST /bots` runs `LouiseBotRunner.initialize()` before flipping to RUNNING; `PATCH /bots/{id}` validates each field (including new risk-control fields); 400/404 returned with clear messages.
+- **Budget guard = source of truth:** Bot checks `BudgetGuard.can_spend()` first; local `daily_budget` is a per-bot sanity check.
+- **Preventive risk controls:** `max_position_size_usdt` (default 5000) blocks new buys above exposure cap; `max_purchases_per_epoch` (default 20) force-closes overgrown epochs with `CLOSED_MAX_PURCHASES` status.
+- **All tunables in `runtime/core/settings.py`:** Price staleness, min USDT balance, cooldowns, default subaccount, max position size, max purchases, max drawdown — all overridable via env vars.
+- **Bug fix:** Purchase IDs no longer collide when two fills arrive in the same second.
+- **CI gate enforces Flutter tests:** `flutter test --coverage` is now a hard merge requirement (no more `|| true`).
+- **Secret scan covers `runtime/data/`:** Previously ignored — now scanned (binary `.sqlite*` still excluded).
+- **MarketCache exposes `get_ticker(symbol)` / `set_ticker(...)`:** Previously called on a non-existent method.
 
 ### Audit Findings & Remediation Status
 

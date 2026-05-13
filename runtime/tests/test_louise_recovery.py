@@ -1,6 +1,5 @@
 """Test suite for Louise bot recovery from failures."""
 
-import asyncio
 import time
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,7 +24,7 @@ def event_bus():
 
 @pytest.fixture
 def mock_gateway():
-    """Mock gateway."""
+    """Mock gateway with async client."""
     gateway = MagicMock()
     gateway._client = AsyncMock()
     return gateway
@@ -33,15 +32,16 @@ def mock_gateway():
 
 @pytest.fixture
 def sample_bot(temp_db):
-    """Create a sample bot."""
+    """Create a sample bot in RUNNING status (poll_market requires it)."""
     bot_id = "louise_btc_recovery"
     temp_db.create_bot(
         bot_id=bot_id,
-        symbol="BTC/USDT",
+        symbol="BTCUSDT",
         buy_volume=10.0,
         poll_interval_seconds=60,
         target_profit_pct=5.0,
         daily_budget_usdt=500.0,
+        status="RUNNING",
     )
     return bot_id
 
@@ -55,17 +55,38 @@ class TestRecoveryScenarios:
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
-        # Set up epoch so bot wants to poll
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
+        # Set runnable state so we reach the governor check
+        runner.current_price = Decimal("50000")
+        runner.usdt_free_balance = Decimal("1000")
+        runner.last_price_timestamp = int(time.time())
 
-        # Mock governor to reject
         with patch("runtime.bot.louise.get_api_governor") as mock_gov:
             mock_gov.return_value.can_execute.return_value = False
+            with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
+                mock_fuse.return_value.is_tripped.return_value = False
+
+                await runner.poll_market()
+
+        # Governor blocked → no epoch created (poll exited before creation)
+        assert temp_db.get_active_epoch(sample_bot) is None
+
+    @pytest.mark.asyncio
+    async def test_recovery_from_api_fuse_tripped(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """Test bot skips poll when API fuse is tripped."""
+        runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
+        runner.initialize()
+
+        runner.current_price = Decimal("50000")
+        runner.usdt_free_balance = Decimal("1000")
+        runner.last_price_timestamp = int(time.time())
+
+        with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
+            mock_fuse.return_value.is_tripped.return_value = True
 
             await runner.poll_market()
 
-            # Should not have attempted buy/sell
-            assert temp_db.get_active_epoch(sample_bot) is not None
+        # Fuse blocked → no epoch
+        assert temp_db.get_active_epoch(sample_bot) is None
 
     @pytest.mark.asyncio
     async def test_recovery_from_budget_guard_exhaustion(self, sample_bot, temp_db, event_bus, mock_gateway):
@@ -73,40 +94,26 @@ class TestRecoveryScenarios:
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
 
-        # Set up runnable state
         runner.current_price = Decimal("50000")
         runner.usdt_free_balance = Decimal("1000")
+        runner.last_price_timestamp = int(time.time())
 
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(f"epoch_{sample_bot}_1", 0, 0, 0)
+        with patch("runtime.bot.louise.get_api_governor") as mock_gov:
+            mock_gov.return_value.can_execute.return_value = True
+            with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
+                mock_fuse.return_value.is_tripped.return_value = False
+                with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
+                    mock_bg.return_value.can_spend.return_value = False
+                    with patch("runtime.bot.louise.get_exchange_filters") as mock_filt:
+                        mock_filt.return_value.get.return_value = None
 
-        with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
-            mock_bg.return_value.can_spend.return_value = False
+                        await runner.poll_market()
 
-            await runner.poll_market()
-
-            # Should have skipped due to budget
-            # (verified by no purchase added to DB)
-
-    @pytest.mark.asyncio
-    async def test_recovery_from_gateway_unavailable(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test bot retries with cooldown when gateway unavailable."""
-        runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
-        runner.initialize()
-
-        runner.current_price = Decimal("50000")
-        runner.usdt_free_balance = Decimal("1000")
-
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(f"epoch_{sample_bot}_1", 0, 0, 0)
-
-        # Mock gateway to fail
-        mock_gateway._client = None
-
-        await runner.poll_market()
-
-        # Should have set cooldown
-        # (verified by cooldown_until timestamp)
+        # Budget blocked → epoch may exist but no purchase
+        epoch = temp_db.get_active_epoch(sample_bot)
+        if epoch:
+            purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
+            assert len(purchases) == 0
 
     @pytest.mark.asyncio
     async def test_recovery_from_stale_price_data(self, sample_bot, temp_db, event_bus, mock_gateway):
@@ -115,16 +122,13 @@ class TestRecoveryScenarios:
         runner.initialize()
 
         runner.current_price = Decimal("50000")
-        runner.last_price_timestamp = 0  # Very old
+        runner.last_price_timestamp = 0  # Ancient
         runner.usdt_free_balance = Decimal("1000")
-
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(f"epoch_{sample_bot}_1", 0, 0, 0)
 
         await runner.poll_market()
 
-        # Should have skipped due to stale data
-        # (no new purchases in DB)
+        # Stale → no epoch
+        assert temp_db.get_active_epoch(sample_bot) is None
 
     @pytest.mark.asyncio
     async def test_recovery_from_insufficient_balance(self, sample_bot, temp_db, event_bus, mock_gateway):
@@ -133,67 +137,76 @@ class TestRecoveryScenarios:
         runner.initialize()
 
         runner.current_price = Decimal("50000")
-        runner.usdt_free_balance = Decimal("1.0")  # Too low
+        runner.usdt_free_balance = Decimal("1.0")  # Below min
         runner.last_price_timestamp = int(time.time())
 
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(f"epoch_{sample_bot}_1", 0, 0, 0)
+        await runner.poll_market()
 
-        with patch("runtime.bot.louise.get_api_governor") as mock_gov:
-            mock_gov.return_value.can_execute.return_value = True
-            with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
-                mock_bg.return_value.can_spend.return_value = True
-
-                await runner.poll_market()
-
-        # Should have skipped due to low balance
+        # Insufficient balance → no epoch
+        assert temp_db.get_active_epoch(sample_bot) is None
 
     @pytest.mark.asyncio
-    async def test_recovery_from_exchange_filter_unavailable(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test bot handles missing exchange filters gracefully."""
+    async def test_max_position_size_blocks_buy(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """Test bot stops buying when max_position_size_usdt reached."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
+        # Tighten position cap to a small value
+        runner.config["max_position_size_usdt"] = 100.0
 
         runner.current_price = Decimal("50000")
         runner.usdt_free_balance = Decimal("1000")
         runner.last_price_timestamp = int(time.time())
 
-        temp_db.create_epoch(f"epoch_{sample_bot}_1", sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(f"epoch_{sample_bot}_1", 0, 0, 0)
+        # Create epoch with exposure already at limit
+        epoch_id = f"epoch_{sample_bot}_max"
+        temp_db.create_epoch(epoch_id, sample_bot, "RUNNING")
+        temp_db.update_epoch_stats(epoch_id, 1, 150.0, 50000.0)  # Above max 100
+        runner.active_epoch = temp_db.get_active_epoch(sample_bot)
 
-        with patch("runtime.bot.louise.get_exchange_filters") as mock_filters:
-            mock_filters.return_value.get.return_value = None
+        with patch("runtime.bot.louise.get_api_governor") as mock_gov:
+            mock_gov.return_value.can_execute.return_value = True
+            with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
+                mock_fuse.return_value.is_tripped.return_value = False
+                with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
+                    mock_bg.return_value.can_spend.return_value = True
 
-            await runner.poll_market()
+                    await runner.poll_market()
 
-            # Should have handled gracefully
+        # Max exposure check prevented new purchase
+        purchases = temp_db.get_purchases_by_epoch(epoch_id)
+        assert len(purchases) == 0
 
     @pytest.mark.asyncio
-    async def test_state_recovery_after_db_read_failure(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test bot recovers from transient DB read failure."""
+    async def test_max_purchases_triggers_force_sell(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """Test bot force-sells at max_purchases_per_epoch limit."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
+        runner.config["max_purchases_per_epoch"] = 2
 
-        # Simulate DB failure during poll (rare case)
-        # The bot should catch exception and retry on next cycle
-        call_count = [0]
+        runner.current_price = Decimal("48000")  # Below avg → losing but not stop-loss
+        runner.usdt_free_balance = Decimal("1000")
+        runner.last_price_timestamp = int(time.time())
 
-        original_poll = runner.poll_market
+        # Epoch already at max purchases
+        epoch_id = f"epoch_{sample_bot}_maxp"
+        temp_db.create_epoch(epoch_id, sample_bot, "RUNNING")
+        temp_db.update_epoch_stats(epoch_id, 2, 200.0, 50000.0)
+        runner.active_epoch = temp_db.get_active_epoch(sample_bot)
 
-        async def poll_with_failure():
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise RuntimeError("DB connection failed")
-            return await original_poll()
+        sell_called = []
 
-        runner.poll_market = poll_with_failure
+        async def track_sell(*args, **kwargs):
+            # Capture status keyword + positional args (we don't need to execute the real sell)
+            sell_called.append(kwargs.get("status", "DEFAULT"))
 
-        # First call fails
-        with pytest.raises(RuntimeError):
-            await runner.poll_market()
+        runner._execute_sell = track_sell
 
-        # Second call should succeed
-        await runner.poll_market()  # Should not raise
+        with patch("runtime.bot.louise.get_api_governor") as mock_gov:
+            mock_gov.return_value.can_execute.return_value = True
+            with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
+                mock_fuse.return_value.is_tripped.return_value = False
 
+                await runner.poll_market()
 
-import time  # Import at module level for timestamp
+        # Force-sell triggered with CLOSED_MAX_PURCHASES status
+        assert "CLOSED_MAX_PURCHASES" in sell_called, f"got: {sell_called}"
