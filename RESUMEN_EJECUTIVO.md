@@ -1,8 +1,11 @@
 # Pecunator-AccuMonetas: Resumen Ejecutivo
 
 **Proyecto:** Hub de Bots Louise (DCA Downside-Only)  
-**Estado:** 🟢 Listo para comenzar desarrollo  
-**Fecha:** 2026-05-11
+**Estado:** 🟠 Staging-Ready — Paper Trading Active, Production Pending UI+Ops Validation  
+**Backend:** 85% (core logic solid, tests comprehensive)  
+**UI Testing:** 10% (boilerplate only, needs control/WebSocket coverage)  
+**Ops Docs:** 0% (deployment/runbook/rollback missing)  
+**Fecha:** 2026-05-13 (Updated after honest assessment)
 
 ---
 
