@@ -27,6 +27,87 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 - ...
 ```
 
+## 2026-05-13 (Hub Dual Louise/AntiLouise + Console Telemetry Backend)
+
+### Added
+- **`runtime/bot/anti_louise.py`** (new): mirror-image DCA bot operating margin SHORT.
+  Opens shorts via `create_margin_order` with `sideEffectType="MARGIN_BUY"` (auto-borrow),
+  closes with `"AUTO_REPAY"`. Entry gate is `current_price > last_short_price` (inverted
+  from Louise). P&L formula is inverted: profit when price falls below `avg_short_price`.
+- **`runtime/bot/_ws_emit.py`** (new): shared helper that publishes `PNL_SNAPSHOT`
+  events through the WS broadcaster on every poll snapshot. Failures here never
+  raise — broadcaster issues must not break trading logic.
+- **`runtime/core/kline_ingestion.py`** (new): periodic service that fetches 1D OHLC
+  klines from Binance and stores them with recursively-computed Heikin-Ashi values.
+  Bootstraps 500 candles per (symbol, interval) on first run, refreshes the last 3
+  candles every 5 min. Discovers symbols dynamically from `louise_bots`.
+- **`pnl_snapshots` table** in `louise_db`: time-series of P&L with
+  `avg_entry_price_usdt`, `total_committed_usdt`, `unrealized_pnl_usdt`,
+  `cumulative_realized_pnl_usdt`, `net_position_usdt`, `net_position_pct`.
+  Written on every poll cycle with active position. Used for long-term charting
+  and identifying rebalancing moments.
+- **DB helpers**: `get_pnl_history`, `get_combined_pnl_history`,
+  `get_total_realized_pnl`, `get_latest_pnl_snapshot`, `get_purchases_by_bot`.
+- **5 REST endpoints** on `/api/louise`:
+  - `GET /bots/{id}/pnl-history` — snapshot time-series
+  - `GET /bots/{id}/purchases` — every entry point (for chart overlay)
+  - `GET /hub/combined-pnl` — multi-bot aggregated view with totals
+  - `GET /hub/dual-state` — current header state (bots + totals)
+  - `GET /klines/{symbol}?interval=1d` — OHLC + HA from the same DB row
+- **HA columns in `kline_history`**: `ha_open`, `ha_high`, `ha_low`, `ha_close`,
+  `is_closed`. `store_klines_with_ha` UPSERTs with continuous recursive HA chain
+  preserved across split batches and unclosed-candle refreshes.
+- **47 new tests** covering HA chain continuity, UPSERT correctness, bootstrap
+  formula, `last_purchase_price` tracking + crash recovery, AntiLouise short
+  logic with inverted P&L math, and all 5 new endpoints.
+
+### Changed
+- **`runtime/bot/louise.py`**: simplified DCA logic per L0 doctrine.
+  - Entry gate now `current_price < last_purchase_price` (strictly lower than the
+    previous individual buy, not `avg`). Original logic blocked rebuys after a
+    Lucky-style extreme entry; new logic preserves the normal accumulation rhythm.
+  - Removed stop-loss / max-drawdown branch (would break the hedge in a dual hub).
+  - Removed max-purchases force-sell branch (no position cap).
+  - Removed max-position-size cap. Take-profit is the only exit condition.
+  - Added `last_purchase_price` field with crash-recovery from DB on init.
+  - Added `pnl_snapshot` recording + WS emit on every poll cycle.
+- **`runtime/api/louise_service.py`**: routes the runner class by `bot_type`
+  column (`louise` → `LouiseBotRunner`, `anti_louise` → `AntiLouiseBotRunner`).
+- **`runtime/modules/trend_signal.py`**: class renamed
+  `TrendSignalService` → `TrendingSignalTipoHekinAshiandMM`. Docstrings cleaned
+  of Dorothy/Elphaba references.
+- **`runtime/core/louise_db.py`**: new `bot_type` column (default `'louise'`)
+  with safe migration ALTER for existing DBs.
+- **`runtime/core/telemetry_vault.py`**: HA columns added to `kline_history`
+  with safe ALTER migration. `_get_last_ha` helper to chain HA across batches.
+
+### Fixed
+- **`runtime/bot/louise.py:_delay_sim`**: simulation path was calling a method
+  that did not exist (`handle_order_update`). Now correctly invokes
+  `_on_execution_report` so paper-trading fills are routed properly.
+
+### Removed
+- **`runtime/modules/vmo.py`** and references (project separated from origin
+  PecunatorCore — VMO is not part of AccuMonetas scope).
+- **`runtime/backtest/dorothy_strategy.py`** and
+  **`runtime/backtest/elphaba_strategy.py`** (strategies belong to a separate
+  project).
+
+### Operational impact
+- AntiLouise paper-trading runs identically to Louise. Live margin mode requires
+  extending `BinanceGateway` to subscribe to the cross/isolated-margin user data
+  stream (currently the gateway only subscribes to the spot stream — documented
+  as a TODO in `anti_louise.py`).
+- `KlineIngestionService` consumes Binance REST weight once per `poll_interval`
+  per (symbol, interval) — default ~12 weight/hour for 1D candles across all
+  tracked symbols. Negligible.
+- All migrations are additive (ALTER TABLE ADD COLUMN with `try/except
+  OperationalError`) — existing DBs are upgraded transparently on first boot.
+- The `last_purchase_price` separation lays the groundwork for Lucky Strike
+  (locked in memory: `project_strategy_philosophy.md`): when Lucky fills land,
+  they must register in DB + epoch stats but MUST NOT update `last_*_price`,
+  otherwise the bots would stop rhythm-buying after every extreme entry.
+
 ## 2026-05-13 (Security Hardening, Flutter CI Fix & Phase 1 Completion)
 
 ### Added
