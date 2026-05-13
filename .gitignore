@@ -10,10 +10,14 @@ runtime/data/vault_local.key
 runtime/data/credential_public.json
 runtime/data/active_credential_id.txt
 runtime/data/*.sqlite
+runtime/data/*.sqlite-*
 runtime/data/*.json
+runtime/data/*.log
 runtime/data/api.token
 runtime/data/documents/*
 !runtime/data/documents/.gitkeep
+runtime/data/vmo/
+runtime/data/vmo_captures/
 .idea/
 .vscode/
 .claude/
