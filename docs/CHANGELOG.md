@@ -27,6 +27,50 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 - ...
 ```
 
+## 2026-05-13 (Security Hardening & Phase 1 Completion)
+
+### Added
+- **`runtime/tests/test_api_security.py`** (16 new tests): Comprehensive API authentication validation
+  - HTTP endpoints: verify 401 rejection on protected routes without Bearer token
+  - Token validation: case-sensitivity, malformed headers, empty tokens, invalid tokens
+  - Metrics endpoint: verify public access (no auth required) for Prometheus scraping
+  - WebSocket auth: documented token validation via query param and header
+  - Auth bypass: documented PECUNATOR_API_AUTH_DISABLED environment variable (dev-only)
+  - All tests passing: 256 total tests pass, 0 failures
+
+### Changed
+- **`.github/workflows/secret-scan.yml`**: Hardened secret scanning
+  - Now explicitly includes all text files in `runtime/data` (was ambiguous comment)
+  - Added binary exclusions: `*.png`, `*.jpg`, `*.jpeg`, `*.gif`
+  - Ensures gitleaks triggers on credential changes in config/operational files
+- **`.gitignore`**: Explicit rules for runtime artifact directories
+  - Added `runtime/data/vmo/` (market analysis captures)
+  - Added `runtime/data/vmo_captures/` (historical captures)
+  - Added `*.sqlite-*` (WAL and shared memory files)
+
+### Fixed
+- **Runtime data pollution**: Removed 85 tracked operational artifacts
+  - `gateway_settings.json`, `subaccounts_created.json` (config metadata)
+  - `vmo/captures/` and `vmo_captures/` (80+ chart screenshots)
+  - `vmo/vmo_cache.db` (runtime cache)
+  - Reduces noise, surface area for accidental leaks, disk space
+- **Secret scan gaps**: Previous rule could miss secrets if only `.json` or `.log` files changed
+  - Now all text files in runtime/data are scanned
+
+### Operational Impact
+- **Test coverage**: API security now formally validated (was implicit in code review)
+- **Repository hygiene**: No more runtime artifacts in version control
+- **CI/CD confidence**: Secret scan now properly covers all text files
+- **Production readiness**: API authentication verified by automated tests
+
+### Artifacts Removed
+- gateway_settings.json (3.7 KB)
+- subaccounts_created.json (0.3 KB)
+- vmo/vmo_cache.db (24 KB)
+- vmo/captures/BTCUSDT, ETHUSDT, etc. (5 PNG files, ~1 MB)
+- vmo_captures/ directory (80 PNG files, ~10 MB)
+- **Total cleanup**: ~11 MB, 85 files
+
 ## 2026-05-13 (Flutter CI Fix & Documentation Consolidation)
 
 ### Fixed
