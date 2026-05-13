@@ -14,10 +14,9 @@ void main() {
     });
 
     test('Pause bot returns PAUSED status', () async {
-      when(() => mockApi.louisePauseBot(botId)).thenAnswer((_) async => {
-            'bot_id': botId,
-            'status': 'PAUSED',
-          });
+      when(
+        () => mockApi.louisePauseBot(botId),
+      ).thenAnswer((_) async => {'bot_id': botId, 'status': 'PAUSED'});
 
       final response = await mockApi.louisePauseBot(botId);
 
@@ -26,10 +25,9 @@ void main() {
     });
 
     test('Resume bot returns RUNNING status', () async {
-      when(() => mockApi.louiseResumeBot(botId)).thenAnswer((_) async => {
-            'bot_id': botId,
-            'status': 'RUNNING',
-          });
+      when(
+        () => mockApi.louiseResumeBot(botId),
+      ).thenAnswer((_) async => {'bot_id': botId, 'status': 'RUNNING'});
 
       final response = await mockApi.louiseResumeBot(botId);
 
@@ -38,8 +36,9 @@ void main() {
     });
 
     test('Delete bot returns deleted confirmation', () async {
-      when(() => mockApi.louiseDeleteBot(botId))
-          .thenAnswer((_) async => {'deleted': true, 'bot_id': botId});
+      when(
+        () => mockApi.louiseDeleteBot(botId),
+      ).thenAnswer((_) async => {'deleted': true, 'bot_id': botId});
 
       final response = await mockApi.louiseDeleteBot(botId);
 
@@ -59,10 +58,9 @@ void main() {
     });
 
     test('Optimistic pause update returns expected status', () async {
-      when(() => mockApi.louisePauseBot(botId)).thenAnswer((_) async => {
-            'bot_id': botId,
-            'status': 'PAUSED',
-          });
+      when(
+        () => mockApi.louisePauseBot(botId),
+      ).thenAnswer((_) async => {'bot_id': botId, 'status': 'PAUSED'});
 
       final response = await mockApi.louisePauseBot(botId);
 
@@ -71,8 +69,9 @@ void main() {
     });
 
     test('Delete with confirmation returns deleted=true', () async {
-      when(() => mockApi.louiseDeleteBot(botId))
-          .thenAnswer((_) async => {'deleted': true});
+      when(
+        () => mockApi.louiseDeleteBot(botId),
+      ).thenAnswer((_) async => {'deleted': true});
 
       final response = await mockApi.louiseDeleteBot(botId);
 
@@ -80,20 +79,17 @@ void main() {
     });
 
     test('Control network error throws exception', () async {
-      when(() => mockApi.louisePauseBot(botId))
-          .thenThrow(Exception('Network timeout'));
+      when(
+        () => mockApi.louisePauseBot(botId),
+      ).thenThrow(Exception('Network timeout'));
 
-      expect(
-        () async => await mockApi.louisePauseBot(botId),
-        throwsException,
-      );
+      expect(() async => await mockApi.louisePauseBot(botId), throwsException);
     });
 
     test('Single pause call fires once', () async {
-      when(() => mockApi.louisePauseBot(botId)).thenAnswer((_) async => {
-            'bot_id': botId,
-            'status': 'PAUSED',
-          });
+      when(
+        () => mockApi.louisePauseBot(botId),
+      ).thenAnswer((_) async => {'bot_id': botId, 'status': 'PAUSED'});
 
       await mockApi.louisePauseBot(botId);
 

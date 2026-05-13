@@ -13,11 +13,13 @@ void main() {
     });
 
     test('Metrics returns price and weight data', () async {
-      when(() => mockApi.louiseMetrics()).thenAnswer((_) async => {
-            'last_price': 45321.50,
-            'symbol': 'BTCUSDT',
-            'weight_used': 120,
-          });
+      when(() => mockApi.louiseMetrics()).thenAnswer(
+        (_) async => {
+          'last_price': 45321.50,
+          'symbol': 'BTCUSDT',
+          'weight_used': 120,
+        },
+      );
 
       final metrics = await mockApi.louiseMetrics();
 
@@ -44,14 +46,16 @@ void main() {
     });
 
     test('Bots list reflects fill events after epoch', () async {
-      when(() => mockApi.louiseBots()).thenAnswer((_) async => [
-            {
-              'bot_id': 'bot_btc_001',
-              'status': 'RUNNING',
-              'symbol': 'BTCUSDT',
-              'purchases_this_epoch': 2,
-            },
-          ]);
+      when(() => mockApi.louiseBots()).thenAnswer(
+        (_) async => [
+          {
+            'bot_id': 'bot_btc_001',
+            'status': 'RUNNING',
+            'symbol': 'BTCUSDT',
+            'purchases_this_epoch': 2,
+          },
+        ],
+      );
 
       final bots = await mockApi.louiseBots();
 
@@ -61,11 +65,13 @@ void main() {
     });
 
     test('Health check detects gateway disconnect', () async {
-      when(() => mockApi.louiseHealth()).thenAnswer((_) async => {
-            'ready': false,
-            'gateway_connected': false,
-            'error': 'gateway_disconnected',
-          });
+      when(() => mockApi.louiseHealth()).thenAnswer(
+        (_) async => {
+          'ready': false,
+          'gateway_connected': false,
+          'error': 'gateway_disconnected',
+        },
+      );
 
       final health = await mockApi.louiseHealth();
 
@@ -92,31 +98,37 @@ void main() {
     });
 
     test('Weight governor status updates via polling', () async {
-      when(() => mockApi.louiseWeightStatus()).thenAnswer((_) async => {
-            'zone': 'GREEN',
-            'weight_used_1m': 240,
-            'weight_limit_1m': 6000,
-          });
+      when(() => mockApi.louiseWeightStatus()).thenAnswer(
+        (_) async => {
+          'zone': 'GREEN',
+          'weight_used_1m': 240,
+          'weight_limit_1m': 6000,
+        },
+      );
 
       final status = await mockApi.louiseWeightStatus();
 
       expect(status['zone'], equals('GREEN'));
-      expect((status['weight_used_1m'] as int) < (status['weight_limit_1m'] as int),
-          isTrue);
+      expect(
+        (status['weight_used_1m'] as int) < (status['weight_limit_1m'] as int),
+        isTrue,
+      );
     });
 
     test('Partial fill visible in bots list', () async {
-      when(() => mockApi.louiseBots()).thenAnswer((_) async => [
-            {
-              'bot_id': 'bot_btc_001',
-              'status': 'RUNNING',
-              'current_epoch': {
-                'purchases': 3,
-                'total_cost_usdt': 150.0,
-                'partial_fill': true,
-              },
+      when(() => mockApi.louiseBots()).thenAnswer(
+        (_) async => [
+          {
+            'bot_id': 'bot_btc_001',
+            'status': 'RUNNING',
+            'current_epoch': {
+              'purchases': 3,
+              'total_cost_usdt': 150.0,
+              'partial_fill': true,
             },
-          ]);
+          },
+        ],
+      );
 
       final bots = await mockApi.louiseBots();
       final epoch = bots[0]['current_epoch'] as Map<String, dynamic>;

@@ -13,8 +13,9 @@ void main() {
     });
 
     test('Health check returns ok status', () async {
-      when(() => mockApi.louiseHealth())
-          .thenAnswer((_) async => {'status': 'ok', 'ready': true});
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'status': 'ok', 'ready': true});
 
       final result = await mockApi.louiseHealth();
 
@@ -24,17 +25,17 @@ void main() {
     });
 
     test('Unauthorized engine raises exception', () async {
-      when(() => mockApi.louiseHealth())
-          .thenThrow(Exception('401 Unauthorized'));
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenThrow(Exception('401 Unauthorized'));
 
       expect(() async => await mockApi.louiseHealth(), throwsException);
     });
 
     test('Engine not ready returns ready=false payload', () async {
-      when(() => mockApi.louiseHealth()).thenAnswer((_) async => {
-            'ready': false,
-            'error': 'engine_not_ready',
-          });
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'ready': false, 'error': 'engine_not_ready'});
 
       final result = await mockApi.louiseHealth();
 
@@ -43,8 +44,9 @@ void main() {
     });
 
     test('After health check, bot list is accessible', () async {
-      when(() => mockApi.louiseHealth())
-          .thenAnswer((_) async => {'status': 'ok', 'ready': true});
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'status': 'ok', 'ready': true});
       when(() => mockApi.louiseBots()).thenAnswer((_) async => []);
 
       await mockApi.louiseHealth();
