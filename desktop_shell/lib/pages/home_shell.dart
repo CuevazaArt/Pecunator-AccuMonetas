@@ -30,8 +30,6 @@ class _PecunatorShellState extends State<PecunatorShell> {
   String _activeCredential = '—';
   String _activeCredentialId = '';
   List<Map<String, dynamic>> _vaultCredentials = [];
-  bool _gatewayRunning = false;
-  bool _gatewayWsConnected = false;
   String _clockText = '--:--:-- UTC';
 
   static const _tooltipDecoration = BoxDecoration(
@@ -61,13 +59,10 @@ class _PecunatorShellState extends State<PecunatorShell> {
     super.dispose();
   }
 
-  /// Handle WebSocket telemetry tick — update gateway state in real-time.
-  void _onTelemetryTick(TelemetrySnapshot snap) {
+  /// Handle WebSocket telemetry tick — real-time telemetry subscription.
+  void _onTelemetryTick(TelemetrySnapshot _) {
     if (!mounted) return;
-    setState(() {
-      _gatewayRunning = snap.gatewayRunning;
-      _gatewayWsConnected = snap.gatewaySnapshot?['ws_connected'] == true;
-    });
+    // Real-time telemetry updates (unused in current UI state)
   }
 
   void _updateClock() {
@@ -90,7 +85,7 @@ class _PecunatorShellState extends State<PecunatorShell> {
   Future<void> _fetchState() async {
     // Louise page refreshes automatically every 5 seconds
     try {
-      final snap = await _api.louiseHealth();
+      await _api.louiseHealth();
       if (!mounted) return;
       setState(() {
         // Louise health check (no gateway concept)
