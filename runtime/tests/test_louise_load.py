@@ -13,7 +13,6 @@ import gc
 import statistics
 import time
 import uuid
-from pathlib import Path
 from typing import List
 
 import pytest
@@ -334,9 +333,15 @@ class TestLoadTestSummary:
         print("\n" + "="*60)
         print("LOAD TEST PERFORMANCE SUMMARY")
         print("="*60)
-        print(f"DB Write (create_bot)     avg={statistics.mean(write_times):.1f}ms  p95={statistics.quantiles(write_times, n=20)[18]:.1f}ms")
-        print(f"DB Read  (get_bot)        avg={statistics.mean(read_times):.1f}ms  p95={statistics.quantiles(read_times, n=20)[18]:.1f}ms")
-        print(f"Full Epoch (5 purchases)  avg={statistics.mean(epoch_times):.1f}ms  p95={statistics.quantiles(epoch_times, n=20)[18]:.1f}ms")
+        p95_write = statistics.quantiles(write_times, n=20)[18]
+        p95_read = statistics.quantiles(read_times, n=20)[18]
+        p95_epoch = statistics.quantiles(epoch_times, n=20)[18]
+        print(f"DB Write (create_bot)     "
+              f"avg={statistics.mean(write_times):.1f}ms  p95={p95_write:.1f}ms")
+        print(f"DB Read  (get_bot)        "
+              f"avg={statistics.mean(read_times):.1f}ms  p95={p95_read:.1f}ms")
+        print(f"Full Epoch (5 purchases)  "
+              f"avg={statistics.mean(epoch_times):.1f}ms  p95={p95_epoch:.1f}ms")
         print("="*60)
         print("TARGETS: writes<50ms, reads<20ms, epoch<500ms")
         print("="*60)

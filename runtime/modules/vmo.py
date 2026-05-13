@@ -37,14 +37,14 @@ class VisualMarketObserver:
             priority=P_DIAGNOSIS,
             caller=f"VMO:{symbol}:{interval}"
         )
-        
+
         if not allowed:
             _LOG.warning("VMO: Chart-IMG request denied by governor (wait=%s)", wait_sec)
             return None
 
         # Format symbol for Chart-IMG (e.g. BINANCE:BTCUSDT)
         chart_symbol = f"BINANCE:{symbol.upper()}"
-        
+
         payload = {
             "symbol": chart_symbol,
             "interval": interval,
@@ -77,13 +77,13 @@ class VisualMarketObserver:
         error_msg = ""
         latency_ms = 0
         path = self._data_dir / f"{symbol}_{interval}.png"
-        
+
         try:
             import time
             t0 = time.monotonic()
             resp = requests.post(CHART_IMG_URL, headers=headers, json=payload, timeout=15)
             latency_ms = int((time.monotonic() - t0) * 1000)
-            
+
             if resp.status_code == 200 and "image" in resp.headers.get("content-type", ""):
                 with open(path, "wb") as f:
                     f.write(resp.content)
@@ -117,7 +117,6 @@ class VisualMarketObserver:
         double-call ``request_token`` here.
         """
         intervals = ["4h", "1d", "1w"]
-        loop = asyncio.get_running_loop()
 
         results = {}
         for iv in intervals:

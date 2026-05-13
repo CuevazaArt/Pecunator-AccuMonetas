@@ -1,4 +1,6 @@
-import config, json, time
+import config
+import json
+import time
 from binance.client import Client
 
 client = Client(config.api_key, config.api_secret, requests_params={'timeout': 30})

@@ -6,12 +6,17 @@ import datetime as dt
 import uuid
 import os
 import logging
-from typing import Any, List, Dict
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from runtime.core.louise_db import LouiseDB
+from runtime.core.settings import (
+    louise_default_subaccount,
+    louise_default_max_position_size_usdt,
+    louise_default_max_purchases_per_epoch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,28 +29,33 @@ def get_db():
 def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
     """Maps DB row to the format expected by Flutter UI."""
     active_epoch = db.get_active_epoch(bot["bot_id"])
-    
+
     from runtime.core.market_cache import get_market_cache
-    
+
     current_price = 0.0
+    has_price = False
     symbol = bot["symbol"]
-    ticker = get_market_cache().get_ticker(symbol)
-    if ticker:
-        current_price = float(ticker.last_price)
-        
+    try:
+        ticker = get_market_cache().get_ticker(symbol)
+        if ticker is not None:
+            current_price = float(ticker.last_price)
+            has_price = True
+    except (AttributeError, ValueError, TypeError) as e:
+        logger.debug(f"Ticker lookup failed for {symbol}: {e}")
+
     position_size = 0.0
     cost_basis = 0.0
     unrealized_pnl = 0.0
     unrealized_pct = 0.0
     trades_today = 0
     progress_percent = 0.0
-    
+
     if active_epoch:
         cost_basis = active_epoch["total_cost"]
         avg_buy_price = active_epoch["avg_buy_price"]
         position_size = cost_basis / avg_buy_price if avg_buy_price > 0 else 0
         trades_today = active_epoch["num_purchases"]
-        
+
         if current_price > 0 and cost_basis > 0:
             current_value = position_size * current_price
             unrealized_pnl = current_value - cost_basis
@@ -53,13 +63,14 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
             target = bot.get("target_profit_pct", 5.0)
             if target > 0:
                 progress_percent = (unrealized_pct / target) * 100.0
-        
+
     return {
         "id": bot["bot_id"],
         "name": bot["bot_id"],
         "symbol": bot["symbol"],
         "status": bot["status"].lower(),
         "current_price": current_price,
+        "price_available": has_price,
         "position_size": position_size,
         "cost_basis": cost_basis,
         "unrealized_pnl": unrealized_pnl,
@@ -67,25 +78,28 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
         "free_balance": bot["daily_budget_usdt"],
         "target_profit_pct": bot["target_profit_pct"],
         "buy_volume": bot.get("buy_volume", 10.0),
+        "max_position_size_usdt": bot.get("max_position_size_usdt", 5000.0),
+        "max_purchases_per_epoch": bot.get("max_purchases_per_epoch", 20),
         "progress_percent": progress_percent,
         "daily_budget": bot["daily_budget_usdt"],
         "trades_today": trades_today,
+        "subaccount": bot.get("subaccount", "bluechip"),
     }
 
 def _hub_metrics(db: LouiseDB) -> dict[str, Any]:
     bots = db.get_all_bots()
     active = sum(1 for b in bots if b["status"] == "ACCUMULATING" or b["status"] == "RUNNING")
-    
+
     portfolio = 0.0
     free = 0.0
     pnl_abs = 0.0
-    
+
     for b in bots:
         mapped = map_bot_to_ui(b, db)
         portfolio += mapped["cost_basis"] + mapped["unrealized_pnl"]
         free += mapped["free_balance"]
         pnl_abs += mapped["unrealized_pnl"]
-        
+
     pnl_pct = round(pnl_abs / portfolio * 100, 2) if portfolio > 0 else 0.0
     return {
         "active_bots": active,
@@ -107,18 +121,36 @@ def get_louise_telemetry(db: LouiseDB = None) -> dict[str, Any]:
 
 # ─── Pydantic models ──────────────────────────────────────────────────
 
+def _default_max_position() -> float:
+    return louise_default_max_position_size_usdt()
+
+
+def _default_max_purchases() -> int:
+    return louise_default_max_purchases_per_epoch()
+
+
+def _default_subaccount() -> str:
+    return louise_default_subaccount()
+
+
 class BotCreateRequest(BaseModel):
     symbol: str
     daily_budget: float = 500.0
     target_profit_pct: float = 5.0
     buy_volume: float = 10.0
     poll_interval_seconds: int = 60
-    subaccount: str = "bluechip"
+    max_position_size_usdt: float = Field(default_factory=_default_max_position)
+    max_purchases_per_epoch: int = Field(default_factory=_default_max_purchases)
+    subaccount: str = Field(default_factory=_default_subaccount)
 
 class BotUpdateRequest(BaseModel):
     daily_budget: float | None = None
     target_profit_pct: float | None = None
     symbol: str | None = None
+    buy_volume: float | None = None
+    poll_interval_seconds: int | None = None
+    max_position_size_usdt: float | None = None
+    max_purchases_per_epoch: int | None = None
 
 # ─── GET endpoints ────────────────────────────────────────────────────
 
@@ -137,14 +169,28 @@ async def get_weight_status() -> dict[str, Any]:
         from runtime.core.settings import api_weight_limit_1m_display
         limit = api_weight_limit_1m_display()
     except Exception:
-        limit = 6000
-    weight = 0
+        return {
+            "error": "api_governor_unavailable",
+            "message": "Failed to load API governor settings",
+            "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+
+    weight = None
     try:
         from runtime.api import deps
         ctx = deps.get_ctx()
-        weight = getattr(getattr(ctx, "state", None), "api_weight_used_1m", None) or 0
+        weight = getattr(getattr(ctx, "state", None), "api_weight_used_1m", None)
     except Exception:
-        weight = 1050
+        pass
+
+    if weight is None:
+        return {
+            "error": "governor_state_unavailable",
+            "message": "API governor state not available (context not loaded)",
+            "weight_limit": limit,
+            "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+
     pct = round(weight / limit * 100, 1) if limit > 0 else 0.0
     if pct < 50:
         zone, msg = "GREEN", f"API weight normal. {pct}% del límite usado."
@@ -162,44 +208,106 @@ async def get_weight_status() -> dict[str, Any]:
     }
 
 @router.get("/weight-governor/history")
-async def get_weight_history() -> list[dict[str, Any]]:
-    # Instead of hardcoding, we should read actual history.
-    # Currently telemetry vault holds snapshots. Returning empty or placeholder for now until UI chart is adapted.
-    return []
+async def get_weight_history() -> dict[str, Any]:
+    try:
+        from runtime.core.telemetry_vault import get_telemetry_vault
+        vault = get_telemetry_vault()
+        snapshots = vault.get_weight_snapshots()
+        if snapshots:
+            return {
+                "ready": True,
+                "data": snapshots,
+                "message": f"{len(snapshots)} snapshots available",
+            }
+        else:
+            return {
+                "ready": False,
+                "data": [],
+                "message": "No weight history snapshots recorded yet",
+            }
+    except Exception as e:
+        logger.warning(f"Failed to fetch weight history: {e}")
+        return {
+            "ready": False,
+            "data": [],
+            "error": str(e),
+            "message": "Could not load weight history from vault",
+        }
 
 @router.get("/telemetry/requests")
 async def get_requests_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
-    bots = db.get_all_bots()
-    counts = {}
-    total = 0
-    for b in bots:
-        mapped = map_bot_to_ui(b, db)
-        c = mapped.get("trades_today", 0) * 82
-        counts[b["bot_id"]] = c
-        total += c
-    return {**counts, "total": total}
+    """Per-bot request counts derived from real OrderLedger entries (not synthetic).
+
+    Returns:
+        {bot_id: request_count, ..., "total": total, "source": "order_ledger"}
+        Or {"error": "...", "ready": False} if telemetry source unavailable.
+    """
+    try:
+        from runtime.core.order_ledger import get_order_ledger
+        ledger = get_order_ledger()
+        bots = db.get_all_bots()
+        counts: dict[str, Any] = {}
+        total = 0
+        for b in bots:
+            bot_id = b["bot_id"]
+            try:
+                stats = ledger.stats_for_bot(bot_id) if hasattr(ledger, "stats_for_bot") else {}
+                n = int(stats.get("orders_today", 0) or 0)
+            except Exception:
+                n = 0
+            counts[bot_id] = n
+            total += n
+        return {**counts, "total": total, "source": "order_ledger"}
+    except Exception as e:
+        logger.warning(f"requests telemetry unavailable: {e}")
+        return {"total": 0, "ready": False, "error": str(e)}
+
 
 @router.get("/telemetry/bandwidth")
 async def get_bandwidth_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
-    bots = db.get_all_bots()
-    bw = {}
-    total = 0
-    for b in bots:
-        mapped = map_bot_to_ui(b, db)
-        c = mapped.get("trades_today", 0) * 82000
-        bw[b["bot_id"]] = c
-        total += c
-    return {**bw, "total": total}
+    """Network bandwidth metric.
+
+    Not currently tracked at the bot level — exposed as 'not_implemented'
+    so the UI shows a placeholder instead of fabricated numbers.
+    """
+    return {
+        "total": 0,
+        "ready": False,
+        "message": "bandwidth tracking not implemented",
+        "status": "not_implemented",
+    }
 
 @router.get("/health")
 async def louise_health(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
     bots = db.get_all_bots()
     active = sum(1 for b in bots if b["status"] == "ACCUMULATING" or b["status"] == "RUNNING")
+    paused = sum(1 for b in bots if b["status"] == "PAUSED")
+
+    # Determine real health status
+    if len(bots) == 0:
+        status = "healthy"
+    elif active == 0 and paused == len(bots):
+        status = "healthy"  # All paused is OK
+    elif active > 0:
+        status = "healthy"  # Active bots = running
+    else:
+        status = "unknown"
+
+    # Get actual weight zone (not hardcoded)
+    weight_zone = "UNKNOWN"
+    try:
+        weight_response = await get_weight_status()
+        if "error" not in weight_response:
+            weight_zone = weight_response.get("weight_zone", "UNKNOWN")
+    except Exception:
+        pass
+
     return {
-        "status": "healthy",
+        "status": status,
         "active_bots": active,
+        "paused_bots": paused,
         "total_bots": len(bots),
-        "weight_zone": "GREEN",
+        "weight_zone": weight_zone,
         "last_check": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
 
@@ -209,7 +317,30 @@ async def louise_health(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
 async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
     from runtime.api import deps
     from runtime.api._helpers import resolve_pair_for_bot
-    
+    from runtime.core.exchange_filters import get_exchange_filters
+
+    # Validate request parameters
+    if req.daily_budget <= 0:
+        raise HTTPException(status_code=400, detail="daily_budget must be > 0")
+    if req.target_profit_pct == 0:
+        raise HTTPException(status_code=400, detail="target_profit_pct cannot be 0")
+    if req.target_profit_pct < -50 or req.target_profit_pct > 100:
+        raise HTTPException(status_code=400, detail="target_profit_pct must be between -50% and 100%")
+    if req.buy_volume <= 0:
+        raise HTTPException(status_code=400, detail="buy_volume must be > 0")
+    if req.poll_interval_seconds < 10:
+        raise HTTPException(status_code=400, detail="poll_interval_seconds must be >= 10")
+    if req.max_position_size_usdt <= 0:
+        raise HTTPException(status_code=400, detail="max_position_size_usdt must be > 0")
+    if req.max_purchases_per_epoch <= 0:
+        raise HTTPException(status_code=400, detail="max_purchases_per_epoch must be > 0")
+
+    # Validate symbol exists in exchange filters
+    filters = get_exchange_filters().get(req.symbol)
+    if not filters:
+        raise HTTPException(status_code=400, detail=f"Symbol {req.symbol} not found in exchange filters")
+
+    # Validate credentials exist (unless paper trading)
     ctx = deps.get_ctx()
     pair = resolve_pair_for_bot(ctx, req.subaccount)
     if not pair and os.environ.get("LOUISE_PAPER_TRADE", "true").lower() != "true":
@@ -217,7 +348,8 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
 
     base = req.symbol.split("/")[0].lower()
     bot_id = f"louise_{base}_{str(uuid.uuid4())[:4]}"
-    
+
+    # Create bot in PAUSED state initially (single DB operation)
     db.create_bot(
         bot_id=bot_id,
         symbol=req.symbol,
@@ -225,12 +357,37 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
         poll_interval_seconds=req.poll_interval_seconds,
         target_profit_pct=req.target_profit_pct,
         daily_budget_usdt=req.daily_budget,
-        subaccount=req.subaccount
+        max_position_size_usdt=req.max_position_size_usdt,
+        max_purchases_per_epoch=req.max_purchases_per_epoch,
+        subaccount=req.subaccount,
+        status="PAUSED"
     )
-    db.update_bot_status(bot_id, "RUNNING")
-    
+
+    # Validate that the runner can initialize against this config + DB row.
+    # We use the ctx bus when available (production) or create a fresh EventBus (tests).
+    # Pass subscribe=False to avoid registering event bus callbacks on this temporary runner.
+    try:
+        from runtime.bot.louise import LouiseBotRunner
+        from runtime.core.event_bus import EventBus
+
+        bus = getattr(ctx, "bus", None) or EventBus()
+        bot_runner = LouiseBotRunner(bot_id, db, bus, None)
+        if not bot_runner.initialize(subscribe=False):
+            raise RuntimeError("Bot initialization failed (config could not be loaded)")
+
+        # Only now transition to RUNNING after successful init.
+        # The louise immortality loop will pick it up within ~10s and start the runner.
+        db.update_bot_status(bot_id, "RUNNING")
+        logger.info(f"Bot {bot_id} created and validated, status=RUNNING")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bot {bot_id} initialization failed: {e}")
+        db.update_bot_status(bot_id, "ERROR")
+        raise HTTPException(status_code=400, detail=f"Bot initialization failed: {e}")
+
     _push_louise_ws(db)
-    
+
     bot_raw = db.get_bot(bot_id)
     return {"bot_id": bot_id, "status": "created", "bot": map_bot_to_ui(bot_raw, db)}
 
@@ -239,7 +396,7 @@ async def pause_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, An
     bot = db.get_bot(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-        
+
     db.update_bot_status(bot_id, "PAUSED")
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "paused"}
@@ -249,23 +406,55 @@ async def resume_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, A
     bot = db.get_bot(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-        
+
     db.update_bot_status(bot_id, "RUNNING")
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "running"}
 
 @router.patch("/bots/{bot_id}")
 async def update_bot(bot_id: str, req: BotUpdateRequest, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    from runtime.core.exchange_filters import get_exchange_filters
+
     bot = db.get_bot(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-        
-    new_budget = req.daily_budget if req.daily_budget is not None else bot.get("daily_budget_usdt", 500.0)
-    new_target = req.target_profit_pct if req.target_profit_pct is not None else bot.get("target_profit_pct", 5.0)
-    
-    db.update_bot_config(bot_id, new_budget, new_target)
-    
-    # Reload bot
+
+    # Validate each provided field
+    if req.daily_budget is not None and req.daily_budget <= 0:
+        raise HTTPException(status_code=400, detail="daily_budget must be > 0")
+    if req.target_profit_pct is not None:
+        if req.target_profit_pct == 0:
+            raise HTTPException(status_code=400, detail="target_profit_pct cannot be 0")
+        if req.target_profit_pct < -50 or req.target_profit_pct > 100:
+            raise HTTPException(status_code=400, detail="target_profit_pct must be between -50% and 100%")
+    if req.buy_volume is not None and req.buy_volume <= 0:
+        raise HTTPException(status_code=400, detail="buy_volume must be > 0")
+    if req.poll_interval_seconds is not None and req.poll_interval_seconds < 10:
+        raise HTTPException(status_code=400, detail="poll_interval_seconds must be >= 10")
+    if req.max_position_size_usdt is not None and req.max_position_size_usdt <= 0:
+        raise HTTPException(status_code=400, detail="max_position_size_usdt must be > 0")
+    if req.max_purchases_per_epoch is not None and req.max_purchases_per_epoch <= 0:
+        raise HTTPException(status_code=400, detail="max_purchases_per_epoch must be > 0")
+    if req.symbol is not None and req.symbol != bot.get("symbol"):
+        filters = get_exchange_filters().get(req.symbol)
+        if not filters:
+            raise HTTPException(status_code=400, detail=f"Symbol {req.symbol} not found in exchange filters")
+
+    # Warn if bot is running and config changes
+    if bot.get("status") == "RUNNING":
+        logger.warning(f"Bot {bot_id} config updated while RUNNING")
+
+    db.update_bot_config(
+        bot_id,
+        daily_budget_usdt=req.daily_budget,
+        target_profit_pct=req.target_profit_pct,
+        symbol=req.symbol,
+        buy_volume=req.buy_volume,
+        poll_interval_seconds=req.poll_interval_seconds,
+        max_position_size_usdt=req.max_position_size_usdt,
+        max_purchases_per_epoch=req.max_purchases_per_epoch,
+    )
+
     bot = db.get_bot(bot_id)
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "updated", "bot": map_bot_to_ui(bot, db)}
@@ -275,7 +464,7 @@ async def delete_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, A
     bot = db.get_bot(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
-    
+
     db.update_bot_status(bot_id, "SHUTDOWN")
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "deleted"}

@@ -2,7 +2,7 @@
 
 import logging
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 from runtime.core.louise_db import LouiseDB
 from runtime.connectors.binance_gateway import BinanceGateway

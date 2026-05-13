@@ -1,6 +1,5 @@
 """Tests for ExchangeFilterCache — LOT_SIZE / MIN_NOTIONAL universal validation."""
 
-import asyncio
 from decimal import Decimal
 
 import pytest

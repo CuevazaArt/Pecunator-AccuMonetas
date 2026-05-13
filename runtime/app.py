@@ -31,10 +31,10 @@ class AppContext:
 
 def build_context() -> AppContext:
     from runtime.core import state_wal
-    
+
     st = StateStore()
     state_wal.hydrate(st, data_dir())
-    
+
     return AppContext(
         bus=EventBus(),
         state=st,

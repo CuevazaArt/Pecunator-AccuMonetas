@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
-
-_LOG = logging.getLogger("pecunator.api.system")
 
 from fastapi import APIRouter, Request
 
 from runtime.api import deps
+
+_LOG = logging.getLogger("pecunator.api.system")
 
 router = APIRouter(tags=["system"])
 
@@ -23,7 +24,7 @@ async def health() -> dict[str, Any]:
     ctx = deps.get_ctx()
     from runtime.core.louise_db import LouiseDB
     louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
-    
+
     # Core system state
     fuse_tripped = False
     weight_zone = "UNKNOWN"
@@ -46,11 +47,11 @@ async def health() -> dict[str, Any]:
         staged_bots = cs.get("staged_bots", 0)
     except Exception as exc:
         _LOG.debug("health: bot_coordinator unavailable: %s", exc)
-    
+
     from runtime.api.routers.louise import _hub_metrics
     hub_stats = {"louise": _hub_metrics(louise_db)}
     total_running = hub_stats["louise"].get("active_bots", 0)
-    
+
     return {
         "status": "degraded" if fuse_tripped else "healthy",
         "fuse_tripped": fuse_tripped,
@@ -68,13 +69,13 @@ async def health() -> dict[str, Any]:
 async def health_deep() -> dict[str, Any]:
     ctx = deps.get_ctx()
     gw_ok = ctx.gateway is not None and getattr(ctx.gateway, "_ws_task", None) is not None
-    
+
     status = "ok" if gw_ok else "degraded"
-    
+
     from runtime.core.louise_db import LouiseDB
     louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
     from runtime.api.routers.louise import _hub_metrics
-    
+
     return {
         "status": status,
         "gateway_connected": gw_ok,
@@ -279,7 +280,6 @@ async def toxic_symbols_whitelist(request: Request) -> dict[str, Any]:
 @router.get("/api/v1/subaccounts/list")
 async def subaccounts_list() -> dict[str, Any]:
     """List registered sub-accounts with credential availability status."""
-    import os
     from runtime.core.subaccount_registry import get_subaccount_registry
     registry = get_subaccount_registry()
     accounts = []

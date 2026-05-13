@@ -440,7 +440,7 @@ class BaseStrategyRunner:
                 self._last_cycle_ts = dt.datetime.now(dt.timezone.utc).isoformat()
                 self._error_streak = 0
                 self._emit("INFO", self._loop_log_summary(rep), {"report": rep})
-                
+
                 # Record decision in Hub State
                 try:
                     get_hub_state().log_decision(
