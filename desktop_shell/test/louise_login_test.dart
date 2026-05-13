@@ -1,59 +1,58 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:pecunator_desktop/api_client.dart';
 
-import '../lib/api_client.dart';
-
-class MockApiClient extends Mock implements ApiClient {}
+class MockEngineApi extends Mock implements EngineApi {}
 
 void main() {
   group('Louise Auth & Health Tests', () {
-    late MockApiClient mockApiClient;
+    late MockEngineApi mockApi;
 
     setUp(() {
-      mockApiClient = MockApiClient();
+      mockApi = MockEngineApi();
     });
 
     test('Health check returns ok status', () async {
-      when(() => mockApiClient.louiseHealth())
+      when(() => mockApi.louiseHealth())
           .thenAnswer((_) async => {'status': 'ok', 'ready': true});
 
-      final result = await mockApiClient.louiseHealth();
+      final result = await mockApi.louiseHealth();
 
       expect(result['status'], equals('ok'));
       expect(result['ready'], isTrue);
-      verify(() => mockApiClient.louiseHealth()).called(1);
+      verify(() => mockApi.louiseHealth()).called(1);
     });
 
     test('Unauthorized engine raises exception', () async {
-      when(() => mockApiClient.louiseHealth())
+      when(() => mockApi.louiseHealth())
           .thenThrow(Exception('401 Unauthorized'));
 
-      expect(() async => await mockApiClient.louiseHealth(), throwsException);
+      expect(() async => await mockApi.louiseHealth(), throwsException);
     });
 
     test('Engine not ready returns ready=false payload', () async {
-      when(() => mockApiClient.louiseHealth()).thenAnswer((_) async => {
+      when(() => mockApi.louiseHealth()).thenAnswer((_) async => {
             'ready': false,
             'error': 'engine_not_ready',
           });
 
-      final result = await mockApiClient.louiseHealth();
+      final result = await mockApi.louiseHealth();
 
       expect(result['ready'], isFalse);
       expect(result.containsKey('error'), isTrue);
     });
 
     test('After health check, bot list is accessible', () async {
-      when(() => mockApiClient.louiseHealth())
+      when(() => mockApi.louiseHealth())
           .thenAnswer((_) async => {'status': 'ok', 'ready': true});
-      when(() => mockApiClient.louiseBots()).thenAnswer((_) async => []);
+      when(() => mockApi.louiseBots()).thenAnswer((_) async => []);
 
-      await mockApiClient.louiseHealth();
-      final bots = await mockApiClient.louiseBots();
+      await mockApi.louiseHealth();
+      final bots = await mockApi.louiseBots();
 
       expect(bots, isA<List>());
-      verify(() => mockApiClient.louiseHealth()).called(1);
-      verify(() => mockApiClient.louiseBots()).called(1);
+      verify(() => mockApi.louiseHealth()).called(1);
+      verify(() => mockApi.louiseBots()).called(1);
     });
   });
 }

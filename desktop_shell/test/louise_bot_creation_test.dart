@@ -1,20 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:pecunator_desktop/api_client.dart';
 
-import '../lib/api_client.dart';
-
-class MockApiClient extends Mock implements ApiClient {}
+class MockEngineApi extends Mock implements EngineApi {}
 
 void main() {
   group('Louise Bot Creation Tests', () {
-    late MockApiClient mockApiClient;
+    late MockEngineApi mockApi;
 
     setUp(() {
-      mockApiClient = MockApiClient();
+      mockApi = MockEngineApi();
     });
 
     test('Valid bot creation returns bot_id and RUNNING status', () async {
-      when(() => mockApiClient.louiseCreateBot(
+      when(() => mockApi.louiseCreateBot(
             symbol: 'ETHUSDT',
             dailyBudget: 1000.0,
             targetProfitPct: 3.0,
@@ -24,7 +23,7 @@ void main() {
             'status': 'RUNNING',
           });
 
-      final result = await mockApiClient.louiseCreateBot(
+      final result = await mockApi.louiseCreateBot(
         symbol: 'ETHUSDT',
         dailyBudget: 1000.0,
         targetProfitPct: 3.0,
@@ -33,7 +32,7 @@ void main() {
 
       expect(result['bot_id'], equals('bot_eth_001'));
       expect(result['status'], equals('RUNNING'));
-      verify(() => mockApiClient.louiseCreateBot(
+      verify(() => mockApi.louiseCreateBot(
             symbol: 'ETHUSDT',
             dailyBudget: 1000.0,
             targetProfitPct: 3.0,
@@ -42,7 +41,7 @@ void main() {
     });
 
     test('Empty symbol throws exception', () async {
-      when(() => mockApiClient.louiseCreateBot(
+      when(() => mockApi.louiseCreateBot(
             symbol: any(named: 'symbol'),
             dailyBudget: any(named: 'dailyBudget'),
             targetProfitPct: any(named: 'targetProfitPct'),
@@ -50,20 +49,20 @@ void main() {
           )).thenThrow(Exception('Symbol required'));
 
       expect(
-        () async => await mockApiClient.louiseCreateBot(symbol: ''),
+        () async => await mockApi.louiseCreateBot(symbol: ''),
         throwsException,
       );
     });
 
     test('Bot creation response includes bot_id key', () async {
-      when(() => mockApiClient.louiseCreateBot(
+      when(() => mockApi.louiseCreateBot(
             symbol: 'BTCUSDT',
             dailyBudget: 500.0,
             targetProfitPct: 2.5,
             buyVolume: 100.0,
           )).thenAnswer((_) async => {'bot_id': 'bot_btc_001'});
 
-      final response = await mockApiClient.louiseCreateBot(
+      final response = await mockApi.louiseCreateBot(
         symbol: 'BTCUSDT',
         dailyBudget: 500.0,
         targetProfitPct: 2.5,
@@ -74,7 +73,7 @@ void main() {
     });
 
     test('Zero target profit throws exception', () async {
-      when(() => mockApiClient.louiseCreateBot(
+      when(() => mockApi.louiseCreateBot(
             symbol: any(named: 'symbol'),
             dailyBudget: any(named: 'dailyBudget'),
             targetProfitPct: any(named: 'targetProfitPct'),
@@ -82,7 +81,7 @@ void main() {
           )).thenThrow(Exception('Target profit must be > 0'));
 
       expect(
-        () async => await mockApiClient.louiseCreateBot(
+        () async => await mockApi.louiseCreateBot(
           symbol: 'BTCUSDT',
           targetProfitPct: 0.0,
         ),
@@ -91,14 +90,14 @@ void main() {
     });
 
     test('Default parameters produce RUNNING status', () async {
-      when(() => mockApiClient.louiseCreateBot(symbol: 'BTCUSDT'))
+      when(() => mockApi.louiseCreateBot(symbol: 'BTCUSDT'))
           .thenAnswer((_) async => {
                 'bot_id': 'bot_btc_002',
                 'status': 'RUNNING',
                 'symbol': 'BTCUSDT',
               });
 
-      final result = await mockApiClient.louiseCreateBot(symbol: 'BTCUSDT');
+      final result = await mockApi.louiseCreateBot(symbol: 'BTCUSDT');
 
       expect(result['status'], equals('RUNNING'));
     });
