@@ -12,7 +12,7 @@ def client():
     """FastAPI test client with lifespan disabled for testing."""
     # Create app without lifespan to avoid AppContext initialization
     app = create_app()
-    return TestClient(app)
+    return TestClient(app, manage_lifespan=False)
 
 
 @pytest.fixture
@@ -108,21 +108,27 @@ class TestWebSocketAuth:
             with client.websocket_connect("/ws/telemetry") as ws:
                 pass
 
-    def test_websocket_accepts_token_query_param(self, client, valid_token):
-        """WebSocket should accept token via query parameter ?token=..."""
-        # Note: TestClient has limited WebSocket support in some versions.
-        # This test documents the expected behavior: token via query param
-        # is accepted for backward compatibility with browser-based clients.
-        # Full integration test would require live server.
-        pass
+    def test_websocket_requires_valid_token(self, client, valid_token):
+        """WebSocket token validation: connection without valid token fails."""
+        # The WebSocket handshake in stream.py validates token before accepting
+        # Invalid or missing token causes close with code 1008 (Policy Violation)
+        invalid_token_url = "/ws/telemetry?token=invalid_token_xyz"
+        with pytest.raises(Exception):
+            with client.websocket_connect(invalid_token_url) as ws:
+                pass
 
-    def test_websocket_accepts_token_header(self, client, valid_token):
-        """WebSocket should accept token via X-API-Token header."""
-        # Note: TestClient has limited WebSocket support in some versions.
-        # This test documents the expected behavior: token via header
-        # is accepted for clients that prefer header-based auth.
-        # Full integration test would require live server.
-        pass
+    def test_websocket_accepts_valid_token_via_query(self, client, valid_token):
+        """WebSocket accepts valid token via query parameter ?token=..."""
+        # Valid token via query param should pass auth handshake
+        # May fail later on lack of AppContext, but not on auth
+        url = f"/ws/telemetry?token={valid_token}"
+        # This may raise due to AppContext, but NOT due to auth (1008)
+        try:
+            with client.websocket_connect(url) as ws:
+                pass
+        except Exception as e:
+            # Auth should not reject with 1008; other errors OK
+            assert "1008" not in str(e)
 
 
 
@@ -141,12 +147,12 @@ class TestAuthBypassEnvironmentVariable:
         import runtime.api.auth as auth_module
         reload(auth_module)
         app = create_app()
-        client_no_auth = TestClient(app)
+        client_no_auth = TestClient(app, manage_lifespan=False)
 
         # Without token, should get past auth layer (though may fail for other reasons)
-        response = client_no_auth.get("/api/v1/louise/bots")
-        # Should NOT be 403 (auth check failed); may be 500 or other error
-        assert response.status_code != 403
+        response = client_no_auth.get("/api/v1/order-ledger/recent")
+        # Should NOT be 401 (auth check failed); may be 500 or other error
+        assert response.status_code != 401
 
         # Cleanup: restore normal auth
         monkeypatch.delenv("PECUNATOR_API_AUTH_DISABLED")
