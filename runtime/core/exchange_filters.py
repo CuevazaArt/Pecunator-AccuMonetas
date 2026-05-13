@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import time
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 from typing import Any, Optional
 
 _LOG = logging.getLogger("pecunator.core.exchange_filters")

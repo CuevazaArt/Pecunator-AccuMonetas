@@ -1,6 +1,5 @@
 import os
 import pytest
-from pathlib import Path
 from runtime.core.louise_db import LouiseDB
 
 import uuid

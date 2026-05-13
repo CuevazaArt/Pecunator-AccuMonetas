@@ -2,10 +2,7 @@
 
 import json
 import logging
-import os
-import tempfile
 import io
-from pathlib import Path
 
 import pytest
 

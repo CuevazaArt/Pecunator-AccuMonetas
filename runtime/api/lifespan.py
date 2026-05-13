@@ -8,12 +8,12 @@ import signal
 import sqlite3
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 
 from runtime.api import deps
-from runtime.api._helpers import resolve_pair, resolve_pair_for_bot
+from runtime.api._helpers import resolve_pair
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.security_util import sanitize_log_message
@@ -161,7 +161,7 @@ async def lifespan(app: FastAPI):
     # Step 6: Flush database state (Louise)
     try:
         from runtime.core.louise_db import LouiseDB
-        db = LouiseDB()
+        LouiseDB()
         _LOG.info("Flushing Louise database state...")
         # Database context managers auto-commit, no explicit action needed
     except (ImportError, OSError, sqlite3.DatabaseError) as e:

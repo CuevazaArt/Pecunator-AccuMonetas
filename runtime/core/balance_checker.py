@@ -17,7 +17,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from decimal import Decimal
 
 from binance.exceptions import BinanceAPIException
 

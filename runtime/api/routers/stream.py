@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import APIRouter, WebSocket, Depends
 from runtime.api.auth import get_api_token, verify_token
 from runtime.core.ws_broadcaster import get_broadcaster
 
