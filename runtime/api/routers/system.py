@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
-
-_LOG = logging.getLogger("pecunator.api.system")
 
 from fastapi import APIRouter, Request
 
 from runtime.api import deps
+
+_LOG = logging.getLogger("pecunator.api.system")
 
 router = APIRouter(tags=["system"])
 
@@ -279,7 +280,6 @@ async def toxic_symbols_whitelist(request: Request) -> dict[str, Any]:
 @router.get("/api/v1/subaccounts/list")
 async def subaccounts_list() -> dict[str, Any]:
     """List registered sub-accounts with credential availability status."""
-    import os
     from runtime.core.subaccount_registry import get_subaccount_registry
     registry = get_subaccount_registry()
     accounts = []

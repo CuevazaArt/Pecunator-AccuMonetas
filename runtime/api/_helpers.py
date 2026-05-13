@@ -11,7 +11,6 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from runtime.api import deps
 from runtime.api.schemas import GatewaySnapshotOut
 from runtime.app import AppContext
 from runtime.core.settings import (

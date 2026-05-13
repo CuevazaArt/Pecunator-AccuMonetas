@@ -1,9 +1,6 @@
 """Tests for vault key derivation, encryption, and audit logging."""
 
 import pytest
-import os
-import tempfile
-from pathlib import Path
 
 from runtime.core.security_util import (
     derive_key_from_passphrase,

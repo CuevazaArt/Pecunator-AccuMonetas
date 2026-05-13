@@ -1,5 +1,8 @@
 import logging
 
+import pytest
+
+
 def pytest_configure():
     """Disable disk logging during tests to prevent poisoning alerts.log and other production logs."""
     # Temporarily set the root logger and pecunator loggers to WARNING to reduce noise,
@@ -10,7 +13,6 @@ def pytest_configure():
         if isinstance(handler, logging.FileHandler):
             logger.removeHandler(handler)
 
-import pytest
 
 @pytest.fixture(autouse=True)
 def reset_singletons():

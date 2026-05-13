@@ -1,7 +1,6 @@
 """Tests for OrderFuse — order rate-limit circuit breaker."""
 
 import time
-from unittest.mock import patch
 
 from runtime.core.order_fuse import OrderFuse, get_order_fuse
 

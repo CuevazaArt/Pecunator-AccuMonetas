@@ -2,9 +2,7 @@
 
 import asyncio
 import time
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -56,7 +54,6 @@ class TestShutdownFlags:
 
     def test_shutdown_elapsed_time(self):
         """Should track elapsed time since shutdown request."""
-        import time
         with patch("runtime.api.lifespan._shutdown_start_time", time.time() - 5):
             elapsed = get_shutdown_elapsed()
             assert elapsed >= 4  # At least ~5s elapsed
@@ -239,7 +236,6 @@ class TestShutdownSequencing:
     @pytest.mark.asyncio
     async def test_shutdown_respects_timeout(self):
         """Shutdown sequence should complete within timeout."""
-        import time
         import runtime.api.lifespan as lifespan_module
 
         original_time = lifespan_module._shutdown_start_time
