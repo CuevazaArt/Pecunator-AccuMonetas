@@ -33,7 +33,7 @@ jobs:
           pytest runtime/tests/ tests/ -v --tb=short -x
 
   flutter-analyze:
-    name: "Flutter Analyze"
+    name: "Flutter Analyze & Tests"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,11 +42,17 @@ jobs:
           flutter-version: '3.41.9'
           channel: 'stable'
 
+      - name: Install dependencies
+        working-directory: desktop_shell
+        run: flutter pub get
+
       - name: Analyze
         working-directory: desktop_shell
-        run: |
-          flutter pub get
-          flutter analyze lib/
+        run: flutter analyze lib/
+
+      - name: Flutter tests
+        working-directory: desktop_shell
+        run: flutter test test/ -v --coverage || true  # Report but don't block if no tests yet
 
   gate:
     name: "CI Gate"
