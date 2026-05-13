@@ -13,7 +13,7 @@ void main() {
     await tester.pumpWidget(const PecunatorApp());
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('PecunatorCore'), findsOneWidget);
+    expect(find.text('Louise Hub'), findsOneWidget);
 
     // reset
     addTearDown(tester.view.resetPhysicalSize);
