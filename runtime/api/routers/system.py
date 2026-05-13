@@ -215,13 +215,23 @@ async def order_ledger_stats() -> dict[str, Any]:
 
 
 # ── Symmetry Guard ──────────────────────────────────────────────
+# DEPRECATED: These endpoints are maintained for backward compatibility only.
+# Louise bot does not use the SymmetryGuard multi-bot watchdog pattern.
+# To be removed in v1.1.
 
 @router.get("/api/v1/symmetry-guard/status")
 async def symmetry_guard_status() -> dict[str, Any]:
+    _LOG.warning("DEPRECATED: /api/v1/symmetry-guard/status endpoint will be removed in v1.1")
     from runtime.core.symmetry_guard import get_symmetry_guard
     guard = get_symmetry_guard()
     health = guard.get_cached_health()
     return {
+        "deprecated": True,
+        "deprecation_notice": (
+            "This endpoint will be removed in v1.1. "
+            "Louise bot uses BudgetGuard and ApiFuse for risk control, "
+            "not SymmetryGuard."
+        ),
         "hub_paused": guard.is_hub_paused(),
         "pause_reason": guard.get_pause_reason(),
         "needs_symbol_rotation": guard.needs_symbol_rotation(),
@@ -234,19 +244,35 @@ async def symmetry_guard_status() -> dict[str, Any]:
 
 @router.post("/api/v1/symmetry-guard/reset")
 async def symmetry_guard_reset() -> dict[str, Any]:
+    _LOG.warning("DEPRECATED: /api/v1/symmetry-guard/reset endpoint will be removed in v1.1")
     from runtime.core.symmetry_guard import get_symmetry_guard
     guard = get_symmetry_guard()
     guard.reset_pause()
-    return {"ok": True, "hub_paused": guard.is_hub_paused()}
+    return {
+        "ok": True,
+        "deprecated": True,
+        "deprecation_notice": (
+            "This endpoint will be removed in v1.1. "
+            "Louise bot uses BudgetGuard and ApiFuse for risk control, "
+            "not SymmetryGuard."
+        ),
+        "hub_paused": guard.is_hub_paused(),
+    }
 
 
-# ── Toxic Symbol Registry ──────────────────────────────────────────
+# ── Toxic Symbol Registry ───────────────────────────────────────────
+# DEPRECATED: These endpoints are maintained for backward compatibility only.
+# Louise bot does not use toxic symbol tracking.
+# To be removed in v1.1.
 
 @router.get("/api/v1/toxic-symbols")
 async def toxic_symbols_list() -> dict[str, Any]:
+    _LOG.warning("DEPRECATED: /api/v1/toxic-symbols endpoint will be removed in v1.1")
     from runtime.core.toxic_symbols import get_toxic_registry
     reg = get_toxic_registry()
     return {
+        "deprecated": True,
+        "deprecation_notice": "This endpoint will be removed in v1.1. Louise bot does not use toxic symbol tracking.",
         "blacklisted": reg.get_blacklist(),
         "history": reg.get_history(limit=30),
     }
@@ -254,6 +280,7 @@ async def toxic_symbols_list() -> dict[str, Any]:
 
 @router.post("/api/v1/toxic-symbols/blacklist")
 async def toxic_symbols_blacklist(request: Request) -> dict[str, Any]:
+    _LOG.warning("DEPRECATED: /api/v1/toxic-symbols/blacklist endpoint will be removed in v1.1")
     from runtime.core.toxic_symbols import get_toxic_registry
     body = await request.json()
     symbol = str(body.get("symbol", "")).upper()
@@ -261,11 +288,18 @@ async def toxic_symbols_blacklist(request: Request) -> dict[str, Any]:
     if not symbol:
         return {"ok": False, "error": "symbol required"}
     is_new = get_toxic_registry().blacklist(symbol, reason=reason)
-    return {"ok": True, "symbol": symbol, "newly_blacklisted": is_new}
+    return {
+        "ok": True,
+        "deprecated": True,
+        "deprecation_notice": "This endpoint will be removed in v1.1",
+        "symbol": symbol,
+        "newly_blacklisted": is_new,
+    }
 
 
 @router.post("/api/v1/toxic-symbols/whitelist")
 async def toxic_symbols_whitelist(request: Request) -> dict[str, Any]:
+    _LOG.warning("DEPRECATED: /api/v1/toxic-symbols/whitelist endpoint will be removed in v1.1")
     from runtime.core.toxic_symbols import get_toxic_registry
     body = await request.json()
     symbol = str(body.get("symbol", "")).upper()
@@ -273,7 +307,13 @@ async def toxic_symbols_whitelist(request: Request) -> dict[str, Any]:
     if not symbol:
         return {"ok": False, "error": "symbol required"}
     found = get_toxic_registry().whitelist(symbol, notes=notes)
-    return {"ok": True, "symbol": symbol, "was_blacklisted": found}
+    return {
+        "ok": True,
+        "deprecated": True,
+        "deprecation_notice": "This endpoint will be removed in v1.1",
+        "symbol": symbol,
+        "was_blacklisted": found,
+    }
 
 # ── Sub-Account Registry ───────────────────────────────────────────
 
