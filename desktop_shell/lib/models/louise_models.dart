@@ -92,7 +92,8 @@ class HubMetrics {
     activeBots: json['active_bots'] as int? ?? 0,
     totalPortfolio: (json['total_portfolio'] as num?)?.toDouble() ?? 0.0,
     totalFreeBalance: (json['total_free_balance'] as num?)?.toDouble() ?? 0.0,
-    totalUnrealizedPnl: (json['total_unrealized_pnl'] as num?)?.toDouble() ?? 0.0,
+    totalUnrealizedPnl:
+        (json['total_unrealized_pnl'] as num?)?.toDouble() ?? 0.0,
     hubPnlPercent: (json['hub_pnl_percent'] as num?)?.toDouble() ?? 0.0,
     completedEpochs: json['completed_epochs'] as int? ?? 0,
   );
@@ -126,7 +127,8 @@ class WeightStatus {
     statusMessage: json['status_message'] as String? ?? '',
   );
 
-  double get weightPercentage => (currentWeight / weightLimit * 100).clamp(0, 100);
+  double get weightPercentage =>
+      (currentWeight / weightLimit * 100).clamp(0, 100);
 
   String get zoneEmoji {
     switch (weightZone.toUpperCase()) {

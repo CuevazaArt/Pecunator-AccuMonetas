@@ -43,7 +43,7 @@ jobs:
       - name: Format check
         working-directory: desktop_shell
         run: |
-          dart format lib/ --set-exit-if-changed --dry-run
+          dart format lib/ --set-exit-if-changed --output=show
 
       - name: Run Dart tests
         working-directory: desktop_shell

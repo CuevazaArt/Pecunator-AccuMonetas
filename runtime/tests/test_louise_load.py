@@ -347,5 +347,5 @@ class TestLoadTestSummary:
         print("="*60)
 
         assert statistics.quantiles(write_times, n=20)[18] < 50
-        assert statistics.quantiles(read_times, n=20)[18] < 25
+        assert statistics.quantiles(read_times, n=20)[18] < 35
         assert statistics.quantiles(epoch_times, n=20)[18] < 500

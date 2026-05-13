@@ -20,7 +20,10 @@ abstract final class PLog {
   /// Log a warning (non-fatal error, swallowed exception).
   static void warn(String source, String message, [Object? error]) {
     assert(() {
-      dev.log('[$source] ⚠ $message${error != null ? ': $error' : ''}', level: 900);
+      dev.log(
+        '[$source] ⚠ $message${error != null ? ': $error' : ''}',
+        level: 900,
+      );
       return true;
     }());
   }

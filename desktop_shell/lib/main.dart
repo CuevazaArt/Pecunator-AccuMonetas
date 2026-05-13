@@ -34,17 +34,31 @@ void main() async {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.redAccent,
+              size: 32,
+            ),
             const SizedBox(height: 8),
-            const Text('Error de renderizado',
-                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            const Text(
+              'Error de renderizado',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(details.exceptionAsString(),
-                style: const TextStyle(color: Colors.grey, fontSize: 11),
-                maxLines: 3, overflow: TextOverflow.ellipsis),
+            Text(
+              details.exceptionAsString(),
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 4),
-            const Text('Los bots siguen operando normalmente.',
-                style: TextStyle(color: Colors.orangeAccent, fontSize: 10)),
+            const Text(
+              'Los bots siguen operando normalmente.',
+              style: TextStyle(color: Colors.orangeAccent, fontSize: 10),
+            ),
           ],
         ),
       ),
@@ -62,7 +76,10 @@ class PecunatorApp extends StatelessWidget {
     return MaterialApp(
       title: 'Pecunator Desktop',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey, brightness: Brightness.dark),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blueGrey,
+          brightness: Brightness.dark,
+        ),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
       ),

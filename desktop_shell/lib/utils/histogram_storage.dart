@@ -40,12 +40,20 @@ class HistogramStorage {
   }
 
   /// Insert a candle for the given symbol/interval.
-  Future<void> insertCandle(String symbol, String interval, Candle candle) async {
+  Future<void> insertCandle(
+    String symbol,
+    String interval,
+    Candle candle,
+  ) async {
     await insertCandles(symbol, interval, [candle]);
   }
 
   /// Insert multiple candles in a batch.
-  Future<void> insertCandles(String symbol, String interval, List<Candle> candles) async {
+  Future<void> insertCandles(
+    String symbol,
+    String interval,
+    List<Candle> candles,
+  ) async {
     if (candles.isEmpty) return;
     await _init();
     final db = sqlite3.open(_dbPath!);
@@ -54,7 +62,7 @@ class HistogramStorage {
         (symbol, interval, ts_utc, open, high, low, close, volume)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''');
-    
+
     db.execute('BEGIN TRANSACTION');
     try {
       for (final candle in candles) {
@@ -83,21 +91,28 @@ class HistogramStorage {
   Future<List<Candle>> getCandles(String symbol, String interval) async {
     await _init();
     final db = sqlite3.open(_dbPath!);
-    final result = db.select('''
+    final result = db.select(
+      '''
       SELECT ts_utc, open, high, low, close, volume
       FROM histogram_candles
       WHERE symbol = ? AND interval = ?
       ORDER BY ts_utc ASC
-    ''', [symbol, interval]);
+    ''',
+      [symbol, interval],
+    );
 
-    final candles = result.map((row) => Candle(
-          date: DateTime.parse(row['ts_utc'] as String).toUtc(),
-          open: (row['open'] as num).toDouble(),
-          high: (row['high'] as num).toDouble(),
-          low: (row['low'] as num).toDouble(),
-          close: (row['close'] as num).toDouble(),
-          volume: (row['volume'] as num).toDouble(),
-        )).toList();
+    final candles = result
+        .map(
+          (row) => Candle(
+            date: DateTime.parse(row['ts_utc'] as String).toUtc(),
+            open: (row['open'] as num).toDouble(),
+            high: (row['high'] as num).toDouble(),
+            low: (row['low'] as num).toDouble(),
+            close: (row['close'] as num).toDouble(),
+            volume: (row['volume'] as num).toDouble(),
+          ),
+        )
+        .toList();
     db.dispose();
     return candles;
   }
@@ -106,12 +121,15 @@ class HistogramStorage {
   Future<Set<String>> getExistingMonths(String symbol, String interval) async {
     await _init();
     final db = sqlite3.open(_dbPath!);
-    final result = db.select('''
+    final result = db.select(
+      '''
       SELECT DISTINCT substr(ts_utc, 1, 7) as month_str
       FROM histogram_candles
       WHERE symbol = ? AND interval = ?
-    ''', [symbol, interval]);
-    
+    ''',
+      [symbol, interval],
+    );
+
     final months = result.map((row) => row['month_str'] as String).toSet();
     db.dispose();
     return months;

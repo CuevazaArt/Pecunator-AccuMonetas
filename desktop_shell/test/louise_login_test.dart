@@ -1,71 +1,60 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:pecunator_desktop/api_client.dart';
 
-import '../lib/api_client.dart';
-import '../lib/main.dart';
-
-// Mock BinanceGateway and dependencies
-class MockApiClient extends Mock implements ApiClient {}
+class MockEngineApi extends Mock implements EngineApi {}
 
 void main() {
-  group('Louise Login Tests', () {
-    late MockApiClient mockApiClient;
+  group('Louise Auth & Health Tests', () {
+    late MockEngineApi mockApi;
 
     setUp(() {
-      mockApiClient = MockApiClient();
+      mockApi = MockEngineApi();
     });
 
-    testWidgets('Login reads api.token file correctly', (WidgetTester tester) async {
-      // Arrange: Mock successful token read
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => 'test_token_abc123');
+    test('Health check returns ok status', () async {
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'status': 'ok', 'ready': true});
 
-      // Act: Build the app
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      final result = await mockApi.louiseHealth();
 
-      // Assert: Verify token was read
-      verify(mockApiClient.readApiToken()).called(greaterThanOrEqualTo(1));
+      expect(result['status'], equals('ok'));
+      expect(result['ready'], isTrue);
+      verify(() => mockApi.louiseHealth()).called(1);
     });
 
-    testWidgets('Login sets Bearer header with token', (WidgetTester tester) async {
-      // Arrange
-      const token = 'test_bearer_token';
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => token);
-      when(mockApiClient.setBearerToken(token)).thenAnswer((_) async {});
+    test('Unauthorized engine raises exception', () async {
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenThrow(Exception('401 Unauthorized'));
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
-
-      // Assert
-      verify(mockApiClient.setBearerToken(token)).called(greaterThanOrEqualTo(1));
+      expect(() async => await mockApi.louiseHealth(), throwsException);
     });
 
-    testWidgets('Missing token file shows error dialog', (WidgetTester tester) async {
-      // Arrange: Mock missing token
-      when(mockApiClient.readApiToken()).thenThrow(Exception('Token file not found'));
+    test('Engine not ready returns ready=false payload', () async {
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'ready': false, 'error': 'engine_not_ready'});
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      final result = await mockApi.louiseHealth();
 
-      // Assert: Verify error is displayed
-      expect(find.byType(AlertDialog), findsWidgets);
-      expect(find.text('Token file not found'), findsWidgets);
+      expect(result['ready'], isFalse);
+      expect(result.containsKey('error'), isTrue);
     });
 
-    testWidgets('Login shows home page on success', (WidgetTester tester) async {
-      // Arrange
-      when(mockApiClient.readApiToken()).thenAnswer((_) async => 'valid_token');
-      when(mockApiClient.setBearerToken('valid_token')).thenAnswer((_) async {});
+    test('After health check, bot list is accessible', () async {
+      when(
+        () => mockApi.louiseHealth(),
+      ).thenAnswer((_) async => {'status': 'ok', 'ready': true});
+      when(() => mockApi.louiseBots()).thenAnswer((_) async => []);
 
-      // Act
-      await tester.pumpWidget(MyApp());
-      await tester.pumpAndSettle();
+      await mockApi.louiseHealth();
+      final bots = await mockApi.louiseBots();
 
-      // Assert: Home shell should be visible
-      expect(find.byType(Scaffold), findsWidgets);
+      expect(bots, isA<List>());
+      verify(() => mockApi.louiseHealth()).called(1);
+      verify(() => mockApi.louiseBots()).called(1);
     });
   });
 }

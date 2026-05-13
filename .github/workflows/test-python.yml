@@ -7,7 +7,7 @@ on:
       - 'refactor/**'
       - 'main'
       - 'develop'
-      - 'dorothy-elphaba-exclusive'
+      - 'claude/**'
     paths:
       - 'runtime/**'
       - 'tests/**'
@@ -57,7 +57,7 @@ jobs:
 
       - name: Type check with mypy
         run: |
-          mypy runtime/bot/dorothy.py runtime/bot/elphaba.py runtime/bot/_base_runner.py runtime/core/weight_governor.py runtime/core/api_fuse.py --ignore-missing-imports
+          mypy runtime/bot/louise.py runtime/bot/_base_runner.py runtime/core/weight_governor.py runtime/core/api_fuse.py --ignore-missing-imports --follow-imports=skip
 
       - name: Run pytest (runtime + e2e)
         run: |

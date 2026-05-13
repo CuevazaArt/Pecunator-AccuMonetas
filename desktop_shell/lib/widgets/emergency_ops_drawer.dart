@@ -68,10 +68,30 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _opBtn('Close Protocol', Icons.cancel, Colors.orangeAccent, 'close'),
-                  _opBtn('Cancel Limits', Icons.remove_circle, Colors.amber, 'cancel_limits'),
-                  _opBtn('RED BUTTON', Icons.emergency, Colors.redAccent, 'red_button'),
-                  _opBtn('Reset Fuse', Icons.flash_on, Colors.cyanAccent, 'reset_fuse'),
+                  _opBtn(
+                    'Close Protocol',
+                    Icons.cancel,
+                    Colors.orangeAccent,
+                    'close',
+                  ),
+                  _opBtn(
+                    'Cancel Limits',
+                    Icons.remove_circle,
+                    Colors.amber,
+                    'cancel_limits',
+                  ),
+                  _opBtn(
+                    'RED BUTTON',
+                    Icons.emergency,
+                    Colors.redAccent,
+                    'red_button',
+                  ),
+                  _opBtn(
+                    'Reset Fuse',
+                    Icons.flash_on,
+                    Colors.cyanAccent,
+                    'reset_fuse',
+                  ),
                 ],
               ),
             ),
@@ -86,7 +106,14 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
       child: OutlinedButton.icon(
         onPressed: _operating ? null : () => _confirmOp(label, action),
         icon: Icon(icon, size: 10, color: color),
-        label: Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: color)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: color.withValues(alpha: 0.25)),
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -101,14 +128,29 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: Text('¿Ejecutar $label?', style: const TextStyle(color: Colors.white)),
-        content: const Text('Esta operación es irreversible.', style: TextStyle(color: Colors.white70)),
+        title: Text(
+          '¿Ejecutar $label?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Esta operación es irreversible.',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Ejecutar', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Ejecutar',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -132,13 +174,19 @@ class _EmergencyOpsDrawerState extends State<EmergencyOpsDrawer> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$op completado'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text('$op completado'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {

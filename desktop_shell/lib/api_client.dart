@@ -115,16 +115,21 @@ class EngineApi {
       _client.get('/api/v1/account/wallets?base_asset=$baseAsset');
 
   /// Auto-resolve qty_decimals and price_decimals from Binance exchangeInfo.
-  Future<Map<String, dynamic>> symbolPrecision(String symbol) =>
-      _client.get('/api/v1/gateway/symbol_precision?symbol=${Uri.encodeComponent(symbol)}');
+  Future<Map<String, dynamic>> symbolPrecision(String symbol) => _client.get(
+    '/api/v1/gateway/symbol_precision?symbol=${Uri.encodeComponent(symbol)}',
+  );
 
   /// Fetch historical equity snapshots from the backend (SQLite).
-  Future<Map<String, dynamic>> equityHistory({int minutes = 60, int limit = 500}) =>
-      _client.get('/api/v1/equity/history?minutes=$minutes&limit=$limit');
+  Future<Map<String, dynamic>> equityHistory({
+    int minutes = 60,
+    int limit = 500,
+  }) => _client.get('/api/v1/equity/history?minutes=$minutes&limit=$limit');
 
   /// Fetch unified telemetry history (equity, weight, orders, fleet, fuses).
-  Future<Map<String, dynamic>> telemetryHistory({int minutes = 60, int limit = 500}) =>
-      _client.get('/api/v1/telemetry/history?minutes=$minutes&limit=$limit');
+  Future<Map<String, dynamic>> telemetryHistory({
+    int minutes = 60,
+    int limit = 500,
+  }) => _client.get('/api/v1/telemetry/history?minutes=$minutes&limit=$limit');
 
   Future<Map<String, dynamic>> terminalExecute({required String command}) =>
       _client.post('/api/v1/terminal/execute', body: {'command': command});
@@ -224,7 +229,8 @@ class EngineApi {
   Future<Map<String, dynamic>> hubLogs(String botId, {int limit = 120}) =>
       _client.get('/api/v1/hub/bots/$botId/logs?limit=$limit');
 
-  Future<Map<String, dynamic>> elphabaBots() => _client.get('/api/v1/elphaba/bots');
+  Future<Map<String, dynamic>> elphabaBots() =>
+      _client.get('/api/v1/elphaba/bots');
 
   Future<Map<String, dynamic>> elphabaCreateBot(Map<String, dynamic> body) =>
       _client.post('/api/v1/elphaba/bots', body: body);
@@ -267,20 +273,15 @@ class EngineApi {
   Future<Map<String, dynamic>> elphabaLogs(String botId, {int limit = 120}) =>
       _client.get('/api/v1/elphaba/bots/$botId/logs?limit=$limit');
 
-
-
   Future<Map<String, dynamic>> sandboxRequest({
     required String method,
     required String endpoint,
     dynamic body,
-  }) => _client.request(
-    method,
-    endpoint,
-    body: body,
-  );
+  }) => _client.request(method, endpoint, body: body);
 
-  Future<Map<String, dynamic>> saveSandboxCurated(Map<String, dynamic> payload) =>
-      _client.post('/api/v1/sandbox/curated/save', body: payload);
+  Future<Map<String, dynamic>> saveSandboxCurated(
+    Map<String, dynamic> payload,
+  ) => _client.post('/api/v1/sandbox/curated/save', body: payload);
 
   Future<Map<String, dynamic>> listSandboxCurated({int limit = 50}) =>
       _client.get('/api/v1/sandbox/curated/list?limit=$limit');
@@ -317,10 +318,15 @@ class EngineApi {
   Future<Map<String, dynamic>> gatewaySettings() =>
       _client.get('/gateway/settings');
 
-  Future<Map<String, dynamic>> updateGatewaySettings(Map<String, dynamic> body) =>
-      _client.post('/gateway/settings', body: body);
+  Future<Map<String, dynamic>> updateGatewaySettings(
+    Map<String, dynamic> body,
+  ) => _client.post('/gateway/settings', body: body);
 
-  Future<Map<String, dynamic>> apiLogRecent({int limit = 100, String? source, bool errorsOnly = false}) async {
+  Future<Map<String, dynamic>> apiLogRecent({
+    int limit = 100,
+    String? source,
+    bool errorsOnly = false,
+  }) async {
     final q = StringBuffer('/api-log/recent?limit=$limit');
     if (source != null && source.isNotEmpty) q.write('&source=$source');
     if (errorsOnly) q.write('&errors_only=true');
@@ -373,17 +379,15 @@ class EngineApi {
   Future<Map<String, dynamic>> healthDeep() =>
       _client.get('/api/v1/health/deep');
 
-  Future<Map<String, dynamic>> healthV1() =>
-      _client.get('/api/v1/health');
+  Future<Map<String, dynamic>> healthV1() => _client.get('/api/v1/health');
 
   // ── Louise Bot Hub endpoints ─────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> louiseBots() async {
     final resp = await _client.get('/api/louise/bots');
     // _parseResponse wraps JSON arrays as {'items': [...]}
-    final raw = resp['items'] as List<dynamic>?
-        ?? resp['bots'] as List<dynamic>?
-        ?? [];
+    final raw =
+        resp['items'] as List<dynamic>? ?? resp['bots'] as List<dynamic>? ?? [];
     return raw.cast<Map<String, dynamic>>();
   }
 
@@ -395,9 +399,10 @@ class EngineApi {
 
   Future<List<Map<String, dynamic>>> louiseWeightHistory() async {
     final resp = await _client.get('/api/louise/weight-governor/history');
-    final raw = resp['items'] as List<dynamic>?
-        ?? resp['history'] as List<dynamic>?
-        ?? [];
+    final raw =
+        resp['items'] as List<dynamic>? ??
+        resp['history'] as List<dynamic>? ??
+        [];
     return raw.cast<Map<String, dynamic>>();
   }
 
@@ -424,12 +429,15 @@ class EngineApi {
     double dailyBudget = 500.0,
     double targetProfitPct = 5.0,
     double buyVolume = 10.0,
-  }) => _client.post('/api/louise/bots', body: {
-    'symbol': symbol,
-    'daily_budget': dailyBudget,
-    'target_profit_pct': targetProfitPct,
-    'buy_volume': buyVolume,
-  });
+  }) => _client.post(
+    '/api/louise/bots',
+    body: {
+      'symbol': symbol,
+      'daily_budget': dailyBudget,
+      'target_profit_pct': targetProfitPct,
+      'buy_volume': buyVolume,
+    },
+  );
 
   Future<Map<String, dynamic>> louiseUpdateBot(
     String botId, {
@@ -437,15 +445,17 @@ class EngineApi {
     double? targetProfitPct,
     double? buyVolume,
     String? symbol,
-  }) => _client.patch('/api/louise/bots/$botId', body: {
-    // ignore: use_null_aware_elements
-    if (dailyBudget != null) 'daily_budget': dailyBudget,
-    // ignore: use_null_aware_elements
-    if (targetProfitPct != null) 'target_profit_pct': targetProfitPct,
-    // ignore: use_null_aware_elements
-    if (buyVolume != null) 'buy_volume': buyVolume,
-    // ignore: use_null_aware_elements
-    if (symbol != null) 'symbol': symbol,
-  });
-
+  }) => _client.patch(
+    '/api/louise/bots/$botId',
+    body: {
+      // ignore: use_null_aware_elements
+      if (dailyBudget != null) 'daily_budget': dailyBudget,
+      // ignore: use_null_aware_elements
+      if (targetProfitPct != null) 'target_profit_pct': targetProfitPct,
+      // ignore: use_null_aware_elements
+      if (buyVolume != null) 'buy_volume': buyVolume,
+      // ignore: use_null_aware_elements
+      if (symbol != null) 'symbol': symbol,
+    },
+  );
 }
