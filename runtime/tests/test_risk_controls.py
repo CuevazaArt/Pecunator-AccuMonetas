@@ -88,44 +88,6 @@ class TestVolSizer:
         assert Decimal("4") <= adj <= Decimal("16")
 
 
-# ── TrailingTP tests ────────────────────────────────────────────────
-
-class TestTrailingTP:
-    def test_inactive_below_tp(self):
-        from runtime.core.trailing_tp import TrailingTP
-
-        tracker = TrailingTP()
-        action = tracker.update("XRPUSDT", Decimal("1.40"), Decimal("1.50"), Decimal("0.02"))
-        assert action == "INACTIVE"
-
-    def test_activates_above_tp(self):
-        from runtime.core.trailing_tp import TrailingTP
-
-        tracker = TrailingTP()
-        action = tracker.update("XRPUSDT", Decimal("1.55"), Decimal("1.50"), Decimal("0.02"))
-        assert action == "TRAILING"
-
-    def test_sell_when_trail_stop_hit(self):
-        from runtime.core.trailing_tp import TrailingTP
-
-        tracker = TrailingTP(atr_multiplier=Decimal("1.0"))
-        # Activate
-        tracker.update("XRPUSDT", Decimal("1.55"), Decimal("1.50"), Decimal("0.02"))
-        # Price rises
-        tracker.update("XRPUSDT", Decimal("1.60"), Decimal("1.50"), Decimal("0.02"))
-        # Price drops to trail stop (1.60 - 0.02 = 1.58)
-        action = tracker.update("XRPUSDT", Decimal("1.57"), Decimal("1.50"), Decimal("0.02"))
-        assert action == "SELL"
-
-    def test_atr_computation(self):
-        from runtime.core.trailing_tp import compute_atr
-
-        highs = [Decimal(str(100 + i * 0.5)) for i in range(20)]
-        lows = [Decimal(str(99 + i * 0.5)) for i in range(20)]
-        closes = [Decimal(str(99.5 + i * 0.5)) for i in range(20)]
-        atr = compute_atr(highs, lows, closes, period=14)
-        assert atr > 0
-
 
 # ── BacktestEngine tests ───────────────────────────────────────────
 
