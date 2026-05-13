@@ -14,9 +14,10 @@ router = APIRouter(prefix="/api/louise/orphans", tags=["louise"])
 
 
 @router.get("/scan", tags=["louise"])
-async def scan_orphans(symbol: str = "BTCUSDT", ctx: AppContext = Depends(get_ctx)):
+async def scan_orphans(symbol: str, ctx: AppContext = Depends(get_ctx)):
     """
     Scan for orphaned orders (exist in Binance but not in Louise DB).
+    Args: symbol (required) — e.g., 'BTCUSDT'
     Returns list of orphaned orders with details.
     """
     if not ctx.gateway or not ctx.gateway._client:
@@ -45,6 +46,7 @@ async def scan_orphans(symbol: str = "BTCUSDT", ctx: AppContext = Depends(get_ct
 @router.post("/adopt", tags=["louise"])
 async def adopt_orphan(
     order_id: str,
+    symbol: str,
     bot_id: str,
     epoch_id: str,
     ctx: AppContext = Depends(get_ctx),
@@ -52,6 +54,7 @@ async def adopt_orphan(
     """
     Adopt an orphaned order by inserting it into Louise DB.
     Associates the order with a specific bot and epoch.
+    Args: symbol (required), order_id, bot_id, epoch_id
     """
     if not ctx.gateway or not ctx.gateway._client:
         raise HTTPException(
@@ -63,7 +66,6 @@ async def adopt_orphan(
         reconciler = OrphanReconciler(ctx.db, ctx.gateway)
 
         # Find the orphan by order_id (re-scan to get fresh data)
-        symbol = "BTCUSDT"  # TODO: parameterize symbol
         orphans = await reconciler.scan_orphans(symbol=symbol)
         orphan = next((o for o in orphans if o.order_id == order_id), None)
 
@@ -99,12 +101,13 @@ async def adopt_orphan(
 @router.post("/cancel", tags=["louise"])
 async def cancel_orphan(
     order_id: str,
-    symbol: str = "BTCUSDT",
+    symbol: str,
     ctx: AppContext = Depends(get_ctx),
 ):
     """
     Cancel an orphaned order on Binance (if still open).
     Does not affect Louise DB.
+    Args: order_id (required), symbol (required)
     """
     if not ctx.gateway or not ctx.gateway._client:
         raise HTTPException(
