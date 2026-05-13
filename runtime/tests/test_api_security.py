@@ -9,10 +9,10 @@ from runtime.api.auth import get_api_token
 
 @pytest.fixture
 def client():
-    """FastAPI test client with lifespan disabled for testing."""
-    # Create app without lifespan to avoid AppContext initialization
+    """FastAPI test client for security testing."""
+    # Create app for testing authentication
     app = create_app()
-    return TestClient(app, manage_lifespan=False)
+    return TestClient(app)
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ class TestAuthBypassEnvironmentVariable:
         import runtime.api.auth as auth_module
         reload(auth_module)
         app = create_app()
-        client_no_auth = TestClient(app, manage_lifespan=False)
+        client_no_auth = TestClient(app)
 
         # Without token, should get past auth layer (though may fail for other reasons)
         response = client_no_auth.get("/api/v1/order-ledger/recent")
