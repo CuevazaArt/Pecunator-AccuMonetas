@@ -2,7 +2,7 @@
 
 Centralizes storage of:
   - Kline (candlestick) history for backtesting and statistical analysis
-  - Capture index (PNG metadata, not BLOBs) for VMO image tracking
+  - Capture index (PNG metadata, not BLOBs) for chart image tracking
   - Bot decision log (every decision made or rejected, with reasoning)
 
 Policy: "We already paid for the data — use it to the maximum."
@@ -24,7 +24,10 @@ from runtime.core.exception_zoo import get_exception_zoo
 _LOG = logging.getLogger("pecunator.core.telemetry_vault")
 
 _DDL = """\
--- Kline (candlestick) history
+-- Kline (candlestick) history with Heikin-Ashi columns.
+-- HA values are computed at ingestion time using the immediately preceding
+-- candle's HA (recursive formula). Storing them denormalized in the same row
+-- guarantees consistency between OHLC and HA — never recomputed from scratch.
 CREATE TABLE IF NOT EXISTS kline_history (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol      TEXT    NOT NULL,
@@ -38,13 +41,18 @@ CREATE TABLE IF NOT EXISTS kline_history (
     close_time  INTEGER NOT NULL,
     quote_vol   TEXT    NOT NULL DEFAULT '0',
     trades      INTEGER NOT NULL DEFAULT 0,
+    ha_open     REAL,
+    ha_high     REAL,
+    ha_low      REAL,
+    ha_close    REAL,
+    is_closed   INTEGER NOT NULL DEFAULT 1,
     ingested_utc TEXT   NOT NULL,
     UNIQUE(symbol, interval, open_time)
 );
 CREATE INDEX IF NOT EXISTS idx_kline_sym_int
     ON kline_history(symbol, interval, open_time DESC);
 
--- VMO capture index (metadata only, PNG stored on disk)
+-- Chart capture index (metadata only, PNG stored on disk)
 CREATE TABLE IF NOT EXISTS capture_index (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol          TEXT    NOT NULL,
@@ -116,6 +124,19 @@ class TelemetryVault:
         conn = open_db(self._path)
         try:
             conn.executescript(_DDL)
+            # Migrations for pre-existing DBs that lack the HA columns
+            for ddl in (
+                "ALTER TABLE kline_history ADD COLUMN ha_open REAL",
+                "ALTER TABLE kline_history ADD COLUMN ha_high REAL",
+                "ALTER TABLE kline_history ADD COLUMN ha_low REAL",
+                "ALTER TABLE kline_history ADD COLUMN ha_close REAL",
+                "ALTER TABLE kline_history ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 1",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+            conn.commit()
         finally:
             conn.close()
 
@@ -191,6 +212,146 @@ class TelemetryVault:
             return [dict(r) for r in rows]
         finally:
             conn.close()
+
+    def _get_last_ha(
+        self, symbol: str, interval: str, before_open_time: int
+    ) -> Optional[tuple[float, float]]:
+        """Return (ha_open, ha_close) of the candle immediately preceding
+        ``before_open_time`` for the given symbol/interval, or None if absent.
+        Used to compute HA recursively for new candles."""
+        conn = open_db(self._path)
+        try:
+            row = conn.execute(
+                """
+                SELECT ha_open, ha_close FROM kline_history
+                WHERE symbol = ? AND interval = ? AND open_time < ?
+                  AND ha_open IS NOT NULL AND ha_close IS NOT NULL
+                ORDER BY open_time DESC LIMIT 1
+                """,
+                (symbol, interval, before_open_time),
+            ).fetchone()
+            if row is None:
+                return None
+            return (float(row[0]), float(row[1]))
+        finally:
+            conn.close()
+
+    def store_klines_with_ha(
+        self,
+        symbol: str,
+        interval: str,
+        klines: list[list],
+        current_server_time_ms: Optional[int] = None,
+    ) -> int:
+        """Store klines with recursively-computed Heikin-Ashi values.
+
+        Klines are processed in chronological order (oldest first). Each
+        candle's HA is computed using the immediately preceding candle's HA
+        (either from the same batch or from DB if it's the first new one).
+        Uses UPSERT so refreshing an unclosed candle updates OHLC + HA in place.
+
+        Args:
+            symbol: e.g. "BTCUSDT"
+            interval: e.g. "1d", "4h", "1h"
+            klines: Binance kline rows [open_time, o, h, l, c, vol, close_time, qv, trades, ...]
+            current_server_time_ms: if given, candles with close_time > this are
+                marked is_closed=0 (still forming). If None, all marked closed.
+
+        Returns: number of rows inserted or updated.
+        """
+        if not klines:
+            return 0
+
+        # Sort chronologically; trust caller-provided order but be defensive
+        sorted_klines = sorted(klines, key=lambda k: int(k[0]))
+        oldest_open_time = int(sorted_klines[0][0])
+
+        # Bootstrap chain from DB: HA of the candle immediately before this batch
+        prior = self._get_last_ha(symbol, interval, oldest_open_time)
+        prev_ha_open, prev_ha_close = (prior if prior else (None, None))
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        rows = []
+        for k in sorted_klines:
+            try:
+                open_time = int(k[0])
+                o = float(k[1])
+                h = float(k[2])
+                lo = float(k[3])
+                c = float(k[4])
+                close_time = int(k[6])
+
+                # HA recursive formula
+                ha_close = (o + h + lo + c) / 4.0
+                if prev_ha_open is None or prev_ha_close is None:
+                    ha_open = (o + c) / 2.0  # bootstrap formula
+                else:
+                    ha_open = (prev_ha_open + prev_ha_close) / 2.0
+                ha_high = max(h, ha_open, ha_close)
+                ha_low = min(lo, ha_open, ha_close)
+
+                is_closed = 1
+                if current_server_time_ms is not None and close_time > current_server_time_ms:
+                    is_closed = 0
+
+                rows.append((
+                    symbol, interval, open_time,
+                    str(k[1]), str(k[2]), str(k[3]), str(k[4]),
+                    str(k[5]), close_time,
+                    str(k[7]) if len(k) > 7 else "0",
+                    int(k[8]) if len(k) > 8 else 0,
+                    ha_open, ha_high, ha_low, ha_close,
+                    is_closed, now_iso,
+                ))
+
+                prev_ha_open, prev_ha_close = ha_open, ha_close
+
+            except (IndexError, ValueError, TypeError) as exc:
+                zoo = get_exception_zoo()
+                zoo.register(exc, module="telemetry_vault",
+                             context=f"store_klines_with_ha:{symbol}:{interval}")
+                continue
+
+        if not rows:
+            return 0
+
+        with self._lock:
+            conn = open_db(self._path)
+            try:
+                cur = conn.executemany(
+                    """
+                    INSERT INTO kline_history
+                        (symbol, interval, open_time, open, high, low, close,
+                         volume, close_time, quote_vol, trades,
+                         ha_open, ha_high, ha_low, ha_close, is_closed, ingested_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol, interval, open_time) DO UPDATE SET
+                        open = excluded.open,
+                        high = excluded.high,
+                        low = excluded.low,
+                        close = excluded.close,
+                        volume = excluded.volume,
+                        close_time = excluded.close_time,
+                        quote_vol = excluded.quote_vol,
+                        trades = excluded.trades,
+                        ha_open = excluded.ha_open,
+                        ha_high = excluded.ha_high,
+                        ha_low = excluded.ha_low,
+                        ha_close = excluded.ha_close,
+                        is_closed = excluded.is_closed,
+                        ingested_utc = excluded.ingested_utc
+                    """,
+                    rows,
+                )
+                conn.commit()
+                return cur.rowcount
+            except Exception as exc:
+                zoo = get_exception_zoo()
+                zoo.register(exc, module="telemetry_vault",
+                             context=f"store_klines_with_ha:{symbol}:{interval}")
+                return 0
+            finally:
+                conn.close()
 
     def kline_coverage(self) -> list[dict[str, Any]]:
         """Summary of kline data per symbol/interval."""
@@ -274,7 +435,7 @@ class TelemetryVault:
         confidence: float = 0.0,
         recommended_bot: str = "",
     ) -> int:
-        """Index a VMO capture PNG file."""
+        """Index a chart capture PNG file."""
         with self._lock:
             conn = open_db(self._path)
             try:

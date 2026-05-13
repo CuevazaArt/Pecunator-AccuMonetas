@@ -12,7 +12,7 @@ every request for forensic analysis.
 
 Priority tiers (for budget allocation):
   P0: Trading operations (40%)
-  P1: Market diagnosis / VMO (25%)
+  P1: Market diagnosis (25%)
   P2: Account monitoring (15%)
   P3: Emergency reserve (10%)
   P4: Data collection / klines (10%)

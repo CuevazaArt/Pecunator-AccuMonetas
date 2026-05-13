@@ -1,14 +1,15 @@
-"""Trend Signal Service — Dual-gate trend detection for Pecunator bots.
+"""TrendingSignalTipoHeikinAshiandMM — Dual-gate trend detection using Heikin-Ashi and Moving Averages.
 
 Gate 1 (Trend): Heikin-Ashi smoothed MA crossover.
     - Computes HA candles from regular OHLC klines.
     - SMA(1) vs SMA(2) on HA opens → BULLISH / BEARISH.
-    - Dorothy requires BULLISH; Elphaba requires BEARISH.
+    - BULLISH: uptrend confirmed (long-side entry favored).
+    - BEARISH: downtrend confirmed (short-side entry favored).
 
 Gate 2 (Entry): Regular candle momentum filter.
     - Compares current price vs the current 1h candle's open.
-    - price > open → CLEAR  (Dorothy can enter, Elphaba should not)
-    - price < open → BLOCKED (Dorothy waits, Elphaba can short)
+    - price > open → CLEAR   (momentum up; long entries favored)
+    - price < open → BLOCKED (momentum down; short entries favored)
 
 Caching: Each symbol's gates are refreshed at most once per
 `trend_ttl_sec` / `entry_ttl_sec` to conserve API weight.
@@ -66,8 +67,8 @@ def compute_trend(ha_candles: List[Dict[str, float]]) -> Dict[str, Any]:
 
     MA1 = last HA open (SMA 1-period = instantaneous).
     MA2 = average of last 2 HA opens (SMA 2-period).
-    MA1 > MA2 → BULLISH (uptrend)
-    MA1 < MA2 → BEARISH (downtrend)
+    MA1 > MA2 → BULLISH (uptrend confirmed)
+    MA1 < MA2 → BEARISH (downtrend confirmed)
     """
     if len(ha_candles) < 2:
         return {"signal": "UNKNOWN", "ma1": 0.0, "ma2": 0.0}
@@ -85,8 +86,8 @@ def compute_entry_gate(
 ) -> Dict[str, Any]:
     """Gate 2: Price vs current 1h candle open.
 
-    price > candle_open → CLEAR  (momentum up; Dorothy enters, Elphaba waits)
-    price < candle_open → BLOCKED (momentum down; Dorothy waits, Elphaba shorts)
+    price > candle_open → CLEAR   (momentum up; long entries favored)
+    price < candle_open → BLOCKED (momentum down; short entries favored)
     """
     diff = current_price - candle_open_1h
     diff_pct = (diff / candle_open_1h * 100) if candle_open_1h > 0 else 0.0
@@ -115,12 +116,11 @@ class _SymbolState:
     entry_updated_at: float = 0.0
 
 
-class TrendSignalService:
-    """Thread-safe trend signal service with per-symbol caching.
+class TrendingSignalTipoHeikinAshiandMM:
+    """Thread-safe Heikin-Ashi + MM trend signal service with per-symbol caching.
 
-    Designed to be used as a singleton — one per runtime.
-    Bots call needs_*_refresh() to check TTL, then update_*() with
-    fresh klines data, and finally get_full_state() to read the result.
+    Singleton — one instance per runtime process.
+    Callers check needs_*_refresh() → call update_*() with fresh klines → read get_full_state().
     """
 
     def __init__(
@@ -218,20 +218,20 @@ class TrendSignalService:
 
 # ── Singleton ───────────────────────────────────────────────────────
 
-_service: Optional[TrendSignalService] = None
+_service: Optional[TrendingSignalTipoHeikinAshiandMM] = None
 
 
 def get_trend_signal_service(
     trend_ttl_sec: float = 300.0,
     entry_ttl_sec: float = 60.0,
-) -> TrendSignalService:
-    """Get or create the global TrendSignalService singleton."""
+) -> TrendingSignalTipoHeikinAshiandMM:
+    """Get or create the global TrendingSignalTipoHeikinAshiandMM singleton."""
     global _service
     if _service is None:
-        _service = TrendSignalService(
+        _service = TrendingSignalTipoHeikinAshiandMM(
             trend_ttl_sec=trend_ttl_sec,
             entry_ttl_sec=entry_ttl_sec,
         )
-        _LOG.info("TrendSignalService initialized (trend_ttl=%ds, entry_ttl=%ds)",
+        _LOG.info("TrendingSignalTipoHeikinAshiandMM initialized (trend_ttl=%ds, entry_ttl=%ds)",
                   trend_ttl_sec, entry_ttl_sec)
     return _service
