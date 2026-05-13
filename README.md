@@ -11,10 +11,31 @@ Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine 
 - Real observability: unhardened telemetry, actual health status (not fake data)
 - Comprehensive tests: runner loop, endpoints, recovery, fill handling
 
-## Status: Production-Ready (Pending Peer Review & Live Validation)
+## Status: 🟠 Staging-Ready — Production Pending UI Validation
 
 **Current readiness:** ✅ Safe for **paper trading + staging** (local development, dry runs)  
-**Production readiness:** 🟢 **READY pending sign-off** — all P0/P1/P2 hardening applied, full test suite green (241 passing, 0 failing)
+**Production readiness:** 🟠 **NOT YET** (see blockers below) — backend 85% hardened, UI 10% tested, ops docs 0%
+
+### Blockers to Production Deployment (Real Money)
+
+1. **UI Testing:** Only boilerplate Flutter tests exist. Critical flows untested:
+   - Login flow (token → Bearer auth)
+   - Bot creation + validation
+   - Emergency control (pause/resume/cancel)
+   - WebSocket real-time updates
+   - Network error recovery
+   - **Impact:** Operators cannot validate emergency controls without UI tests
+
+2. **Operational Docs:** No deployment/runbook/rollback procedures exist
+   - Missing: DEPLOYMENT.md, OPERATIONAL_RUNBOOK.md, ROLLBACK_PLAN.md, MONITORING_CHECKLIST.md
+   - **Impact:** Deployment becomes ad-hoc, recovery is improvised
+
+3. **Technical Debt:** Hardcodes + unused modules remain
+   - `orphan.py` has hardcoded BTCUSDT symbol
+   - Dorothy/Elphaba modules (balance_checker, toxic_symbols) still present
+   - **Impact:** Codebase confusion, potential bugs
+
+**Estimated effort to close blockers: ~12 hours** (see ESTADO_REAL.md for detailed breakdown)
 
 ### Verified hardening (this branch)
 - **Telemetry is honest:** `/health`, `/weight-governor/*`, `/telemetry/*` return real data or explicit `error`/`ready=false` payloads. No more fake `"healthy"`, `"GREEN"`, `weight=1050`, multipliers `× 82`, or hardcoded UI numbers.

@@ -2,7 +2,8 @@
 
 **Repo:** https://github.com/CuevazaArt/Pecunator-AccuMonetas.git  
 **Base Template:** PecunatorCore (v3.7.5 stable)  
-**Status:** 🟡 Development Phase — Structure & Onboarding
+**Status:** 🟠 Staging Phase — Paper Trading Active, Production Validation Pending  
+**Blockers:** UI testing (5h), Ops docs (3h), Tech debt cleanup (3h) — see ESTADO_REAL.md
 
 ---
 
