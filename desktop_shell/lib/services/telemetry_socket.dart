@@ -44,10 +44,10 @@ class TelemetrySocketService {
     String? wsUrl,
     Duration? reconnectDelay,
     int? maxReconnectAttempts,
-  })  : wsUrl = wsUrl ?? AppConfig.buildWsUrl(),
-        reconnectDelay = reconnectDelay ?? AppConfig.wsReconnectDelay,
-        maxReconnectAttempts =
-            maxReconnectAttempts ?? AppConfig.wsMaxReconnectAttempts;
+  }) : wsUrl = wsUrl ?? AppConfig.buildWsUrl(),
+       reconnectDelay = reconnectDelay ?? AppConfig.wsReconnectDelay,
+       maxReconnectAttempts =
+           maxReconnectAttempts ?? AppConfig.wsMaxReconnectAttempts;
 
   /// Stream of decoded telemetry events.
   Stream<Map<String, dynamic>> get stream => _controller.stream;
@@ -88,14 +88,12 @@ class TelemetrySocketService {
       _connectionController.add(true);
 
       assert(() {
-        dev.log('TelemetrySocket: connected to $wsUrl',
-            name: 'pecunator.ws');
+        dev.log('TelemetrySocket: connected to $wsUrl', name: 'pecunator.ws');
         return true;
       }());
     } catch (e) {
       assert(() {
-        dev.log('TelemetrySocket: connect failed: $e',
-            name: 'pecunator.ws');
+        dev.log('TelemetrySocket: connect failed: $e', name: 'pecunator.ws');
         return true;
       }());
       _scheduleReconnect();
@@ -109,8 +107,7 @@ class TelemetrySocketService {
       _controller.add(decoded);
     } catch (e) {
       assert(() {
-        dev.log('TelemetrySocket: decode error: $e',
-            name: 'pecunator.ws');
+        dev.log('TelemetrySocket: decode error: $e', name: 'pecunator.ws');
         return true;
       }());
     }
@@ -148,8 +145,9 @@ class TelemetrySocketService {
       _reconnectCount = 0;
       assert(() {
         dev.log(
-            'TelemetrySocket: max reconnect attempts reached, resetting...',
-            name: 'pecunator.ws');
+          'TelemetrySocket: max reconnect attempts reached, resetting...',
+          name: 'pecunator.ws',
+        );
         return true;
       }());
     }
@@ -157,9 +155,10 @@ class TelemetrySocketService {
     _reconnectCount++;
     // Exponential backoff: 3s, 6s, 12s, capped at 30s
     final delay = Duration(
-      milliseconds: (reconnectDelay.inMilliseconds *
-              (1 << (_reconnectCount - 1).clamp(0, 3)))
-          .clamp(0, 30000),
+      milliseconds:
+          (reconnectDelay.inMilliseconds *
+                  (1 << (_reconnectCount - 1).clamp(0, 3)))
+              .clamp(0, 30000),
     );
 
     _reconnectTimer?.cancel();

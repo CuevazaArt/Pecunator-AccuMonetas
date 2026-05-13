@@ -155,6 +155,9 @@ class SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SparklinePainter old) =>
-      old.data.length != data.length || old.color != color ||
-      (data.isNotEmpty && old.data.isNotEmpty && old.data.last.value != data.last.value);
+      old.data.length != data.length ||
+      old.color != color ||
+      (data.isNotEmpty &&
+          old.data.isNotEmpty &&
+          old.data.last.value != data.last.value);
 }

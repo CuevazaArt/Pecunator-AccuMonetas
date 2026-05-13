@@ -128,7 +128,7 @@ class _WeightOscillatorState extends State<WeightOscillator> {
   int _weightLimit = 6000;
   bool _fuseTripped = false;
 
-  int _syncMs = 2000;  // kept for UI label only
+  int _syncMs = 2000; // kept for UI label only
   int _windowMin = 10;
   static const _syncOptions = [1000, 2000, 3000, 5000, 10000];
   static const _windowOptions = [1, 5, 10, 30, 60];

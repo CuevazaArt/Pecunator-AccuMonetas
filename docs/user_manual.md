@@ -41,9 +41,12 @@ graph TB
 
 ### 2.1 Levantar el Backend
 ```powershell
-cd c:\Users\lexar\Desktop\Pecunator
-python -m uvicorn "runtime.api.app:create_app" --factory --host 0.0.0.0 --port 8000
+cd C:\ruta\a\Pecunator-AccuMonetas
+powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
 ```
+
+> **Nota:** El motor se inicia en `127.0.0.1:8000` (solo loopback). Nunca uses `--host 0.0.0.0` en desarrollo local.  
+> Para supervisor inmortal (reinicia si cae): `scripts/engine/run_engine_immortal.ps1`
 
 ### 2.2 Levantar Flutter Desktop
 ```powershell

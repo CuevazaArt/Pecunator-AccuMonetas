@@ -1,39 +1,41 @@
-# Development Guide: refactor/stable-ui-and-tests
+# Development Guide — Pecunator-AccuMonetas
 
-**Current Development Branch**: `refactor/stable-ui-and-tests`  
-**Status**: 🟢 Active, Testing via GitHub Actions
+**Repo:** https://github.com/CuevazaArt/Pecunator-AccuMonetas  
+**Main Branch:** `main`  
+**Status:** 🟠 Staging-Ready — Paper Trading Active
 
 ---
 
-## Quick Start (5 minutes)
+## Quick Start (5 minutos)
 
 ### Clone & Setup
 
 ```bash
 # Clone
-git clone https://github.com/Cuevaza/PecunatorCore.git
-cd PecunatorCore
+git clone https://github.com/CuevazaArt/Pecunator-AccuMonetas.git
+cd Pecunator-AccuMonetas
 
-# Switch to dev branch
-git checkout refactor/stable-ui-and-tests
-git pull
+# Install Python dependencies
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements-dev.txt
 
-# Install dependencies
-pip install -r requirements-dev.txt        # Python
-cd desktop_shell && flutter pub get        # Dart
+# Install Flutter dependencies
+cd desktop_shell && flutter pub get && cd ..
 ```
 
 ### Run Tests Locally
 
 ```bash
-# Python tests
+# Python tests (run from repo root)
 pytest runtime/tests/ -v
+
+# E2E pipeline tests
+pytest tests/ -v
 
 # Flutter tests
 cd desktop_shell
 flutter test test/ -v
-
-# Verify Flutter code
 flutter analyze lib/
 ```
 
@@ -44,362 +46,303 @@ flutter analyze lib/
 ### 1. Create a Feature Branch
 
 ```bash
-git checkout refactor/stable-ui-and-tests
-git pull
+git checkout main
+git pull origin main
 git checkout -b feature/your-feature-name
-
-# Work on feature...
+# Examples: feature/louise-stop-loss, feature/ui-portfolio-screen
 ```
 
-### 2. Commit & Test
+### 2. Make Changes & Test
 
 ```bash
-git add .
-git commit -m "feat(scope): description of change"
+# Edit code...
 
-# Run tests locally BEFORE pushing
-pytest runtime/tests/ -v
-flutter test test/ -v
+# Run tests before committing
+pytest runtime/tests/ -x -q
+
+# Check linting
+ruff check runtime/
+
+# Flutter checks (if UI changed)
+cd desktop_shell && flutter analyze lib/
 ```
 
-### 3. Push & Create PR
+### 3. Commit
+
+```bash
+git add <specific-files>
+git commit -m "feat(scope): brief description"
+# Examples:
+# feat(bot): add trailing stop-loss for Louise
+# fix(api): handle weight governor zone transition
+# test(flutter): add bot creation widget test
+```
+
+### 4. Push & Create PR
 
 ```bash
 git push -u origin feature/your-feature-name
 
-# Create PR to refactor branch (not main!)
-gh pr create --base refactor/stable-ui-and-tests \
-             --head feature/your-feature-name \
-             --title "Feature: your feature" \
-             --body "Description of changes"
+gh pr create --base main \
+             --title "feat(scope): describe feature" \
+             --body "What changed and why"
 ```
 
-### 4. Wait for GitHub Actions
+### 5. Wait for GitHub Actions
 
-GitHub Actions automatically runs:
-- ✅ Python tests (pytest)
-- ✅ Flutter tests (flutter test)
-- ✅ Code analysis (ruff, dart analyzer)
+GitHub Actions automatically runs on every PR:
+- ✅ `pytest runtime/tests/` — Python test suite
+- ✅ `pytest tests/` — E2E pipeline tests
+- ✅ Ruff linting + type checking
+- ✅ Secret scanning (gitleaks)
+- ✅ Flutter analyze (if desktop_shell changed)
 
-You'll see status in PR.
-
-### 5. Merge to Refactor Branch
-
-Once tests pass and reviewed:
+### 6. Merge Once Green
 
 ```bash
-gh pr merge <PR_NUMBER> --merge
-```
-
-### 6. Delete Feature Branch (Optional)
-
-```bash
-git branch -d feature/your-feature-name
-git push origin --delete feature/your-feature-name
+gh pr merge <PR_NUMBER> --squash
 ```
 
 ---
 
-## Important Rules
+## Rules
 
 ### ✅ DO:
-- Develop on `refactor/stable-ui-and-tests`
-- Create feature branches FROM `refactor/stable-ui-and-tests`
+- Create feature branches FROM `main`
+- Create PRs TO `main`
 - Run tests locally before pushing
-- Create PRs to `refactor/stable-ui-and-tests`
-- Pull docs from main when available
-- Ask for help in discussions
+- Commit specific files (not `git add -A` blindly)
+- Write descriptive commit messages (feat/fix/refactor/test/docs)
 
 ### ❌ DON'T:
-- Push directly to `main` (it's protected)
-- Create PRs to `main` without authorization
-- Merge untested code to `refactor/stable-ui-and-tests`
-- Ignore GitHub Actions failures
-- Delete `refactor/stable-ui-and-tests` branch
+- Push directly to `main` (branch protected)
+- Skip tests before pushing
+- Commit `.env`, `*.token`, `credentials.enc` files
+- Use `PECUNATOR_API_AUTH_DISABLED=1` outside local dev
+- Bind to `0.0.0.0` on a local dev machine (use `127.0.0.1`)
 
 ---
 
-## Code Organization
-
-### Python (Backend)
+## Repository Structure
 
 ```
-runtime/
-├── tests/              # ✨ NEW: Test suite
-│   ├── test_dorothy.py # 25+ tests
-│   └── __init__.py
-├── bot/dorothy.py      # Bot logic (tested)
-├── connectors/         # API clients
-├── core/               # Config, security, state
-├── api/                # FastAPI endpoints
-└── main.py             # Entry point
+Pecunator-AccuMonetas/
+├── runtime/
+│   ├── bot/
+│   │   ├── louise.py          # Louise DCA bot runner (main bot)
+│   │   ├── _base_runner.py    # Shared runner base
+│   │   └── _paper_log.py      # Paper trading log
+│   ├── core/                  # WeightGovernor, ApiFuse, BudgetGuard, etc.
+│   ├── api/
+│   │   ├── app.py             # FastAPI factory + router wiring
+│   │   ├── auth.py            # Bearer token auth dependency
+│   │   └── routers/
+│   │       ├── louise.py      # Louise bot endpoints
+│   │       ├── system.py      # Health, weight, fuse
+│   │       ├── vault.py       # Credentials vault
+│   │       └── ...
+│   ├── connectors/            # BinanceGateway (async)
+│   ├── modules/               # TrendSignal, VMO
+│   └── tests/                 # Python test suite (240+ tests)
+├── tests/                     # E2E pipeline tests
+├── desktop_shell/             # Flutter Windows UI
+│   ├── lib/                   # Dart source
+│   └── test/                  # Flutter widget tests
+├── scripts/
+│   ├── engine/                # run_engine.ps1, run_engine_immortal.ps1
+│   └── ui/                    # run_dashboard.ps1
+├── docs/                      # Architecture, specs, integration docs
+├── wiki/                      # Operational guides (Spanish)
+└── main.py                    # Entry point
 ```
 
-### Flutter (Frontend)
+---
 
-```
-desktop_shell/lib/
-├── config/             # ✨ NEW: Centralized config
-│   └── app_config.dart
-├── providers/          # ✨ NEW: Riverpod state
-│   └── app_providers.dart
-├── services/           # ✨ NEW: Reusable services
-│   ├── http_client.dart
-│   ├── exceptions.dart
-│   └── preferences.dart
-├── screens/            # ✨ NEW: Page components
-│   ├── home_screen.dart
-│   ├── bots_screen.dart
-│   └── spot_account_screen.dart
-├── widgets/            # ✨ NEW: Reusable widgets
-│   ├── error_display.dart
-│   ├── logs_viewer.dart
-│   └── gateway_status.dart
-├── utils/              # ✨ NEW: Helpers
-│   └── number_formatter.dart
-├── api_client.dart     # Updated (uses new services)
-└── main_refactored.dart # ✨ NEW: Recommended entry
-```
+## Key Modules
+
+| Module | File | Purpose |
+|--------|------|---------|
+| **LouiseBotRunner** | `runtime/bot/louise.py` | Main DCA bot — runs trading cycles |
+| **WeightGovernor** | `runtime/core/weight_governor.py` | API rate-limit zones (GREEN/YELLOW/RED) |
+| **ApiFuse** | `runtime/core/api_fuse.py` | Circuit breaker + exponential backoff |
+| **BudgetGuard** | `runtime/core/budget_guard.py` | Daily USDT spend ceiling |
+| **LouiseDB** | `runtime/core/louise_db.py` | SQLite persistence for bot state |
+| **BinanceGateway** | `runtime/connectors/binance_gateway.py` | Async Binance client |
+| **auth.py** | `runtime/api/auth.py` | Bearer token generation + verification |
 
 ---
 
 ## Common Development Tasks
 
-### Task: Add a new Python test
+### Add a Python Test
 
 ```python
-# runtime/tests/test_dorothy.py
+# runtime/tests/test_your_feature.py
 
-def test_new_feature():
-    """Test your new feature."""
-    # Arrange
-    config = DorothyConfig(symbol="BTCUSDT")
-    
-    # Act
-    config.normalize()
-    
-    # Assert
-    assert config.symbol == "BTCUSDT"
+import pytest
+
+class TestYourFeature:
+    def test_basic_case(self):
+        # Arrange
+        ...
+        # Act
+        ...
+        # Assert
+        assert result == expected
 ```
 
-### Task: Add a new Flutter widget
+Run it: `pytest runtime/tests/test_your_feature.py -v`
+
+### Add an API Endpoint
+
+```python
+# runtime/api/routers/louise.py
+
+@router.get("/bots/{bot_id}/summary")
+async def get_bot_summary(bot_id: str, db: LouiseDB = Depends(get_db)):
+    bot = db.get_bot(bot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    return {"bot_id": bot_id, ...}
+```
+
+All endpoints are automatically auth-protected via `Depends(verify_token)` in `app.py`.
+
+### Add a Flutter Widget Test
 
 ```dart
-// desktop_shell/lib/widgets/new_widget.dart
+// desktop_shell/test/your_feature_test.dart
 
-import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
-class NewWidget extends StatelessWidget {
-  const NewWidget({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text('New Widget'),
-      ),
-    );
-  }
+void main() {
+  group('YourFeature', () {
+    testWidgets('shows correct initial state', (tester) async {
+      await tester.pumpWidget(const YourWidget());
+      expect(find.text('Expected text'), findsOneWidget);
+    });
+  });
 }
-
-// Use in screen:
-// body: NewWidget(),
 ```
 
-### Task: Add a new Riverpod provider
+Run it: `cd desktop_shell && flutter test test/your_feature_test.dart -v`
 
-```dart
-// desktop_shell/lib/providers/app_providers.dart
+---
 
-final myDataProvider = FutureProvider<MyData>((ref) async {
-  final api = ref.watch(engineApiProvider);
-  return api.fetchMyData();
-});
+## Starting the System Locally
 
-// Use in widget:
-// final data = ref.watch(myDataProvider);
-// data.when(
-//   data: (d) => Text(d.toString()),
-//   loading: () => CircularProgressIndicator(),
-//   error: (e, st) => ErrorDisplay(error: e),
-// );
+### Option 1: Scripts (recommended)
+
+```powershell
+# Terminal 1 — Start engine
+powershell -ExecutionPolicy Bypass -File scripts/engine/run_engine.ps1
+
+# Terminal 2 — Start Flutter UI
+powershell -ExecutionPolicy Bypass -File scripts/ui/run_dashboard.ps1
 ```
 
-### Task: Update dependencies
+### Option 2: Manual
 
-```bash
-# Python
-pip install -r requirements-dev.txt
+```powershell
+# Terminal 1 — Engine (binds to localhost only)
+python main.py
+# API available at: http://127.0.0.1:8000
+# OpenAPI docs:     http://127.0.0.1:8000/docs
 
-# Flutter
+# Terminal 2 — Flutter
 cd desktop_shell
-flutter pub get
-flutter pub upgrade  # Check for updates
+flutter run -d windows
+```
+
+### Stub mode (no Binance connection needed)
+
+```powershell
+$env:PECUNATOR_ENGINE_STUB=1; python main.py
 ```
 
 ---
 
-## Testing Checklist
-
-Before creating a PR:
-
-- [ ] Code runs locally without errors
-- [ ] Python tests pass: `pytest runtime/tests/ -v`
-- [ ] Flutter tests pass: `flutter test test/ -v`
-- [ ] Code formatted: `dart format lib/`
-- [ ] No lint warnings: `flutter analyze lib/`
-- [ ] Commits are descriptive
-- [ ] PR description explains changes
-
----
-
-## GitHub Actions
-
-### View Test Results
+## Environment Variables
 
 ```bash
-# List recent runs
-gh run list --branch refactor/stable-ui-and-tests -L 10
+# Required for production (via .env or system env)
+LOUISE_API_KEY=<binance-subaccount-key>
+LOUISE_API_SECRET=<binance-subaccount-secret>
 
-# View specific run
-gh run view <RUN_ID> --log
+# Optional overrides
+PECUNATOR_API_HOST=127.0.0.1      # Never use 0.0.0.0 on local dev
+PECUNATOR_API_PORT=8000
+PECUNATOR_VAULT_PASSPHRASE=<passphrase>  # Required for vault encryption
+
+# Dev only — disables auth (NEVER in production)
+PECUNATOR_API_AUTH_DISABLED=0     # Keep at 0 always
 ```
 
-### What Triggers Tests
+---
 
-- ✅ Push to `refactor/**`
-- ✅ Push to `develop`
+## GitHub Actions Workflow
+
+### View CI Status
+
+```bash
+# List recent runs on main
+gh run list --branch main -L 10
+
+# View a specific run
+gh run view <RUN_ID> --log
+
+# View PR checks
+gh pr checks <PR_NUMBER>
+```
+
+### What Triggers CI
+
+- ✅ Push to any `feature/**` branch
 - ✅ Pull request to `main`
 - ✅ Manual workflow dispatch
 
-### What Stops Merge
+### What Blocks Merge
 
-- ❌ Python tests fail
-- ❌ Flutter tests fail
-- ❌ Code analysis errors (soft, can override)
-
----
-
-## Sync with Main
-
-### Get latest docs
-
-```bash
-git fetch origin
-git merge origin/main -- docs/
-git push origin refactor/stable-ui-and-tests
-```
-
-### Get code improvements
-
-```bash
-git fetch origin
-git merge origin/main -- runtime/core/
-git push origin refactor/stable-ui-and-tests
-```
-
-### Keep your feature branch updated
-
-```bash
-git fetch origin
-git rebase origin/refactor/stable-ui-and-tests
-git push --force-with-lease origin feature/your-branch
-```
+- ❌ Python tests fail (`pytest runtime/tests/`)
+- ❌ E2E tests fail (`pytest tests/`)
+- ❌ Ruff linting violations
+- ❌ Secret scan detects credentials
 
 ---
 
-## Support
+## Testing Checklist (Before PR)
 
-### Having issues?
-
-1. Check GitHub Actions logs: `gh run view <ID> --log`
-2. Run tests locally to reproduce
-3. Check `docs/GITHUB_WORKFLOW.md` for troubleshooting
-4. Open issue or discussion
-
-### Need to merge to main?
-
-1. Get explicit authorization: "merge to main approved"
-2. Create formal PR: `gh pr create --base main`
-3. Wait for GitHub Actions + owner approval
-4. Merge when all checks pass
-
----
-
-## Key Files to Know
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `docs/CHANGELOG.md` | Overview of changes | ✅ Read this first |
-| `docs/architecture-next.md` | Design deep-dive | ✅ Reference |
-| `VALIDATION_CHECKLIST.md` | Testing steps | ✅ Follow for QA |
-| `docs/GITHUB_WORKFLOW.md` | Collaboration guide | ✅ For multi-office setup |
-| `requirements-dev.txt` | Python dependencies | ✅ Keep updated |
-| `desktop_shell/pubspec.yaml` | Flutter dependencies | ✅ Keep updated |
-
----
-
-## Performance Tips
-
-### Speed up Python tests
-
-```bash
-# Run specific test file
-pytest runtime/tests/test_dorothy.py -v
-
-# Run specific test
-pytest runtime/tests/test_dorothy.py::test_defaults -v
-
-# Show slowest tests
-pytest runtime/tests/ -v --durations=10
-```
-
-### Speed up Flutter builds
-
-```bash
-# Use --split-debug-info for faster builds
-flutter run --split-debug-info
-
-# Hot reload during development
-# Press 'r' in terminal while running
-```
+- [ ] All Python tests pass: `pytest runtime/tests/ -x -q`
+- [ ] E2E tests pass: `pytest tests/ -q`
+- [ ] No linting violations: `ruff check runtime/`
+- [ ] No secrets in diff: `git diff --name-only`
+- [ ] Flutter tests pass (if UI changed): `flutter test test/ -v`
+- [ ] PR description explains what changed and why
 
 ---
 
 ## Useful Commands
 
 ```bash
-# See branch status
-git status
+# See all tests
+pytest runtime/tests/ --collect-only -q
 
-# See commit history
+# Run only fast tests (skip slow load tests)
+pytest runtime/tests/ -x -q -k "not load"
+
+# See test coverage
+pytest runtime/tests/ --cov=runtime --cov-report=term-missing
+
+# Lint specific file
+ruff check runtime/bot/louise.py
+
+# Check git history
 git log --oneline -10
 
-# See what changed
-git diff origin/refactor/stable-ui-and-tests
-
-# Undo local changes
-git checkout -- <file>
-
-# Undo last commit (keep changes)
-git reset --soft HEAD~1
-
-# See who changed what
-git blame <file>
+# See what changed vs main
+git diff origin/main --stat
 ```
 
 ---
 
-## Ready to start? 🚀
-
-1. ✅ Clone the repo
-2. ✅ Switch to `refactor/stable-ui-and-tests`
-3. ✅ Run tests locally
-4. ✅ Create a feature branch
-5. ✅ Make your changes
-6. ✅ Create a PR
-7. ✅ Wait for GitHub Actions
-8. ✅ Get reviewed & merged
-
-**Questions?** Check `docs/GITHUB_WORKFLOW.md` or open a discussion!
+**Questions?** Open a discussion on GitHub or check `wiki/` for operational guides.

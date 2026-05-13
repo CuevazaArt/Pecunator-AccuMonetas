@@ -147,7 +147,7 @@ class BaseStrategyRunner:
                     try:
                         count = int(float(v))
                         from runtime.api import deps
-                        deps.get_context().state.order_count_10s = count
+                        deps.get_context().state.order_count_10s = count  # type: ignore[attr-defined]
                         # Feed Order Fuse
                         get_order_fuse().check_order_count(count)
                     except Exception:
@@ -155,7 +155,7 @@ class BaseStrategyRunner:
                 elif ku == "X-MBX-ORDER-COUNT-1M":
                     try:
                         from runtime.api import deps
-                        deps.get_context().state.order_count_1m = int(float(v))
+                        deps.get_context().state.order_count_1m = int(float(v))  # type: ignore[attr-defined]
                     except Exception:
                         pass
         except Exception:
@@ -331,7 +331,7 @@ class BaseStrategyRunner:
         gross_win = sum(r for r in rs if r > 0)
         gross_loss = abs(sum(r for r in rs if r < 0))
         cumulative = sum(rs, Decimal("0"))
-        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")
+        pf = (gross_win / gross_loss) if gross_loss > 0 else Decimal("999")  # type: ignore[operator]
         return {
             "cumulative_pnl": str(cumulative),
             "win_rate": str(Decimal(wins) / Decimal(n)),
@@ -392,7 +392,7 @@ class BaseStrategyRunner:
             if check_panic_lock():
                 self._emit("CRITICAL", f"PANIC.lock detected — halting {self.BOT_TYPE}")
                 break
-            sleep_sec = float(getattr(self.config, 'loop_interval_sec', 450))
+            sleep_sec = float(getattr(self.config, 'loop_interval_sec', 450))  # type: ignore[attr-defined]
             # ── Fuse check with desync jitter ─────────────────────
             # If fuse is tripped, skip the cycle but add random jitter
             # so all bots don't converge when the fuse resets.
@@ -469,7 +469,7 @@ class BaseStrategyRunner:
                 await self._close_client()
                 sleep_sec = min(
                     60.0,
-                    max(2.0, min(float(getattr(self.config, 'loop_interval_sec', 450)),
+                    max(2.0, min(float(getattr(self.config, 'loop_interval_sec', 450)),  # type: ignore[attr-defined]
                                  float(2 ** min(self._error_streak, 6)))),
                 )
                 self._emit("ERROR", f"{self.BOT_TYPE}:error {self._last_error}", {"error": self._last_error})

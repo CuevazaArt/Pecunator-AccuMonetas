@@ -11,7 +11,7 @@
 
 **Pecunator-AccuMonetas** es un nuevo hub de bots de trading autónomo, basado en la arquitectura probada de PecunatorCore. Reutiliza toda la infraestructura de producción (API, WebSocket, telemetría, DB, rate-limiting, error handling) pero implementa:
 
-- ✅ **Nuevo bot de trading** (estrategia específica — *TBD*)
+- ✅ **Bot de trading Louise DCA** (Dollar-Cost Averaging — estrategia implementada)
 - ✅ **UI Flutter customizada** para las necesidades de ese bot
 - ✅ **Subacuenta de Binance dedicada** (a especificar)
 
@@ -125,7 +125,7 @@ PECUNATOR_API_AUTH_DISABLED=0       # Keep enabled in production
 - Managed from Flutter UI (secure input dialogs)
 - Single source per session (avoid account mixing)
 
-**Subaccount to use:** *TBD — specify which Binance subaccount*
+**Subaccount to use:** `bluechip` — subcuenta Binance confirmada (2026-05-11). Ver `BLUECHIP_SUBACCOUNT_CONFIG.md`.
 
 ---
 

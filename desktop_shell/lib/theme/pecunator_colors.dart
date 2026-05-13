@@ -41,8 +41,7 @@ abstract final class PColors {
   }
 
   /// Side color for BUY/SELL order display
-  static Color sideColor(String side) =>
-      side == 'BUY' ? bullGreen : bearRed;
+  static Color sideColor(String side) => side == 'BUY' ? bullGreen : bearRed;
 
   /// Status color for boolean OK/ERR indicators
   static Color statusColor(bool ok) => ok ? bullGreen : bearRed;

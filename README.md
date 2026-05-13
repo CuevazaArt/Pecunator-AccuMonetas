@@ -26,16 +26,11 @@ Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine 
    - Network error recovery
    - **Impact:** Operators cannot validate emergency controls without UI tests
 
-2. **Operational Docs:** No deployment/runbook/rollback procedures exist
-   - Missing: DEPLOYMENT.md, OPERATIONAL_RUNBOOK.md, ROLLBACK_PLAN.md, MONITORING_CHECKLIST.md
-   - **Impact:** Deployment becomes ad-hoc, recovery is improvised
+2. ~~**Operational Docs:** No deployment/runbook/rollback procedures exist~~ ✅ **RESOLVED** — `DEPLOYMENT.md`, `OPERATIONAL_RUNBOOK.md`, `ROLLBACK_PLAN.md`, `MONITORING_CHECKLIST.md` all created.
 
-3. **Technical Debt:** Hardcodes + unused modules remain
-   - `orphan.py` has hardcoded BTCUSDT symbol
-   - Dorothy/Elphaba modules (balance_checker, toxic_symbols) still present
-   - **Impact:** Codebase confusion, potential bugs
+3. ~~**Technical Debt:** Hardcodes + unused modules remain~~ ✅ **RESOLVED** — `balance_checker.py` and `trailing_tp.py` removed; `orphan.py` BTCUSDT hardcode fixed; deprecated endpoints flagged.
 
-**Estimated effort to close blockers: ~12 hours** (see ESTADO_REAL.md for detailed breakdown)
+**Remaining blocker: UI Testing only** (~5h). See `ESTADO_REAL.md`.
 
 ### Verified hardening (this branch)
 - **Telemetry is honest:** `/health`, `/weight-governor/*`, `/telemetry/*` return real data or explicit `error`/`ready=false` payloads. No more fake `"healthy"`, `"GREEN"`, `weight=1050`, multipliers `× 82`, or hardcoded UI numbers.
@@ -127,7 +122,7 @@ Conectores Binance (`python-binance`), cofre y estado: `runtime/` (ver `runtime/
 
 ### Estructura modular del repo (raíz)
 
-- `runtime/bot/` — Dorothy (spot DCA) and Elphaba (margin short) runners
+- `runtime/bot/` — Louise DCA bot runner (`louise.py`) + shared base runner
 - `runtime/core/` — Infrastructure: WeightGovernor, ApiFuse, BotCoordinator, SymmetryGuard, BudgetGuard, OrderLedger, StateWAL
 - `runtime/api/` — FastAPI routers and hub services
 - `runtime/modules/` — TrendSignal, VMO

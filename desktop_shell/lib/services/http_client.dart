@@ -36,14 +36,13 @@ class RobustHttpClient {
     String endpoint, {
     Map<String, String>? headers,
     Duration? timeout,
-  }) =>
-      _requestWithRetry(
-        () => _inner.get(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _mergeHeaders(headers),
-        ),
-        timeout: timeout,
-      );
+  }) => _requestWithRetry(
+    () => _inner.get(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _mergeHeaders(headers),
+    ),
+    timeout: timeout,
+  );
 
   static const _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -65,40 +64,37 @@ class RobustHttpClient {
     String endpoint, {
     Map<String, String>? headers,
     dynamic body,
-  }) =>
-      _requestWithRetry(
-        () => _inner.post(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _mergeHeaders(headers),
-          body: body != null ? jsonEncode(body) : null,
-        ),
-      );
+  }) => _requestWithRetry(
+    () => _inner.post(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _mergeHeaders(headers),
+      body: body != null ? jsonEncode(body) : null,
+    ),
+  );
 
   /// Perform PATCH request with retry and error handling.
   Future<Map<String, dynamic>> patch(
     String endpoint, {
     Map<String, String>? headers,
     dynamic body,
-  }) =>
-      _requestWithRetry(
-        () => _inner.patch(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _mergeHeaders(headers),
-          body: body != null ? jsonEncode(body) : null,
-        ),
-      );
+  }) => _requestWithRetry(
+    () => _inner.patch(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _mergeHeaders(headers),
+      body: body != null ? jsonEncode(body) : null,
+    ),
+  );
 
   /// Perform DELETE request with retry and error handling.
   Future<Map<String, dynamic>> delete(
     String endpoint, {
     Map<String, String>? headers,
-  }) =>
-      _requestWithRetry(
-        () => _inner.delete(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: _mergeHeaders(headers),
-        ),
-      );
+  }) => _requestWithRetry(
+    () => _inner.delete(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _mergeHeaders(headers),
+    ),
+  );
 
   /// Perform arbitrary HTTP request with retry and error handling.
   Future<Map<String, dynamic>> request(
@@ -130,10 +126,7 @@ class RobustHttpClient {
         );
       case 'DELETE':
         return _requestWithRetry(
-          () => _inner.delete(
-            url,
-            headers: _mergeHeaders(headers),
-          ),
+          () => _inner.delete(url, headers: _mergeHeaders(headers)),
         );
       default:
         throw ValidationException(message: 'Método HTTP no soportado: $method');
@@ -161,9 +154,9 @@ class RobustHttpClient {
         }
         await Future.delayed(
           Duration(
-            milliseconds: (config.retryDelay.inMilliseconds *
-                    (1.5 * attempt).toInt())
-                .clamp(0, 10000),
+            milliseconds:
+                (config.retryDelay.inMilliseconds * (1.5 * attempt).toInt())
+                    .clamp(0, 10000),
           ),
         );
       } catch (e) {
@@ -177,9 +170,9 @@ class RobustHttpClient {
         }
         await Future.delayed(
           Duration(
-            milliseconds: (config.retryDelay.inMilliseconds *
-                    (1.5 * attempt).toInt())
-                .clamp(0, 10000),
+            milliseconds:
+                (config.retryDelay.inMilliseconds * (1.5 * attempt).toInt())
+                    .clamp(0, 10000),
           ),
         );
       }
@@ -203,7 +196,9 @@ class RobustHttpClient {
       }
 
       // Parse error response
-      final errorBodyRaw = isJson ? jsonDecode(response.body) : <String, dynamic>{};
+      final errorBodyRaw = isJson
+          ? jsonDecode(response.body)
+          : <String, dynamic>{};
       final errorBody = errorBodyRaw is Map
           ? Map<String, dynamic>.from(errorBodyRaw)
           : <String, dynamic>{'detail': errorBodyRaw.toString()};
@@ -222,9 +217,7 @@ class RobustHttpClient {
         case 404:
           throw ApiException.notFound();
         case 422:
-          throw ValidationException(
-            message: 'Datos inválidos: $detail',
-          );
+          throw ValidationException(message: 'Datos inválidos: $detail');
         case >= 500:
           throw ApiException.serverError(detail);
         default:

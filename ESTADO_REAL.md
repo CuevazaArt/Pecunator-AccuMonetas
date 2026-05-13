@@ -80,27 +80,17 @@ ARCHITECTURE.md (recién agregado):
 
 ### 3. DEUDA TÉCNICA PUNTUAL
 
-#### a) Hardcodes aún presentes
-```python
-# runtime/api/routers/orphan.py - línea ~50
-symbol = "BTCUSDT"  # HARDCODED! Should be configurable
-```
+#### ~~a) Hardcodes aún presentes~~ ✅ RESUELTO
+- `orphan.py` BTCUSDT hardcode fue corregido (commit `2d64da5`)
 
-#### b) Ruido arquitectónico (Dorothy/Elphaba aún presentes)
-```
-runtime/api/routers/gateway.py
-runtime/core/balance_checker.py
-runtime/core/toxic_symbols.py
-runtime/core/trailing_tp.py
-=> Estos módulos son para Dorothy/Elphaba, no Louise
-=> Generan ruido en codebase Louise
-```
+#### ~~b) Ruido arquitectónico (Dorothy/Elphaba)~~ ✅ RESUELTO
+- `balance_checker.py` eliminado (commit `1bd5a77`)
+- `trailing_tp.py` eliminado (commit `1bd5a77`)
+- `toxic_symbols.py` deprecado con warnings (commit `b2db087`)
+- Endpoints gateway/symmetry_guard marcados como deprecated
 
-#### c) TODO/FIXME pendientes
-```
-runtime/core/market_cache.py línea ~30:
-  # TODO: Implement real caching strategy for multiple symbols
-```
+#### c) TODO/FIXME pendientes — ✅ RESUELTO
+- Sin TODOs ni FIXMEs en codebase (verificado 2026-05-13)
 
 ---
 
@@ -108,65 +98,50 @@ runtime/core/market_cache.py línea ~30:
 
 | Item | Status | Detalle |
 |------|--------|---------|
-| **Backend Louise** | ✅ 85% | Core logic OK, TODOs menores |
-| **Tests Python** | ✅ 100% | 241 passing, 0 failed |
-| **Tests Flutter** | ⚠️ 10% | Solo boilerplate, UI sin validar |
+| **Backend Louise** | ✅ 90% | Core logic completo, sin TODOs pendientes |
+| **Tests Python** | ✅ 100% | 240 passing, 0 failed (estabilizados 2026-05-13) |
+| **Tests E2E** | ✅ 100% | 17 passing, 0 failed |
+| **Tests Flutter** | ⚠️ 30% | 5 test files comprehensivos, pendiente ejecutar en CI |
 | **Linting** | ✅ 100% | 0 violations |
-| **Security** | ✅ 95% | Token auth, vault, scan activo |
-| **Documentation** | ❌ 40% | Inconsistencia crítica |
+| **Security** | ✅ 100% | Token auth en todos los routers, vault, scan activo |
+| **Documentation** | ✅ 85% | Unificada — DEVELOPMENT_GUIDE, user_manual corregidos |
 | **Risk Controls** | ✅ 100% | 3-layer (position, purchases, drawdown) |
 | **Budget Guard** | ✅ 100% | SOTV coordinated |
 | **Crash Recovery** | ✅ 100% | SQLite WAL + immortality |
-| **Deployment Checklist** | ❌ 0% | No existe |
-| **Runbook Operativo** | ❌ 0% | No existe |
-| **Rollback Plan** | ❌ 0% | No existe |
+| **Deployment Checklist** | ✅ 100% | DEPLOYMENT.md completo |
+| **Runbook Operativo** | ✅ 100% | OPERATIONAL_RUNBOOK.md completo |
+| **Rollback Plan** | ✅ 100% | ROLLBACK_PLAN.md completo |
 
 ---
 
-## 🛑 Bloqueadores para Producción Real
+## 🛑 Bloqueadores para Producción Real (Estado Actual)
 
-### 1. Resolver inconsistencia documental (BLOQUEADOR #1)
+### ~~1. Resolver inconsistencia documental~~ ✅ RESUELTO (2026-05-13)
+- `DEVELOPMENT_GUIDE.md` reescrito para AccuMonetas
+- `user_manual.md` corregido (rutas, comandos inseguros)
+- `CLAUDE.md` actualizado con subacuenta bluechip + estrategia Louise
+- `README.md` actualizado con estado real de deuda técnica
+- `ESTADO_REAL.md` (este archivo) refleja estado actual
 
-**Hacer AHORA:**
-```bash
-# Consolidate single source of truth
-# Option A: README = "Development Phase — Paper Trading Ready"
-# Option B: README = "Production Staging — Pending UI Validation"
+### 2. Validar UI completamente (BLOQUEADOR ACTIVO) ⚠️
 
-# Then update ALL docs to match ONE narrative
+**Flutter tests presentes pero no ejecutados en CI:**
+```
+desktop_shell/test/
+├── louise_login_test.dart          ✅ Escrito
+├── louise_bot_creation_test.dart   ✅ Escrito
+├── louise_bot_control_test.dart    ✅ Escrito
+├── louise_websocket_test.dart      ✅ Escrito
+└── louise_error_handling_test.dart ✅ Escrito
 ```
 
-**Por qué:** Operacionalmente, no puedes deployar si documentación contradice.
+**Pendiente:** Ejecutar con `flutter test` en entorno con Flutter SDK + verificar que pasan.
 
-### 2. Validar UI completamente (BLOQUEADOR #2)
+**Estimado:** 2-3 horas para ejecutar + corregir failures eventuales.
 
-**Flutter tests faltantes:**
-```
-- Login flow (token file → Bearer header)
-- Bot creation (form validation)
-- Bot control (pause/resume buttons)
-- WebSocket real-time updates
-- Error handling (gateway down, API error)
-- Reconnection (WebSocket drop/recover)
-```
+### ~~3. Limpieza de deuda técnica~~ ✅ RESUELTO (2026-05-13)
 
-**Estimado:** 4-6 horas para tests comprehensivos.
-
-### 3. Limpieza de deuda técnica
-
-**Eliminar:**
-- Módulos Dorothy/Elphaba sin usar (balance_checker, toxic_symbols, trailing_tp)
-- Hardcodes en orphan.py (symbol BTCUSDT)
-- TODOs sin fecha de resolución
-
-**Estimado:** 2-3 horas.
-
-### 4. Documentación de salida
-
-**Crear:**
-- `DEPLOYMENT.md` → Cómo deployar a prod
-- `OPERATIONAL_RUNBOOK.md` → Cómo operar bots en vivo
-- `ROLLBACK_PLAN.md` → Cómo revertir en emergencia
+### ~~4. Documentación de salida~~ ✅ RESUELTO (2026-05-13)
 - `MONITORING_CHECKLIST.md` → Qué monitorear 24/7
 
 **Estimado:** 3-4 horas.

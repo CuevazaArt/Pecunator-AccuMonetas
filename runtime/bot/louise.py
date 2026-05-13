@@ -66,9 +66,9 @@ class LouiseBotRunner:
         # Subscribe to websocket data for price & balances (zero REST weight)
         if subscribe:
             symbol = self.config['symbol']
-            self.bus.subscribe(f"market.ticker.{symbol}", self._on_ticker)
-            self.bus.subscribe("account.balances", self._on_balances)
-            self.bus.subscribe("account.execution_report", self._on_execution_report)
+            self.bus.subscribe(f"market.ticker.{symbol}", self._on_ticker)  # type: ignore[arg-type]
+            self.bus.subscribe("account.balances", self._on_balances)  # type: ignore[arg-type]
+            self.bus.subscribe("account.execution_report", self._on_execution_report)  # type: ignore[arg-type]
 
         symbol = self.config['symbol']
         subacct = self.config.get('subaccount', 'bluechip')
@@ -112,7 +112,7 @@ class LouiseBotRunner:
 
                 # Record to global budget guard
                 from runtime.core.budget_guard import get_budget_guard
-                get_budget_guard().record_spend(self.bot_id, self.config["symbol"], "BUY", cost_usdt)
+                get_budget_guard().record_spend(self.bot_id, self.config["symbol"], "BUY", cost_usdt)  # type: ignore[index]
 
                 # Update epoch stats
                 epoch = meta['epoch']
@@ -326,7 +326,7 @@ class LouiseBotRunner:
         await self._execute_buy(epoch, buy_volume)
 
     async def _execute_buy(self, epoch: Dict[str, Any], cost_usdt: Decimal):
-        symbol = self.config["symbol"]
+        symbol = self.config["symbol"]  # type: ignore[index]
         alerts = get_alert_dispatcher()
 
         logger.info(f"{self.bot_id}: Executing MARKET BUY of {cost_usdt} USDT on {symbol}")
@@ -404,7 +404,7 @@ class LouiseBotRunner:
         profit_pct: Decimal,
         status: str = "CLOSED_SUCCESSFUL"
     ):
-        symbol = self.config["symbol"]
+        symbol = self.config["symbol"]  # type: ignore[index]
         total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
         alerts = get_alert_dispatcher()
 

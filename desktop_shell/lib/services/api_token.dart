@@ -8,7 +8,7 @@ import 'dart:io';
 class ApiTokenReader {
   static String? _cachedToken;
   static DateTime? _lastRead;
-  
+
   /// Re-read interval to pick up token regeneration.
   static const _cacheDuration = Duration(minutes: 5);
 
@@ -16,7 +16,8 @@ class ApiTokenReader {
   /// Returns null if the file is missing (auth may be disabled).
   static String? readToken() {
     final now = DateTime.now();
-    if (_cachedToken != null && _lastRead != null &&
+    if (_cachedToken != null &&
+        _lastRead != null &&
         now.difference(_lastRead!) < _cacheDuration) {
       return _cachedToken;
     }
@@ -29,7 +30,9 @@ class ApiTokenReader {
         // When running built exe from desktop_shell
         File('../runtime/data/api.token'),
         // Absolute path fallback
-        File('c:\\Users\\lexar\\Desktop\\Pecunator-AccuMonetas\\runtime\\data\\api.token'),
+        File(
+          'c:\\Users\\lexar\\Desktop\\Pecunator-AccuMonetas\\runtime\\data\\api.token',
+        ),
         // Absolute path (common dev setup)
         ...(_resolveFromScript()),
       ];
@@ -45,7 +48,7 @@ class ApiTokenReader {
         }
       }
     } catch (_) {}
-    
+
     return _cachedToken; // Return last known good, or null
   }
 
