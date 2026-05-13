@@ -79,7 +79,7 @@ class TestDeduplication:
 
     def test_dedup_same_alert_within_window(self, alert_dispatcher):
         """Sending same alert twice within DEDUP_WINDOW should skip second."""
-        alert1 = alert_dispatcher.critical("DUP_TEST", "First", silent=False)
+        alert_dispatcher.critical("DUP_TEST", "First", silent=False)
         alert2 = alert_dispatcher.critical("DUP_TEST", "Second", silent=False)
 
         # Both stored but dedup_cache prevents external dispatch
@@ -327,7 +327,7 @@ class TestValidation:
     def test_warn_on_token_without_chatid(self, caplog):
         """Should warn if token set but chat_id missing."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "PECUNATOR_ALERT_TELEGRAM_CHAT_ID missing" in caplog.text
 
@@ -337,7 +337,7 @@ class TestValidation:
     def test_warn_on_chatid_without_token(self, caplog):
         """Should warn if chat_id set but token missing."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "PECUNATOR_ALERT_TELEGRAM_TOKEN missing" in caplog.text
 
@@ -349,6 +349,6 @@ class TestValidation:
     def test_warn_on_incomplete_email_config(self, caplog):
         """Should warn if email vars incomplete."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "Email alerts enabled but" in caplog.text and "incomplete" in caplog.text

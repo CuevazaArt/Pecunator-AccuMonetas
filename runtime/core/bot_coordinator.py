@@ -225,7 +225,6 @@ class BotCoordinator:
             return 0.0  # Green — no jitter needed
 
         # Predict collisions: how many bots will cycle within ±5s of this bot?
-        now = time.monotonic()
         my_next = bot.last_cycle_ts + bot.loop_interval_sec
         collision_count = 0
 

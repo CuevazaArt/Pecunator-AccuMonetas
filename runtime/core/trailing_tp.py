@@ -37,7 +37,7 @@ def compute_atr(
     if n < period + 1:
         # Not enough data, return a wide default
         if highs and lows:
-            return max(h - l for h, l in zip(highs[-5:], lows[-5:])) if len(highs) >= 5 else Decimal("0")
+            return max(h - lo for h, lo in zip(highs[-5:], lows[-5:])) if len(highs) >= 5 else Decimal("0")
         return Decimal("0")
 
     tr_values: list[Decimal] = []

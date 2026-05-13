@@ -14,11 +14,7 @@ Run: python -m pytest tests/test_e2e_pipeline.py -v
 """
 
 import asyncio
-import json
 import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -185,7 +181,6 @@ class TestTransferServiceDryRun:
     """Test transfer validation without real API calls."""
 
     def test_fund_bot_dry_run(self, fresh_registry, fresh_governor):
-        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
         loop = asyncio.get_event_loop()
@@ -194,7 +189,6 @@ class TestTransferServiceDryRun:
         assert result["dry_run"] is True
 
     def test_fund_bot_over_limit(self, fresh_registry, fresh_governor):
-        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
         loop = asyncio.get_event_loop()
@@ -203,7 +197,6 @@ class TestTransferServiceDryRun:
         assert "exceeds" in result["error"].lower()
 
     def test_fund_unknown_bot(self, fresh_registry, fresh_governor):
-        import asyncio
         from runtime.core.transfer_service import TransferService
         ts = TransferService("fake_key", "fake_secret")
         loop = asyncio.get_event_loop()

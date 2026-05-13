@@ -182,7 +182,7 @@ class TestStopLoss:
                 time.sleep(0.1)
 
                 # Epoch should be closed (liquidated)
-                closed_epoch = louise_db.get_epoch(epoch_id)
+                louise_db.get_epoch(epoch_id)
                 # In real scenario, epoch would be closed with status CLOSED_STOP_LOSS
                 # Here we just verify no crash
 

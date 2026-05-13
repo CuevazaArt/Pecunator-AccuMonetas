@@ -248,10 +248,10 @@ class TelemetryVault:
             for row in rows:
                 try:
                     h = float(row[0])
-                    l = float(row[1])
+                    lo = float(row[1])
                     c = float(row[2])
                     if c > 0:
-                        total += ((h - l) / c) * 100.0
+                        total += ((h - lo) / c) * 100.0
                         valid += 1
                 except (ValueError, TypeError, ZeroDivisionError):
                     continue
