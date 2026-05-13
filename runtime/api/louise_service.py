@@ -5,6 +5,7 @@ import logging
 from typing import Dict
 from runtime.core.louise_db import LouiseDB
 from runtime.bot.louise import LouiseBotRunner
+from runtime.bot.anti_louise import AntiLouiseBotRunner
 from runtime.api import deps
 from runtime.api._helpers import resolve_pair_for_bot
 from runtime.connectors.binance_gateway import BinanceGateway
@@ -95,7 +96,11 @@ class LouiseService:
                             continue
 
                     gw = self._gateways[subaccount]
-                    runner = LouiseBotRunner(bot_id, self.db, ctx.bus, gw)
+                    bot_type = bot_data.get("bot_type", "louise")
+                    if bot_type == "anti_louise":
+                        runner = AntiLouiseBotRunner(bot_id, self.db, ctx.bus, gw)
+                    else:
+                        runner = LouiseBotRunner(bot_id, self.db, ctx.bus, gw)
                     if runner.initialize():
                         try:
                             await runner.start()

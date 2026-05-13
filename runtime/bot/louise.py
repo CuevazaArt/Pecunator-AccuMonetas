@@ -17,10 +17,8 @@ from runtime.core.settings import (
     louise_min_usdt_balance,
     louise_cooldown_buy_fail_sec,
     louise_cooldown_gateway_fail_sec,
-    louise_default_max_position_size_usdt,
-    louise_default_max_purchases_per_epoch,
-    louise_default_max_drawdown_pct,
 )
+from runtime.bot._ws_emit import publish_pnl_snapshot as _publish_pnl_snapshot_ws
 
 logger = logging.getLogger("louise_bot")
 
@@ -44,6 +42,7 @@ class LouiseBotRunner:
         self.usdt_free_balance: Decimal = Decimal("0")
         self.pending_orders: Dict[str, Dict[str, Any]] = {}
         self.cooldown_until: int = 0
+        self.last_purchase_price: Decimal = Decimal("0")
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -62,6 +61,12 @@ class LouiseBotRunner:
             return False
 
         self.active_epoch = self.db.get_active_epoch(self.bot_id)
+
+        # Restore last_purchase_price from DB for crash recovery
+        if self.active_epoch:
+            purchases = self.db.get_purchases_by_epoch(self.active_epoch['epoch_id'])
+            if purchases:
+                self.last_purchase_price = Decimal(str(purchases[-1]['price_at_buy']))
 
         # Subscribe to websocket data for price & balances (zero REST weight)
         if subscribe:
@@ -128,6 +133,7 @@ class LouiseBotRunner:
 
                 self.db.update_epoch_stats(meta['epoch_id'], new_purchases, float(new_cost), float(new_avg_price))
                 self.active_epoch = self.db.get_active_epoch(self.bot_id)
+                self.last_purchase_price = price_at_buy
                 logger.info(f"{self.bot_id}: Buy WS confirmed. New avg price: {new_avg_price:.4f}")
 
             elif meta['type'] == 'SELL':
@@ -251,48 +257,36 @@ class LouiseBotRunner:
 
             logger.info(f"{self.bot_id}: Current PnL: {profit_pct:.2f}% (Target: {target_profit:.2f}%)")
 
-            # 1. Take Profit Check
+            # Record snapshot for time-series charting
+            realized = self.db.get_total_realized_pnl(self.bot_id)
+            self.db.record_pnl_snapshot(
+                bot_id=self.bot_id,
+                bot_type="louise",
+                current_price=float(self.current_price),
+                epoch_id=epoch['epoch_id'],
+                avg_entry_price_usdt=float(avg_price),
+                num_entries=epoch['num_purchases'],
+                total_committed_usdt=float(total_cost),
+                unrealized_pnl_usdt=float(profit_usdt),
+                unrealized_pnl_pct=float(profit_pct),
+                cumulative_realized_pnl_usdt=realized,
+            )
+            _publish_pnl_snapshot_ws(
+                self.bot_id, "louise", epoch, self.current_price, avg_price,
+                total_cost, profit_usdt, profit_pct, realized,
+            )
+
+            # Take Profit: only exit condition
             if profit_pct >= target_profit:
-                # Execute Market Sell to close epoch
                 await self._execute_sell(epoch, current_value, profit_usdt, profit_pct)
                 return
 
-            # 2. Hard Stop Loss / Drawdown limit
-            max_drawdown = Decimal(str(self.config.get("max_drawdown_pct", louise_default_max_drawdown_pct())))
-            if max_drawdown < 0 and profit_pct <= max_drawdown:
-                logger.error(
-                    f"{self.bot_id}: CRITICAL: Stop loss reached "
-                    f"({profit_pct:.2f}% <= {max_drawdown:.2f}%). Liquidating position."
-                )
-                await self._execute_sell(epoch, current_value, profit_usdt, profit_pct, status="CLOSED_STOP_LOSS")
-                return
-
-            # 3. Max purchases per epoch limit (preventive position control)
-            max_purchases = self.config.get("max_purchases_per_epoch") or louise_default_max_purchases_per_epoch()
-            if epoch['num_purchases'] >= max_purchases:
-                logger.info(f"{self.bot_id}: Max purchases per epoch ({max_purchases}) reached. Force-selling.")
-                await self._execute_sell(epoch, current_value, profit_usdt, profit_pct, status="CLOSED_MAX_PURCHASES")
-                return
-
-        # If not exiting, check if we can buy
+        # Only buy if current price is strictly below the last purchase price
         if epoch['num_purchases'] > 0:
-            avg_price = Decimal(str(epoch['avg_buy_price']))
-            if self.current_price >= avg_price:
-                logger.debug(f"{self.bot_id}: Price {self.current_price:.4f} "
-                           f"is above average {avg_price:.4f}. "
-                           f"Skipping buy to strictly average down.")
+            if self.current_price >= self.last_purchase_price:
+                logger.debug(f"{self.bot_id}: Price {self.current_price:.4f} not below "
+                           f"last buy {self.last_purchase_price:.4f}. Waiting for lower price.")
                 return
-
-        # Check max position size (preventive position limit)
-        current_exposure = Decimal(str(epoch.get('total_cost', 0.0)))
-        max_exposure_raw = self.config.get("max_position_size_usdt") or louise_default_max_position_size_usdt()
-        max_exposure = Decimal(str(max_exposure_raw))
-        if current_exposure >= max_exposure:
-            logger.info(
-                f"{self.bot_id}: Max position size reached ({max_exposure} USDT). "
-                f"Waiting for target or stop-loss."
-            )
-            return
 
         # BudgetGuard is the source of truth for global spend limits (checked first)
         bg = get_budget_guard()
@@ -405,14 +399,35 @@ class LouiseBotRunner:
         status: str = "CLOSED_SUCCESSFUL"
     ):
         symbol = self.config["symbol"]  # type: ignore[index]
-        total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
         alerts = get_alert_dispatcher()
 
+        avg = Decimal(str(epoch['avg_buy_price']))
+        total_cost = Decimal(str(epoch['total_cost']))
+        if avg <= Decimal("0") or total_cost <= Decimal("0"):
+            alerts.critical(
+                "SELL_INVALID_EPOCH",
+                f"Louise {self.bot_id}: cannot sell epoch {epoch['epoch_id']} "
+                f"— avg={avg} total={total_cost}",
+                payload={"bot_id": self.bot_id, "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
+            return
+        total_vol = total_cost / avg
+
         filters = get_exchange_filters().get(symbol)
-        if filters:
-            quantized_vol = filters.quantize_qty(total_vol)
-        else:
-            quantized_vol = round(total_vol, 5)
+        if filters is None:
+            alerts.critical(
+                "SELL_BLOCKED_NO_FILTERS",
+                f"Louise {self.bot_id} reached take-profit on {symbol} but "
+                f"exchange filters are unavailable — aborting sell until filters load.",
+                payload={"bot_id": self.bot_id, "symbol": symbol,
+                         "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_gateway_fail_sec()
+            return
+        quantized_vol = filters.quantize_qty(total_vol)
 
         logger.info(f"{self.bot_id}: Target reached! Executing MARKET SELL of {quantized_vol} {symbol}")
         client_oid = f"ls_{self.bot_id}_{int(time.time())}"
@@ -496,7 +511,7 @@ class LouiseBotRunner:
 
     async def _delay_sim(self, payload):
         await asyncio.sleep(1.5)
-        await self.handle_order_update(payload)
+        self._on_execution_report(payload)
 
     async def stop(self, shutdown_db=True):
         """Clean shutdown of the bot."""

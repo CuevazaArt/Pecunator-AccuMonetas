@@ -57,7 +57,7 @@ def get_shutdown_elapsed() -> float:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start Dorothy + Elphaba services, optionally autostart gateway, with graceful shutdown."""
+    """Start Louise/AntiLouise services + supporting infrastructure, with graceful shutdown."""
     import os
     global _shutdown_requested, _shutdown_start_time
 
@@ -100,6 +100,16 @@ async def lifespan(app: FastAPI):
     # ── Start Louise Immortality ───────────────────────────────────
     from runtime.api.louise_service import get_louise_service
     await get_louise_service().start_immortality()
+
+    # ── Start Kline Ingestion (OHLC + HA for charting) ─────────────
+    try:
+        from runtime.core.kline_ingestion import get_kline_ingestion_service
+        await get_kline_ingestion_service().start()
+    except (ImportError, AttributeError, RuntimeError) as e:
+        _LOG.warning(
+            "kline_ingestion startup failed (type=%s): %s",
+            type(e).__name__, sanitize_log_message(str(e)),
+        )
 
     yield
 
@@ -144,6 +154,14 @@ async def lifespan(app: FastAPI):
             type(e).__name__,
             err_msg
         )
+
+    # Step 2b: Stop kline ingestion
+    try:
+        from runtime.core.kline_ingestion import get_kline_ingestion_service
+        _LOG.info("Stopping kline ingestion...")
+        await get_kline_ingestion_service().stop()
+    except (ImportError, AttributeError, RuntimeError, OSError) as e:
+        _LOG.warning("Kline ingestion stop error (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
 
     # Step 3: Stop telemetry collector
     try:

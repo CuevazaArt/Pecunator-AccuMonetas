@@ -29,6 +29,7 @@ class LouiseDB:
                     max_position_size_usdt REAL DEFAULT 5000.0,
                     max_purchases_per_epoch INTEGER DEFAULT 20,
                     subaccount TEXT DEFAULT 'bluechip',
+                    bot_type TEXT DEFAULT 'louise',
                     status TEXT NOT NULL,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
@@ -39,11 +40,15 @@ class LouiseDB:
             try:
                 conn.execute("ALTER TABLE louise_bots ADD COLUMN max_position_size_usdt REAL DEFAULT 5000.0")
             except sqlite3.OperationalError:
-                pass  # Column already exists
+                pass
             try:
                 conn.execute("ALTER TABLE louise_bots ADD COLUMN max_purchases_per_epoch INTEGER DEFAULT 20")
             except sqlite3.OperationalError:
-                pass  # Column already exists
+                pass
+            try:
+                conn.execute("ALTER TABLE louise_bots ADD COLUMN bot_type TEXT DEFAULT 'louise'")
+            except sqlite3.OperationalError:
+                pass
 
             # Table: louise_epochs
             conn.execute("""
@@ -81,10 +86,42 @@ class LouiseDB:
                 )
             """)
 
+            # Table: pnl_snapshots — time-series P&L for long-term charting
+            # Every poll cycle with an active position writes one row.
+            # Fields:
+            #   avg_entry_price_usdt  — average entry price in USDT (nominal)
+            #   total_committed_usdt  — capital deployed in current epoch (nominal USDT)
+            #   unrealized_pnl_usdt   — floating P&L right now in USDT
+            #   unrealized_pnl_pct    — floating P&L as % of committed capital
+            #   cumulative_realized_pnl_usdt — sum of ALL profits taken since bot started
+            #   net_position_usdt     — cumulative_realized + unrealized (true all-time P&L)
+            #   net_position_pct      — net_position as % of total capital ever committed
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS pnl_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bot_id TEXT NOT NULL,
+                    bot_type TEXT NOT NULL,
+                    epoch_id TEXT,
+                    snapshot_at INTEGER NOT NULL,
+                    current_price REAL NOT NULL,
+                    avg_entry_price_usdt REAL DEFAULT 0.0,
+                    num_entries INTEGER DEFAULT 0,
+                    total_committed_usdt REAL DEFAULT 0.0,
+                    unrealized_pnl_usdt REAL DEFAULT 0.0,
+                    unrealized_pnl_pct REAL DEFAULT 0.0,
+                    cumulative_realized_pnl_usdt REAL DEFAULT 0.0,
+                    net_position_usdt REAL DEFAULT 0.0,
+                    net_position_pct REAL DEFAULT 0.0,
+                    FOREIGN KEY(bot_id) REFERENCES louise_bots(bot_id)
+                )
+            """)
+
             # Indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_epochs_bot_id ON louise_epochs(bot_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_purchases_epoch_id ON louise_purchases(epoch_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_purchases_bot_id ON louise_purchases(bot_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pnl_snapshots_bot_id ON pnl_snapshots(bot_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pnl_snapshots_at ON pnl_snapshots(snapshot_at)")
 
             conn.commit()
 
@@ -99,7 +136,8 @@ class LouiseDB:
         subaccount: str = "bluechip",
         status: str = "IDLE",
         max_position_size_usdt: float = 5000.0,
-        max_purchases_per_epoch: int = 20
+        max_purchases_per_epoch: int = 20,
+        bot_type: str = "louise",
     ) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
@@ -107,13 +145,13 @@ class LouiseDB:
                 INSERT INTO louise_bots
                 (bot_id, symbol, buy_volume, poll_interval_seconds,
                  target_profit_pct, daily_budget_usdt, max_position_size_usdt,
-                 max_purchases_per_epoch, subaccount, status, created_at,
+                 max_purchases_per_epoch, subaccount, bot_type, status, created_at,
                  updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 bot_id, symbol, buy_volume, poll_interval_seconds,
                 target_profit_pct, daily_budget_usdt, max_position_size_usdt,
-                max_purchases_per_epoch, subaccount, status, now, now
+                max_purchases_per_epoch, subaccount, bot_type, status, now, now
             ))
             conn.commit()
 
@@ -251,6 +289,42 @@ class LouiseDB:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_purchases_by_bot(
+        self,
+        bot_id: str,
+        since: Optional[int] = None,
+        limit: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        """Return purchases for a bot across all its epochs, oldest first.
+        Used by the console to plot every entry point on the price chart."""
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if since is not None:
+                cursor = conn.execute(
+                    "SELECT * FROM louise_purchases WHERE bot_id = ? AND created_at >= ? "
+                    "ORDER BY created_at ASC LIMIT ?",
+                    (bot_id, since, limit),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM louise_purchases WHERE bot_id = ? "
+                    "ORDER BY created_at ASC LIMIT ?",
+                    (bot_id, limit),
+                )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_latest_pnl_snapshot(self, bot_id: str) -> Optional[Dict[str, Any]]:
+        """Return the most recent P&L snapshot for a bot (None if no snapshots yet)."""
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM pnl_snapshots WHERE bot_id = ? "
+                "ORDER BY snapshot_at DESC LIMIT 1",
+                (bot_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def get_active_epoch(self, bot_id: str) -> Optional[Dict[str, Any]]:
         with open_db(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -286,3 +360,110 @@ class LouiseDB:
     def get_epoch_purchases(self, epoch_id: str) -> List[Dict[str, Any]]:
         """Alias for get_purchases_by_epoch for test convenience."""
         return self.get_purchases_by_epoch(epoch_id)
+
+    def get_total_realized_pnl(self, bot_id: str) -> float:
+        """Return total profit_usdt summed across all closed epochs for a bot.
+
+        This is the cumulative_realized_pnl: all profits effectively collected
+        since the bot started. Negative values mean more losses than gains so far.
+        """
+        with open_db(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT COALESCE(SUM(profit_usdt), 0.0) FROM louise_epochs "
+                "WHERE bot_id = ? AND status NOT IN ('RUNNING')",
+                (bot_id,),
+            )
+            row = cursor.fetchone()
+            return float(row[0]) if row else 0.0
+
+    def record_pnl_snapshot(
+        self,
+        bot_id: str,
+        bot_type: str,
+        current_price: float,
+        epoch_id: Optional[str] = None,
+        avg_entry_price_usdt: float = 0.0,
+        num_entries: int = 0,
+        total_committed_usdt: float = 0.0,
+        unrealized_pnl_usdt: float = 0.0,
+        unrealized_pnl_pct: float = 0.0,
+        cumulative_realized_pnl_usdt: float = 0.0,
+    ) -> None:
+        """Record a P&L snapshot for time-series charting.
+
+        net_position_usdt = cumulative_realized + unrealized (true all-time P&L).
+        net_position_pct  = net_position / total_committed * 100 (when committed > 0).
+        """
+        net_position_usdt = cumulative_realized_pnl_usdt + unrealized_pnl_usdt
+        net_position_pct = (
+            (net_position_usdt / total_committed_usdt * 100.0)
+            if total_committed_usdt > 0.0 else 0.0
+        )
+        now = int(time.time())
+        with open_db(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO pnl_snapshots
+                (bot_id, bot_type, epoch_id, snapshot_at, current_price,
+                 avg_entry_price_usdt, num_entries, total_committed_usdt,
+                 unrealized_pnl_usdt, unrealized_pnl_pct,
+                 cumulative_realized_pnl_usdt, net_position_usdt, net_position_pct)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                bot_id, bot_type, epoch_id, now, current_price,
+                avg_entry_price_usdt, num_entries, total_committed_usdt,
+                unrealized_pnl_usdt, unrealized_pnl_pct,
+                cumulative_realized_pnl_usdt, net_position_usdt, net_position_pct,
+            ))
+            conn.commit()
+
+    def get_pnl_history(
+        self,
+        bot_id: str,
+        since: Optional[int] = None,
+        limit: int = 2000,
+    ) -> List[Dict[str, Any]]:
+        """Return P&L snapshots for a bot, ordered oldest-first.
+
+        Args:
+            bot_id: Target bot.
+            since: Unix timestamp lower bound (inclusive). None = all history.
+            limit: Maximum number of rows returned (default 2000 ≈ ~7 days at 5-min polls).
+        """
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if since is not None:
+                cursor = conn.execute(
+                    "SELECT * FROM pnl_snapshots WHERE bot_id = ? AND snapshot_at >= ? "
+                    "ORDER BY snapshot_at ASC LIMIT ?",
+                    (bot_id, since, limit),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM pnl_snapshots WHERE bot_id = ? "
+                    "ORDER BY snapshot_at ASC LIMIT ?",
+                    (bot_id, limit),
+                )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_combined_pnl_history(
+        self,
+        since: Optional[int] = None,
+        limit: int = 4000,
+    ) -> List[Dict[str, Any]]:
+        """Return P&L snapshots for ALL bots, ordered by time.
+        Useful for dual-hub combined view (Louise + AntiLouise together).
+        """
+        with open_db(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if since is not None:
+                cursor = conn.execute(
+                    "SELECT * FROM pnl_snapshots WHERE snapshot_at >= ? "
+                    "ORDER BY snapshot_at ASC LIMIT ?",
+                    (since, limit),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM pnl_snapshots ORDER BY snapshot_at ASC LIMIT ?",
+                    (limit,),
+                )
+            return [dict(row) for row in cursor.fetchall()]
