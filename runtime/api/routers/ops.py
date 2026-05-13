@@ -18,7 +18,7 @@ async def ops_protocol_status(ctx: AppContext = Depends(deps.get_ctx)) -> dict[s
     from runtime.core.louise_db import LouiseDB
     from runtime.api.routers.louise import _hub_metrics
     louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
-    
+
     audit = get_ops_audit_log(ctx.config.data_dir)
     return {
         "close_protocol": audit.last("close_protocol"),
