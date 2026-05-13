@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from runtime.api import deps
 from runtime.api._helpers import build_snapshot, resolve_pair
 from runtime.api.schemas import (
-    BotStatusOut,
     GatewaySnapshotOut,
     GatewayStartBody,
     TerminalExecBody,
@@ -122,7 +121,6 @@ async def symbol_precision(
     Reads LOT_SIZE.stepSize → qty_decimals and PRICE_FILTER.tickSize → price_decimals.
     This makes manual qDec/pDec fields unnecessary.
     """
-    import asyncio
     from decimal import Decimal
 
     if not ctx.gateway or not ctx.gateway._client:

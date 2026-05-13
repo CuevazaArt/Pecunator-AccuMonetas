@@ -7,16 +7,13 @@ imports still work through the re-export shim in ``app.py``.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from typing import Any
 
 from binance import AsyncClient
 from binance.exceptions import BinanceAPIException
-from fastapi import HTTPException
 
-from runtime.api import deps
 from runtime.api._helpers import audit_weight_from_client, resolve_pair
 from runtime.app import AppContext
 from runtime.core.equity import build_ticker_price_map, compute_spot_equity_in_base

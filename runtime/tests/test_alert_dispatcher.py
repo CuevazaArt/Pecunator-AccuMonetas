@@ -1,12 +1,9 @@
 """Tests for AlertDispatcher — alert channels, deduplication, retry logic."""
 
-import json
 import logging
 import os
-import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -82,7 +79,7 @@ class TestDeduplication:
 
     def test_dedup_same_alert_within_window(self, alert_dispatcher):
         """Sending same alert twice within DEDUP_WINDOW should skip second."""
-        alert1 = alert_dispatcher.critical("DUP_TEST", "First", silent=False)
+        alert_dispatcher.critical("DUP_TEST", "First", silent=False)
         alert2 = alert_dispatcher.critical("DUP_TEST", "Second", silent=False)
 
         # Both stored but dedup_cache prevents external dispatch
@@ -190,7 +187,17 @@ class TestTelegramIntegration:
         "PECUNATOR_ALERT_TELEGRAM_CHAT_ID": "123456"
     })
     def test_telegram_exponential_backoff(self, mock_client_class):
-        """Test exponential backoff on connection failures."""
+        """Test exponential backoff on connection failures.
+
+        We patch the `time.sleep` attribute of the alert_dispatcher module
+        with a real (instant) function that records the requested duration.
+        The background thread issues 2 retries with 2s and 4s backoff; we
+        wait by polling the mock's invocation count from outside the patch's
+        reach (we sleep on `_real_sleep`, the unpatched reference).
+        """
+        import time as _real_time
+        from runtime.core import alert_dispatcher as _alert_mod
+
         mock_client = Mock()
         mock_client.post.side_effect = ConnectionError("Network error")
         mock_client.__enter__ = Mock(return_value=mock_client)
@@ -198,16 +205,33 @@ class TestTelegramIntegration:
         mock_client_class.return_value = mock_client
 
         dispatcher = AlertDispatcher()
+        sleep_calls: list = []
 
-        with patch("time.sleep") as mock_sleep:
+        def fake_sleep(d):
+            sleep_calls.append(d)
+
+        original_sleep = _alert_mod.time.sleep
+        _alert_mod.time.sleep = fake_sleep
+        try:
             dispatcher._send_telegram_async("Test message")
-            time.sleep(0.5)
+            # Poll outside the patch — _real_time.sleep is still real
+            deadline = _real_time.monotonic() + 5.0
+            while _real_time.monotonic() < deadline:
+                if mock_client.post.call_count >= 3:
+                    break
+                _real_time.sleep(0.05)
+        finally:
+            _alert_mod.time.sleep = original_sleep
 
-            # Should have retried with backoff: 2s, 4s
-            if mock_sleep.called:
-                calls = mock_sleep.call_args_list
-                # At least one sleep call with exponential backoff
-                assert any(call[0][0] in [2, 4] for call in calls)
+        # Give the thread a moment to record final sleeps after the post calls
+        _real_time.sleep(0.1)
+
+        # Verify retries happened
+        assert mock_client.post.call_count >= 2, f"Expected ≥2 retries, got {mock_client.post.call_count}"
+        # Exponential backoff: 2s and/or 4s should appear
+        assert any(d in (2, 4) for d in sleep_calls), (
+            f"Expected backoff sleeps of 2s or 4s, got: {sleep_calls}"
+        )
 
 
 class TestEmailIntegration:
@@ -303,7 +327,7 @@ class TestValidation:
     def test_warn_on_token_without_chatid(self, caplog):
         """Should warn if token set but chat_id missing."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "PECUNATOR_ALERT_TELEGRAM_CHAT_ID missing" in caplog.text
 
@@ -313,7 +337,7 @@ class TestValidation:
     def test_warn_on_chatid_without_token(self, caplog):
         """Should warn if chat_id set but token missing."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "PECUNATOR_ALERT_TELEGRAM_TOKEN missing" in caplog.text
 
@@ -325,6 +349,6 @@ class TestValidation:
     def test_warn_on_incomplete_email_config(self, caplog):
         """Should warn if email vars incomplete."""
         with caplog.at_level(logging.WARNING):
-            dispatcher = AlertDispatcher()
+            AlertDispatcher()
 
         assert "Email alerts enabled but" in caplog.text and "incomplete" in caplog.text

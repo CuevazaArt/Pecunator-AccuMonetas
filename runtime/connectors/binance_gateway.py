@@ -198,7 +198,7 @@ class BinanceGateway:
         raw_bal = data.get("balances", [])
         if not isinstance(raw_bal, list):
             raw_bal = []
-            
+
         consolidated = {}
         for b in raw_bal:
             ast = b.get("asset")
@@ -233,7 +233,7 @@ class BinanceGateway:
             for k, v in consolidated.items()
             if v["free"] > 0 or v["locked"] > 0
         ]
-        
+
         self.bus.publish("account.balances", self.state.balances)
         self.state.last_error = None
         self._capture_rest_weight_from_client(action="fetch_account:get_account")
@@ -663,7 +663,7 @@ class BinanceGateway:
                 raise
             except Exception as e:
                 self._emit_log(f"poll light: {sanitize_log_message(str(e))}")
-                
+
             # ── PERSIST STATE (WAL) ─────────────────────────────
             try:
                 from runtime.core import state_wal
@@ -671,7 +671,7 @@ class BinanceGateway:
                     state_wal.persist(self.state, self.data_dir)
             except Exception as e:
                 _LOG.warning("Failed to persist state_wal: %s", e)
-                
+
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=interval)
             except asyncio.TimeoutError:

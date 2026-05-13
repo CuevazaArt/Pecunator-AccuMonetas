@@ -438,9 +438,13 @@ class EngineApi {
     double? buyVolume,
     String? symbol,
   }) => _client.patch('/api/louise/bots/$botId', body: {
+    // ignore: use_null_aware_elements
     if (dailyBudget != null) 'daily_budget': dailyBudget,
+    // ignore: use_null_aware_elements
     if (targetProfitPct != null) 'target_profit_pct': targetProfitPct,
+    // ignore: use_null_aware_elements
     if (buyVolume != null) 'buy_volume': buyVolume,
+    // ignore: use_null_aware_elements
     if (symbol != null) 'symbol': symbol,
   });
 

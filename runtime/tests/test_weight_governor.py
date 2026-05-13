@@ -11,7 +11,6 @@ Validates:
 import threading
 import time
 
-import pytest
 
 from runtime.core.weight_governor import WeightGovernor
 

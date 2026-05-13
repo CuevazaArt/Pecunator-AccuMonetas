@@ -1,20 +1,14 @@
 """Integration tests for Louise bot — full DCA lifecycle, failover, state recovery."""
 
-import asyncio
-import os
-import sqlite3
 import time
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from runtime.bot.louise import LouiseBotRunner
-from runtime.core.budget_guard import BudgetGuard
 from runtime.core.louise_db import LouiseDB
 from runtime.core.event_bus import EventBus
-from runtime.core.market_cache import get_market_cache
-from runtime.core.settings import data_dir
 
 
 @pytest.fixture
@@ -75,7 +69,8 @@ class TestHappyPath:
                     buy_volume=100.0,
                     poll_interval_seconds=1,
                     target_profit_pct=5.0,
-                    daily_budget_usdt=1000.0
+                    daily_budget_usdt=1000.0,
+                    status="RUNNING",
                 )
 
                 # Start bot runner
@@ -124,7 +119,8 @@ class TestHappyPath:
                     buy_volume=50.0,
                     poll_interval_seconds=1,
                     target_profit_pct=3.0,
-                    daily_budget_usdt=500.0
+                    daily_budget_usdt=500.0,
+                    status="RUNNING",
                 )
 
                 runner = LouiseBotRunner(bot_id, louise_db, event_bus, mock_gateway)
@@ -186,7 +182,7 @@ class TestStopLoss:
                 time.sleep(0.1)
 
                 # Epoch should be closed (liquidated)
-                closed_epoch = louise_db.get_epoch(epoch_id)
+                louise_db.get_epoch(epoch_id)
                 # In real scenario, epoch would be closed with status CLOSED_STOP_LOSS
                 # Here we just verify no crash
 
@@ -205,9 +201,9 @@ class TestBudgetCeiling:
                     mock_budget.can_spend.side_effect = [True, False]  # First bot OK, second blocked
                     mock_bg.return_value = mock_budget
 
-                    # Create 2 bots
-                    louise_db.create_bot("louise-btc-1", "BTCUSDT", 100.0, 1, 5.0, 500.0)
-                    louise_db.create_bot("louise-eth-1", "ETHUSDT", 100.0, 1, 5.0, 500.0)
+                    # Create 2 bots (status=RUNNING so poll_market processes them)
+                    louise_db.create_bot("louise-btc-1", "BTCUSDT", 100.0, 1, 5.0, 500.0, status="RUNNING")
+                    louise_db.create_bot("louise-eth-1", "ETHUSDT", 100.0, 1, 5.0, 500.0, status="RUNNING")
 
                     runner1 = LouiseBotRunner("louise-btc-1", louise_db, event_bus, mock_gateway)
                     runner2 = LouiseBotRunner("louise-eth-1", louise_db, event_bus, mock_gateway)
@@ -243,7 +239,7 @@ class TestConcurrentBuys:
                 mock_gov.return_value.can_execute.return_value = True
 
                 bot_id = "louise-concurrent"
-                louise_db.create_bot(bot_id, "BTCUSDT", 50.0, 1, 5.0, 1000.0)
+                louise_db.create_bot(bot_id, "BTCUSDT", 50.0, 1, 5.0, 1000.0, status="RUNNING")
 
                 runner = LouiseBotRunner(bot_id, louise_db, event_bus, mock_gateway)
                 runner.initialize()

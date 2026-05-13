@@ -30,7 +30,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from runtime.bot._paper_log import get_paper_trades, paper_trade_summary
+from runtime.bot._paper_log import get_paper_trades  # noqa: E402
 
 
 def _parse_price(report: dict[str, Any], key: str) -> Decimal | None:
@@ -52,7 +52,6 @@ def analyse_trades(
 ) -> dict[str, Any]:
     """Analyse paper trade history and return structured report."""
 
-    summary = paper_trade_summary(bot_type=bot_type, symbol=symbol)
     trades = get_paper_trades(bot_type=bot_type, symbol=symbol, limit=limit)
 
     if not trades:

@@ -629,7 +629,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
             _summaryCard('Activos', '${m.activeBots}', Colors.blueAccent),
             _summaryCard('Portfolio', '\$${m.totalPortfolio.toStringAsFixed(0)}', Colors.greenAccent),
             _summaryCard('Libre', '\$${m.totalFreeBalance.toStringAsFixed(0)}', Colors.amber),
-            _summaryCard('PNL \$', (m.totalUnrealizedPnl >= 0 ? '+' : '') + '\$${m.totalUnrealizedPnl.toStringAsFixed(2)}', pnlColor),
+            _summaryCard('PNL \$', '${m.totalUnrealizedPnl >= 0 ? '+' : ''}\$${m.totalUnrealizedPnl.toStringAsFixed(2)}', pnlColor),
           ],
         ),
       ]),
@@ -838,7 +838,7 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                   Row(
                     children: [
                       _metricCell('Posición Activa', '${bot.positionSize.toStringAsFixed(4)} ${bot.symbol.split("/")[0]}'),
-                      _metricCell('PNL Acumulado', (bot.unrealizedPnl >= 0 ? '+' : '') + '\$${bot.unrealizedPnl.toStringAsFixed(2)}', color: pnlColor),
+                      _metricCell('PNL Acumulado', '${bot.unrealizedPnl >= 0 ? '+' : ''}\$${bot.unrealizedPnl.toStringAsFixed(2)}', color: pnlColor),
                       _metricCell('Trades de Ciclo', '${bot.tradesToday}'),
                     ],
                   ),

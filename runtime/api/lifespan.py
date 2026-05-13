@@ -8,12 +8,12 @@ import signal
 import sqlite3
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 
 from runtime.api import deps
-from runtime.api._helpers import resolve_pair, resolve_pair_for_bot
+from runtime.api._helpers import resolve_pair
 from runtime.app import AppContext
 from runtime.connectors.binance_gateway import BinanceGateway
 from runtime.core.security_util import sanitize_log_message
@@ -66,7 +66,9 @@ async def lifespan(app: FastAPI):
     _shutdown_start_time = None
 
     if os.environ.get("PECUNATOR_API_AUTH_DISABLED", "").strip() in ("1", "true"):
-        _LOG.critical("⚠️ PECUNATOR_API_AUTH_DISABLED is active! The API is exposed without authentication. DO NOT USE IN PRODUCTION.")
+        _LOG.critical("⚠️ PECUNATOR_API_AUTH_DISABLED is active! "
+                     "The API is exposed without authentication. "
+                     "DO NOT USE IN PRODUCTION.")
 
     # Register signal handlers for graceful shutdown (not supported on Windows)
     loop = asyncio.get_event_loop()
@@ -128,9 +130,20 @@ async def lifespan(app: FastAPI):
                             await runner.gateway._client.cancel_order(symbol=symbol, origClientOrderId=client_oid)
                             _LOG.info("Cancelled order %s on %s", client_oid, symbol)
                     except (OSError, TimeoutError, RuntimeError, AttributeError) as e:
-                        _LOG.warning("Failed to cancel order %s (type=%s): %s", client_oid, type(e).__name__, sanitize_log_message(str(e)))
+                        err_msg = sanitize_log_message(str(e))
+                        _LOG.warning(
+                            "Failed to cancel order %s (type=%s): %s",
+                            client_oid,
+                            type(e).__name__,
+                            err_msg
+                        )
     except (ImportError, AttributeError, RuntimeError) as e:
-        _LOG.error("Error during pending order cancellation (type=%s): %s", type(e).__name__, sanitize_log_message(str(e)))
+        err_msg = sanitize_log_message(str(e))
+        _LOG.error(
+            "Error during pending order cancellation (type=%s): %s",
+            type(e).__name__,
+            err_msg
+        )
 
     # Step 3: Stop telemetry collector
     try:
@@ -161,7 +174,7 @@ async def lifespan(app: FastAPI):
     # Step 6: Flush database state (Louise)
     try:
         from runtime.core.louise_db import LouiseDB
-        db = LouiseDB()
+        LouiseDB()
         _LOG.info("Flushing Louise database state...")
         # Database context managers auto-commit, no explicit action needed
     except (ImportError, OSError, sqlite3.DatabaseError) as e:

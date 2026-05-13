@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 _LOG = logging.getLogger("pecunator.modules.trend_signal")
@@ -38,8 +38,8 @@ def compute_heikin_ashi(klines: List[list]) -> List[Dict[str, float]]:
     prev_ha_close = None
 
     for k in klines:
-        o, h, l, c = float(k[1]), float(k[2]), float(k[3]), float(k[4])
-        ha_close = (o + h + l + c) / 4.0
+        o, h, lo, c = float(k[1]), float(k[2]), float(k[3]), float(k[4])
+        ha_close = (o + h + lo + c) / 4.0
 
         if prev_ha_open is None:
             ha_open = (o + c) / 2.0
@@ -47,7 +47,7 @@ def compute_heikin_ashi(klines: List[list]) -> List[Dict[str, float]]:
             ha_open = (prev_ha_open + prev_ha_close) / 2.0
 
         ha_high = max(h, ha_open, ha_close)
-        ha_low = min(l, ha_open, ha_close)
+        ha_low = min(lo, ha_open, ha_close)
 
         result.append({
             "ha_open": ha_open,

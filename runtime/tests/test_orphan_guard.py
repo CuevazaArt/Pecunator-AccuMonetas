@@ -1,6 +1,5 @@
 """Tests for OrphanGuard — orphaned position detection."""
 import asyncio
-import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock
 

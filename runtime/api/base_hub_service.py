@@ -20,6 +20,8 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import logging
+import os
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -27,8 +29,6 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from runtime.core.db_util import open_db
-
-import logging
 
 _LOG = logging.getLogger("pecunator.hub_base")
 
@@ -247,7 +247,7 @@ class BaseHubService(ABC):
             rec = self._bots.get(bot_id)
             tag = rec.tag if rec is not None else "-"
             self._write_log(bot_id, tag, level or "INFO", msg, payload)
-            
+
             log_level_str = (level or "INFO").upper()
 
             # ── Structured JSON event ────────────────────────────
@@ -282,7 +282,7 @@ class BaseHubService(ABC):
                 if _parts:
                     _flat_extra = " | " + " | ".join(_parts)
             _LOG.log(log_level, "[%s] %s%s", bot_id, msg, _flat_extra)
-            
+
             if isinstance(payload, dict):
                 if msg == equity_msg:
                     self._persist_equity_snapshot(bot_id, payload)

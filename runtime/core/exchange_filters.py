@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import time
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 from typing import Any, Optional
 
 _LOG = logging.getLogger("pecunator.core.exchange_filters")
@@ -131,7 +131,7 @@ class ExchangeFilterCache:
         self, symbol: str, client: Any, *, _to_thread: Any = None
     ) -> SymbolFilters:
         """Load symbol filters from Binance if not already cached.
-        
+
         Works with both AsyncClient (direct await) and sync Client (_to_thread).
         """
         import asyncio
