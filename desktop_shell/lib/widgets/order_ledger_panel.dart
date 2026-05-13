@@ -44,8 +44,9 @@ class _OrderLedgerPanelState extends State<OrderLedgerPanel> {
     if (!mounted) return;
     final wsStats = snap.orderLedgerStats;
     final wsRecent = snap.orderLedgerRecent;
-    if (wsStats == null && wsRecent.isEmpty)
+    if (wsStats == null && wsRecent.isEmpty) {
       return; // no ledger data in this tick
+    }
     setState(() {
       if (wsStats != null) _stats = wsStats;
       if (wsRecent.isNotEmpty) _orders = wsRecent;

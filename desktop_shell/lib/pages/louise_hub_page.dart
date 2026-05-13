@@ -168,16 +168,18 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         _loading = false;
         _error = null;
         final botList = results[0] as List<Map<String, dynamic>>;
-        if (botList.isNotEmpty)
+        if (botList.isNotEmpty) {
           _bots = botList.map(BotMetrics.fromJson).toList();
+        }
 
         final metricsMap = results[1] as Map<String, dynamic>;
         if (metricsMap.isNotEmpty) {
           _hubMetrics = HubMetrics.fromJson(metricsMap);
         }
         final weightMap = results[2] as Map<String, dynamic>;
-        if (weightMap.isNotEmpty)
+        if (weightMap.isNotEmpty) {
           _weightStatus = WeightStatus.fromJson(weightMap);
+        }
 
         final histList = (results[3] as List<Map<String, dynamic>>);
         if (histList.isNotEmpty) {
@@ -185,11 +187,12 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
         }
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = '$e';
         });
+      }
     }
   }
 
