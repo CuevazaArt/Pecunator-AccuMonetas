@@ -300,6 +300,15 @@ class AntiLouiseBotRunner:
             avg_short_price = Decimal(str(epoch['avg_buy_price']))
             total_received = Decimal(str(epoch['total_cost']))
 
+            # Defensive guards: should not happen when num_purchases > 0, but a
+            # corrupted/partial DB row could leave these at zero and crash the loop.
+            if avg_short_price <= Decimal("0") or total_received <= Decimal("0"):
+                logger.warning(
+                    f"{self.bot_id}: Epoch {epoch['epoch_id']} has num_purchases>0 "
+                    f"but avg={avg_short_price} total={total_received}. Skipping cycle."
+                )
+                return
+
             total_volume = total_received / avg_short_price   # base asset owed
             current_exposure = total_volume * self.current_price  # cost to cover now
             profit_usdt = total_received - current_exposure
@@ -467,13 +476,37 @@ class AntiLouiseBotRunner:
 
         avg_short_price = Decimal(str(epoch['avg_buy_price']))
         total_received = Decimal(str(epoch['total_cost']))
+
+        # Defensive: should be guarded upstream, but never let division blow the loop
+        if avg_short_price <= Decimal("0") or total_received <= Decimal("0"):
+            alerts.critical(
+                "COVER_INVALID_EPOCH",
+                f"AntiLouise {self.bot_id}: cannot cover epoch "
+                f"{epoch['epoch_id']} — avg={avg_short_price} total={total_received}",
+                payload={"bot_id": self.bot_id, "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
+            return
+
         total_volume = total_received / avg_short_price  # total base asset owed
 
         filters = get_exchange_filters().get(symbol)
-        if filters:
-            quantized_vol = filters.quantize_qty(total_volume)
-        else:
-            quantized_vol = round(total_volume, 5)
+        if filters is None:
+            # Without filters we cannot quantize to LOT_SIZE — Binance would reject
+            # the cover with -1013. Abort with critical alert and retry next cycle
+            # (poll_market will attempt to ensure_loaded the filters).
+            alerts.critical(
+                "COVER_BLOCKED_NO_FILTERS",
+                f"AntiLouise {self.bot_id} reached take-profit on {symbol} but "
+                f"exchange filters are unavailable — aborting cover until filters load.",
+                payload={"bot_id": self.bot_id, "symbol": symbol,
+                         "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_gateway_fail_sec()
+            return
+        quantized_vol = filters.quantize_qty(total_volume)
 
         logger.info(
             f"{self.bot_id}: Covering SHORT {quantized_vol} {symbol} at market "

@@ -399,14 +399,35 @@ class LouiseBotRunner:
         status: str = "CLOSED_SUCCESSFUL"
     ):
         symbol = self.config["symbol"]  # type: ignore[index]
-        total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
         alerts = get_alert_dispatcher()
 
+        avg = Decimal(str(epoch['avg_buy_price']))
+        total_cost = Decimal(str(epoch['total_cost']))
+        if avg <= Decimal("0") or total_cost <= Decimal("0"):
+            alerts.critical(
+                "SELL_INVALID_EPOCH",
+                f"Louise {self.bot_id}: cannot sell epoch {epoch['epoch_id']} "
+                f"— avg={avg} total={total_cost}",
+                payload={"bot_id": self.bot_id, "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
+            return
+        total_vol = total_cost / avg
+
         filters = get_exchange_filters().get(symbol)
-        if filters:
-            quantized_vol = filters.quantize_qty(total_vol)
-        else:
-            quantized_vol = round(total_vol, 5)
+        if filters is None:
+            alerts.critical(
+                "SELL_BLOCKED_NO_FILTERS",
+                f"Louise {self.bot_id} reached take-profit on {symbol} but "
+                f"exchange filters are unavailable — aborting sell until filters load.",
+                payload={"bot_id": self.bot_id, "symbol": symbol,
+                         "epoch_id": epoch['epoch_id']},
+                silent=False,
+            )
+            self.cooldown_until = int(time.time()) + louise_cooldown_gateway_fail_sec()
+            return
+        quantized_vol = filters.quantize_qty(total_vol)
 
         logger.info(f"{self.bot_id}: Target reached! Executing MARKET SELL of {quantized_vol} {symbol}")
         client_oid = f"ls_{self.bot_id}_{int(time.time())}"

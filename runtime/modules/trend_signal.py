@@ -1,4 +1,4 @@
-"""TrendingSignalTipoHekinAshiandMM — Dual-gate trend detection using Heikin-Ashi and Moving Averages.
+"""TrendingSignalTipoHeikinAshiandMM — Dual-gate trend detection using Heikin-Ashi and Moving Averages.
 
 Gate 1 (Trend): Heikin-Ashi smoothed MA crossover.
     - Computes HA candles from regular OHLC klines.
@@ -116,7 +116,7 @@ class _SymbolState:
     entry_updated_at: float = 0.0
 
 
-class TrendingSignalTipoHekinAshiandMM:
+class TrendingSignalTipoHeikinAshiandMM:
     """Thread-safe Heikin-Ashi + MM trend signal service with per-symbol caching.
 
     Singleton — one instance per runtime process.
@@ -218,20 +218,20 @@ class TrendingSignalTipoHekinAshiandMM:
 
 # ── Singleton ───────────────────────────────────────────────────────
 
-_service: Optional[TrendingSignalTipoHekinAshiandMM] = None
+_service: Optional[TrendingSignalTipoHeikinAshiandMM] = None
 
 
 def get_trend_signal_service(
     trend_ttl_sec: float = 300.0,
     entry_ttl_sec: float = 60.0,
-) -> TrendingSignalTipoHekinAshiandMM:
-    """Get or create the global TrendingSignalTipoHekinAshiandMM singleton."""
+) -> TrendingSignalTipoHeikinAshiandMM:
+    """Get or create the global TrendingSignalTipoHeikinAshiandMM singleton."""
     global _service
     if _service is None:
-        _service = TrendingSignalTipoHekinAshiandMM(
+        _service = TrendingSignalTipoHeikinAshiandMM(
             trend_ttl_sec=trend_ttl_sec,
             entry_ttl_sec=entry_ttl_sec,
         )
-        _LOG.info("TrendingSignalTipoHekinAshiandMM initialized (trend_ttl=%ds, entry_ttl=%ds)",
+        _LOG.info("TrendingSignalTipoHeikinAshiandMM initialized (trend_ttl=%ds, entry_ttl=%ds)",
                   trend_ttl_sec, entry_ttl_sec)
     return _service

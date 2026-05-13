@@ -74,7 +74,7 @@ This changelog is the disciplined, operator-facing history for architecture, UI 
 - **`runtime/api/louise_service.py`**: routes the runner class by `bot_type`
   column (`louise` → `LouiseBotRunner`, `anti_louise` → `AntiLouiseBotRunner`).
 - **`runtime/modules/trend_signal.py`**: class renamed
-  `TrendSignalService` → `TrendingSignalTipoHekinAshiandMM`. Docstrings cleaned
+  `TrendSignalService` → `TrendingSignalTipoHeikinAshiandMM`. Docstrings cleaned
   of Dorothy/Elphaba references.
 - **`runtime/core/louise_db.py`**: new `bot_type` column (default `'louise'`)
   with safe migration ALTER for existing DBs.

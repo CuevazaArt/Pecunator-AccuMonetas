@@ -45,14 +45,18 @@ class KlineIngestionService:
         self._task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
         self._bootstrapped: set[tuple[str, str]] = set()
+        # Cache the DB handle — constructor runs schema init + migrations,
+        # so instantiating per-tick would re-run those every cycle.
+        self._db: Optional[LouiseDB] = None
 
     # ── Discovery ────────────────────────────────────────────────────
 
     def _symbols_in_use(self) -> set[str]:
         """Return set of symbols currently in use by any bot in louise_bots."""
         try:
-            db = LouiseDB()
-            bots = db.get_all_bots()
+            if self._db is None:
+                self._db = LouiseDB()
+            bots = self._db.get_all_bots()
             return {b["symbol"] for b in bots if b.get("symbol")}
         except Exception as e:
             _LOG.warning("Failed to discover symbols: %s", e)
@@ -120,37 +124,40 @@ class KlineIngestionService:
         except Exception:
             server_ms = None
 
-        for sym in symbols:
-            for iv in self._intervals:
-                key = (sym, iv)
-                try:
-                    if key not in self._bootstrapped:
-                        # Deep history bootstrap (one-shot per symbol/interval)
-                        klines = await client.get_klines(
-                            symbol=sym,
-                            interval=iv,
-                            limit=self._bootstrap_candles,
-                        )
-                        if klines:
-                            vault.store_klines_with_ha(sym, iv, klines, server_ms)
-                            self._bootstrapped.add(key)
-                            _LOG.info(
-                                "Bootstrapped %s %s with %d candles",
-                                sym, iv, len(klines),
-                            )
-                    else:
-                        # Refresh tail (catches unclosed candle as it forms)
-                        klines = await client.get_klines(
-                            symbol=sym,
-                            interval=iv,
-                            limit=self._refresh_tail_candles,
-                        )
-                        if klines:
-                            vault.store_klines_with_ha(sym, iv, klines, server_ms)
-                except Exception as e:
-                    _LOG.warning(
-                        "Kline fetch %s %s failed: %s", sym, iv, e
+        # Build (symbol, interval) work units and fetch them concurrently.
+        # Each fetch is independent — gather amortizes round-trip latency.
+        units = [(sym, iv) for sym in symbols for iv in self._intervals]
+
+        async def _fetch_one(sym: str, iv: str):
+            try:
+                if (sym, iv) not in self._bootstrapped:
+                    klines = await client.get_klines(
+                        symbol=sym,
+                        interval=iv,
+                        limit=self._bootstrap_candles,
                     )
+                    if klines:
+                        vault.store_klines_with_ha(sym, iv, klines, server_ms)
+                        self._bootstrapped.add((sym, iv))
+                        _LOG.info(
+                            "Bootstrapped %s %s with %d candles",
+                            sym, iv, len(klines),
+                        )
+                else:
+                    klines = await client.get_klines(
+                        symbol=sym,
+                        interval=iv,
+                        limit=self._refresh_tail_candles,
+                    )
+                    if klines:
+                        vault.store_klines_with_ha(sym, iv, klines, server_ms)
+            except Exception as e:
+                _LOG.warning("Kline fetch %s %s failed: %s", sym, iv, e)
+
+        await asyncio.gather(
+            *[_fetch_one(s, i) for s, i in units],
+            return_exceptions=True,
+        )
 
 
 # ── Singleton ──────────────────────────────────────────────────────────

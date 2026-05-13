@@ -134,6 +134,16 @@ def _default_subaccount() -> str:
 
 
 class BotCreateRequest(BaseModel):
+    """Bot creation payload.
+
+    Note on L0 doctrine: ``max_position_size_usdt`` and ``max_purchases_per_epoch``
+    are stored on the bot record for informational/dashboard purposes but are
+    NOT enforced by the runner. Under the L0 dual-hub doctrine, drawdown on one
+    side is profit on the other — capping one side asymmetrically would break
+    the hedge. The runner is gated only by ``daily_budget`` and the global
+    ``BudgetGuard``. These fields are kept for backwards compatibility and may
+    be removed once UI is fully migrated.
+    """
     symbol: str
     daily_budget: float = 500.0
     target_profit_pct: float = 5.0
@@ -144,6 +154,12 @@ class BotCreateRequest(BaseModel):
     subaccount: str = Field(default_factory=_default_subaccount)
 
 class BotUpdateRequest(BaseModel):
+    """Bot config update payload.
+
+    See ``BotCreateRequest`` for the L0-doctrine note on ``max_position_size_usdt``
+    and ``max_purchases_per_epoch`` — these are informational only at the runner
+    level, but validation is preserved so dashboards/UI stay coherent.
+    """
     daily_budget: float | None = None
     target_profit_pct: float | None = None
     symbol: str | None = None
