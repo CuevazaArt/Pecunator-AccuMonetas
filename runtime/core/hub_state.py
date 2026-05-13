@@ -123,7 +123,7 @@ class HubStateStore:
                 rows = conn.execute("SELECT * FROM hub_instances").fetchall()
         finally:
             conn.close()
-            
+
         results = []
         for r in rows:
             d = dict(r)
@@ -198,9 +198,12 @@ class HubStateStore:
         conn = self._conn()
         try:
             conn.execute(
-                """INSERT INTO hub_decisions (ts, bot_id, symbol, decision, market_price, equity_usdt, drawdown_pct, active_rungs)
+                """INSERT INTO hub_decisions
+                   (ts, bot_id, symbol, decision, market_price, equity_usdt,
+                    drawdown_pct, active_rungs)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (time.time(), bot_id, symbol, decision, market_price, equity_usdt, drawdown_pct, active_rungs)
+                (time.time(), bot_id, symbol, decision, market_price,
+                 equity_usdt, drawdown_pct, active_rungs)
             )
             conn.commit()
         finally:

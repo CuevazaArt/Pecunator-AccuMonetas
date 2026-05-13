@@ -121,7 +121,7 @@ def build_snapshot(ctx: AppContext) -> GatewaySnapshotOut:
         from runtime.core.rest_usage_log import get_rest_usage_log
         from runtime.core.louise_db import LouiseDB
         from runtime.api.routers.louise import _hub_metrics
-        
+
         louise_db = LouiseDB(ctx.config.data_dir / "louise_hub.sqlite" if ctx.config.data_dir else None)
         st = _hub_metrics(louise_db)
         get_rest_usage_log(ctx.config.data_dir).maybe_record(

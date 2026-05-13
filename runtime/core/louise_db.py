@@ -88,14 +88,33 @@ class LouiseDB:
 
             conn.commit()
 
-    def create_bot(self, bot_id: str, symbol: str, buy_volume: float, poll_interval_seconds: int, target_profit_pct: float, daily_budget_usdt: float, subaccount: str = "bluechip", status: str = "IDLE", max_position_size_usdt: float = 5000.0, max_purchases_per_epoch: int = 20) -> None:
+    def create_bot(
+        self,
+        bot_id: str,
+        symbol: str,
+        buy_volume: float,
+        poll_interval_seconds: int,
+        target_profit_pct: float,
+        daily_budget_usdt: float,
+        subaccount: str = "bluechip",
+        status: str = "IDLE",
+        max_position_size_usdt: float = 5000.0,
+        max_purchases_per_epoch: int = 20
+    ) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
             conn.execute("""
                 INSERT INTO louise_bots
-                (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, max_position_size_usdt, max_purchases_per_epoch, subaccount, status, created_at, updated_at)
+                (bot_id, symbol, buy_volume, poll_interval_seconds,
+                 target_profit_pct, daily_budget_usdt, max_position_size_usdt,
+                 max_purchases_per_epoch, subaccount, status, created_at,
+                 updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, max_position_size_usdt, max_purchases_per_epoch, subaccount, status, now, now))
+            """, (
+                bot_id, symbol, buy_volume, poll_interval_seconds,
+                target_profit_pct, daily_budget_usdt, max_position_size_usdt,
+                max_purchases_per_epoch, subaccount, status, now, now
+            ))
             conn.commit()
 
     def update_bot_status(self, bot_id: str, status: str) -> None:
@@ -170,42 +189,76 @@ class LouiseDB:
     def update_epoch_stats(self, epoch_id: str, num_purchases: int, total_cost: float, avg_buy_price: float) -> None:
         with open_db(self.db_path) as conn:
             conn.execute("""
-                UPDATE louise_epochs 
+                UPDATE louise_epochs
                 SET num_purchases = ?, total_cost = ?, avg_buy_price = ?
                 WHERE epoch_id = ?
             """, (num_purchases, total_cost, avg_buy_price, epoch_id))
             conn.commit()
 
-    def close_epoch(self, epoch_id: str, final_price: float, final_value: float, profit_usdt: float, profit_pct: float, status: str = "CLOSED_SUCCESSFUL") -> None:
+    def close_epoch(
+        self,
+        epoch_id: str,
+        final_price: float,
+        final_value: float,
+        profit_usdt: float,
+        profit_pct: float,
+        status: str = "CLOSED_SUCCESSFUL"
+    ) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
             conn.execute("""
-                UPDATE louise_epochs 
-                SET final_price = ?, final_value = ?, profit_usdt = ?, profit_pct = ?, status = ?, closed_at = ?
+                UPDATE louise_epochs
+                SET final_price = ?, final_value = ?, profit_usdt = ?,
+                    profit_pct = ?, status = ?, closed_at = ?
                 WHERE epoch_id = ?
-            """, (final_price, final_value, profit_usdt, profit_pct, status, now, epoch_id))
+            """, (
+                final_price, final_value, profit_usdt, profit_pct,
+                status, now, epoch_id
+            ))
             conn.commit()
 
-    def add_purchase(self, purchase_id: str, bot_id: str, epoch_id: str, price_at_buy: float, volume: float, cost_usdt: float, order_id: Optional[str], status: str) -> None:
+    def add_purchase(
+        self,
+        purchase_id: str,
+        bot_id: str,
+        epoch_id: str,
+        price_at_buy: float,
+        volume: float,
+        cost_usdt: float,
+        order_id: Optional[str],
+        status: str
+    ) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
             conn.execute("""
-                INSERT INTO louise_purchases 
-                (purchase_id, bot_id, epoch_id, price_at_buy, volume, cost_usdt, order_id, status, created_at)
+                INSERT INTO louise_purchases
+                (purchase_id, bot_id, epoch_id, price_at_buy, volume,
+                 cost_usdt, order_id, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (purchase_id, bot_id, epoch_id, price_at_buy, volume, cost_usdt, order_id, status, now))
+            """, (
+                purchase_id, bot_id, epoch_id, price_at_buy, volume,
+                cost_usdt, order_id, status, now
+            ))
             conn.commit()
 
     def get_purchases_by_epoch(self, epoch_id: str) -> List[Dict[str, Any]]:
         with open_db(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM louise_purchases WHERE epoch_id = ? ORDER BY created_at ASC", (epoch_id,))
+            cursor = conn.execute(
+                "SELECT * FROM louise_purchases WHERE epoch_id = ? "
+                "ORDER BY created_at ASC",
+                (epoch_id,)
+            )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_active_epoch(self, bot_id: str) -> Optional[Dict[str, Any]]:
         with open_db(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM louise_epochs WHERE bot_id = ? AND status = 'RUNNING' ORDER BY created_at DESC LIMIT 1", (bot_id,))
+            cursor = conn.execute(
+                "SELECT * FROM louise_epochs WHERE bot_id = ? AND "
+                "status = 'RUNNING' ORDER BY created_at DESC LIMIT 1",
+                (bot_id,)
+            )
             row = cursor.fetchone()
             return dict(row) if row else None
 

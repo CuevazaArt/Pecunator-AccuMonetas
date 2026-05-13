@@ -71,7 +71,10 @@ class LouiseBotRunner:
             self.bus.subscribe("account.execution_report", self._on_execution_report)
 
         symbol = self.config['symbol']
-        logger.info(f"Initialized LouiseBot {self.bot_id} on {symbol} (subaccount: {self.config.get('subaccount', 'bluechip')}). Active epoch: {self.active_epoch['epoch_id'] if self.active_epoch else 'None'}")
+        subacct = self.config.get('subaccount', 'bluechip')
+        epoch_id = self.active_epoch['epoch_id'] if self.active_epoch else 'None'
+        logger.info(f"Initialized LouiseBot {self.bot_id} on {symbol} "
+                   f"(subaccount: {subacct}). Active epoch: {epoch_id}")
         return True
 
     def _on_ticker(self, data: Dict[str, Any]):
@@ -129,9 +132,18 @@ class LouiseBotRunner:
 
             elif meta['type'] == 'SELL':
                 status = meta.get('status', 'CLOSED_SUCCESSFUL')
-                self.db.close_epoch(meta['epoch_id'], float(meta['current_price']), float(meta['final_value']), float(meta['profit_usdt']), float(meta['profit_pct']), status=status)
+                self.db.close_epoch(
+                    meta['epoch_id'],
+                    float(meta['current_price']),
+                    float(meta['final_value']),
+                    float(meta['profit_usdt']),
+                    float(meta['profit_pct']),
+                    status=status
+                )
                 self.active_epoch = None
-                logger.info(f"{self.bot_id}: Sell WS confirmed. Epoch closed with status {status} ({meta['profit_pct']:.2f}%)!")
+                profit_pct = meta['profit_pct']
+                logger.info(f"{self.bot_id}: Sell WS confirmed. Epoch closed "
+                           f"with status {status} ({profit_pct:.2f}%)!")
 
     async def start(self):
         if not self.config:
@@ -266,7 +278,9 @@ class LouiseBotRunner:
         if epoch['num_purchases'] > 0:
             avg_price = Decimal(str(epoch['avg_buy_price']))
             if self.current_price >= avg_price:
-                logger.debug(f"{self.bot_id}: Price {self.current_price:.4f} is above average {avg_price:.4f}. Skipping buy to strictly average down.")
+                logger.debug(f"{self.bot_id}: Price {self.current_price:.4f} "
+                           f"is above average {avg_price:.4f}. "
+                           f"Skipping buy to strictly average down.")
                 return
 
         # Check max position size (preventive position limit)
@@ -291,12 +305,14 @@ class LouiseBotRunner:
         total_cost_so_far = Decimal(str(epoch.get('total_cost', 0.0)))
 
         if total_cost_so_far + buy_volume > daily_budget:
-            logger.warning(f"{self.bot_id}: Daily budget reached ({daily_budget} USDT). Pausing DCA until target reached.")
+            logger.warning(f"{self.bot_id}: Daily budget reached "
+                          f"({daily_budget} USDT). Pausing DCA until target reached.")
             return
 
         # Check spot balance
         if self.usdt_free_balance < buy_volume:
-            logger.warning(f"{self.bot_id}: Insufficient USDT in spot wallet. Need {buy_volume}, have {self.usdt_free_balance}.")
+            logger.warning(f"{self.bot_id}: Insufficient USDT in spot wallet. "
+                          f"Need {buy_volume}, have {self.usdt_free_balance}.")
             return
 
         # Check MIN_NOTIONAL before buy
@@ -366,15 +382,28 @@ class LouiseBotRunner:
 
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute buy: {e}")
+            err_str = str(e)[:100]
             alerts.warning(
                 "BUY_FAILED",
-                f"Bot {self.bot_id} failed to execute BUY on {symbol}: {str(e)[:100]}",
-                payload={"bot_id": self.bot_id, "symbol": symbol, "amount_usdt": float(cost_usdt), "error": str(e)[:100]},
+                f"Bot {self.bot_id} failed to execute BUY on {symbol}: {err_str}",
+                payload={
+                    "bot_id": self.bot_id,
+                    "symbol": symbol,
+                    "amount_usdt": float(cost_usdt),
+                    "error": err_str
+                },
                 silent=False
             )
             self.cooldown_until = int(time.time()) + louise_cooldown_buy_fail_sec()
 
-    async def _execute_sell(self, epoch: Dict[str, Any], final_value: Decimal, profit_usdt: Decimal, profit_pct: Decimal, status: str = "CLOSED_SUCCESSFUL"):
+    async def _execute_sell(
+        self,
+        epoch: Dict[str, Any],
+        final_value: Decimal,
+        profit_usdt: Decimal,
+        profit_pct: Decimal,
+        status: str = "CLOSED_SUCCESSFUL"
+    ):
         symbol = self.config["symbol"]
         total_vol = Decimal(str(epoch['total_cost'] / epoch['avg_buy_price']))
         alerts = get_alert_dispatcher()
@@ -428,9 +457,12 @@ class LouiseBotRunner:
                     )
             else:
                 logger.error(f"{self.bot_id}: No gateway available to execute SELL")
+                msg = (f"CRITICAL: Bot {self.bot_id} reached take-profit but "
+                      f"gateway unavailable. Position STUCK with {quantized_vol} "
+                      f"{symbol} at {self.current_price}")
                 alerts.critical(
                     "SELL_BLOCKED_NO_GATEWAY",
-                    f"CRITICAL: Bot {self.bot_id} reached take-profit but gateway unavailable. Position STUCK with {quantized_vol} {symbol} at {self.current_price}",
+                    msg,
                     payload={
                         "bot_id": self.bot_id,
                         "symbol": symbol,
@@ -445,9 +477,12 @@ class LouiseBotRunner:
 
         except Exception as e:
             logger.error(f"{self.bot_id}: Failed to execute sell: {e}")
+            err = str(e)[:80]
+            msg = (f"CRITICAL: Bot {self.bot_id} reached take-profit on {symbol} "
+                  f"but SELL execution failed. Position STUCK: {err}")
             alerts.critical(
                 "SELL_EXECUTION_FAILED",
-                f"CRITICAL: Bot {self.bot_id} reached take-profit on {symbol} but SELL execution failed. Position STUCK: {str(e)[:80]}",
+                msg,
                 payload={
                     "bot_id": self.bot_id,
                     "symbol": symbol,

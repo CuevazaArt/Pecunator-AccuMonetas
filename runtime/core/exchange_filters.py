@@ -131,7 +131,7 @@ class ExchangeFilterCache:
         self, symbol: str, client: Any, *, _to_thread: Any = None
     ) -> SymbolFilters:
         """Load symbol filters from Binance if not already cached.
-        
+
         Works with both AsyncClient (direct await) and sync Client (_to_thread).
         """
         import asyncio

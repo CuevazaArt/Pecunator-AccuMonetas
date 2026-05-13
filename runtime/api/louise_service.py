@@ -19,12 +19,12 @@ class LouiseService:
         self._immortality_task: asyncio.Task | None = None
         self._stop = asyncio.Event()
         self._gateways: Dict[str, BinanceGateway] = {}
-        
+
     async def start_immortality(self, interval_sec: float = 10.0):
         self._stop.clear()
         self._immortality_task = asyncio.create_task(self._immortality_loop(interval_sec))
         logger.info("Louise immortality loop started.")
-        
+
     async def stop_immortality(self):
         self._stop.set()
         if self._immortality_task:
@@ -34,13 +34,13 @@ class LouiseService:
             except asyncio.CancelledError:
                 pass
             self._immortality_task = None
-            
+
         for bot_id, runner in list(self.runners.items()):
             try:
                 await runner.stop(shutdown_db=False)
             except Exception as e:
                 logger.error(f"Failed to stop {bot_id}: {e}")
-            
+
         for gw in self._gateways.values():
             try:
                 await gw.stop()
@@ -54,7 +54,7 @@ class LouiseService:
             except Exception as e:
                 logger.error(f"Error in Louise immortality loop: {e}")
             await asyncio.sleep(interval_sec)
-            
+
     async def _check_bots(self):
         ctx = deps.get_ctx()
         bots = self.db.get_all_bots()

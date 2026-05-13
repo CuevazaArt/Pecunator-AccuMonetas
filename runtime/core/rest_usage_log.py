@@ -233,9 +233,12 @@ class RestUsageLog:
                       source,
                       action,
                       COUNT(*) AS events,
-                      SUM(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0 THEN 0 ELSE delta_weight_1m END) AS delta_sum,
-                      MAX(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0 THEN 0 ELSE delta_weight_1m END) AS delta_max,
-                      AVG(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0 THEN NULL ELSE delta_weight_1m END) AS delta_avg,
+                      SUM(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0
+                          THEN 0 ELSE delta_weight_1m END) AS delta_sum,
+                      MAX(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0
+                          THEN 0 ELSE delta_weight_1m END) AS delta_max,
+                      AVG(CASE WHEN delta_weight_1m IS NULL OR delta_weight_1m < 0
+                          THEN NULL ELSE delta_weight_1m END) AS delta_avg,
                       MAX(ts_utc) AS last_ts_utc,
                       MAX(used_weight_1m) AS max_used_seen
                     FROM base

@@ -134,7 +134,8 @@ class ApiFuse:
                 )
                 try:
                     from runtime.core.alert_dispatcher import get_alert_dispatcher
-                    get_alert_dispatcher().info("FUSE_RESET", f"Auto-reset after {elapsed:.0f}s (trip #{self._trip_count})")
+                    msg = f"Auto-reset after {elapsed:.0f}s (trip #{self._trip_count})"
+                    get_alert_dispatcher().info("FUSE_RESET", msg)
                 except Exception:
                     pass
                 return False
@@ -257,10 +258,10 @@ class ApiFuse:
         )
         try:
             from runtime.core.alert_dispatcher import get_alert_dispatcher
-            get_alert_dispatcher().critical(
-                "FUSE_TRIPPED",
-                f"Trip #{self._trip_count} (streak={self._consecutive_streak}): {reason}. Blocked {self._current_cooldown}s.",
-            )
+            msg = (f"Trip #{self._trip_count} "
+                  f"(streak={self._consecutive_streak}): {reason}. "
+                  f"Blocked {self._current_cooldown}s.")
+            get_alert_dispatcher().critical("FUSE_TRIPPED", msg)
         except Exception:
             pass
 

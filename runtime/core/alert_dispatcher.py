@@ -61,11 +61,20 @@ class AlertDispatcher:
     def _validate_config(self) -> None:
         """Warn if telegram or email configured incorrectly."""
         if self._telegram_token and not self._telegram_chat_id:
-            _LOG.warning("PECUNATOR_ALERT_TELEGRAM_TOKEN set but PECUNATOR_ALERT_TELEGRAM_CHAT_ID missing — Telegram alerts disabled")
+            _LOG.warning("PECUNATOR_ALERT_TELEGRAM_TOKEN set but "
+                        "PECUNATOR_ALERT_TELEGRAM_CHAT_ID missing — "
+                        "Telegram alerts disabled")
         if not self._telegram_token and self._telegram_chat_id:
-            _LOG.warning("PECUNATOR_ALERT_TELEGRAM_CHAT_ID set but PECUNATOR_ALERT_TELEGRAM_TOKEN missing — Telegram alerts disabled")
-        if self._email_enabled and not all([self._email_smtp_host, self._email_from, self._email_to, self._email_password]):
-            _LOG.warning("Email alerts enabled but PECUNATOR_ALERT_EMAIL_* vars incomplete — Email alerts disabled")
+            _LOG.warning("PECUNATOR_ALERT_TELEGRAM_CHAT_ID set but "
+                        "PECUNATOR_ALERT_TELEGRAM_TOKEN missing — "
+                        "Telegram alerts disabled")
+        if self._email_enabled and not all(
+            [self._email_smtp_host, self._email_from, self._email_to,
+             self._email_password]
+        ):
+            _LOG.warning("Email alerts enabled but "
+                        "PECUNATOR_ALERT_EMAIL_* vars incomplete — "
+                        "Email alerts disabled")
         if self._telegram_token and self._telegram_chat_id:
             _LOG.info("Telegram alerts enabled (chat_id=%s...)", self._telegram_chat_id[:8])
         if self._email_enabled and all([self._email_smtp_host, self._email_from, self._email_to]):
@@ -151,7 +160,14 @@ class AlertDispatcher:
 
         threading.Thread(target=_send, daemon=True).start()
 
-    def _dispatch(self, level: str, code: str, message: str, payload: Optional[dict] = None, silent: bool = False) -> dict[str, Any]:
+    def _dispatch(
+        self,
+        level: str,
+        code: str,
+        message: str,
+        payload: Optional[dict] = None,
+        silent: bool = False
+    ) -> dict[str, Any]:
         ts_utc = datetime.now(timezone.utc).isoformat()
         alert = {
             "level": level,
