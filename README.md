@@ -1,19 +1,20 @@
-# Pecunator-AccuMonetas
+# Pecunator-AccuMonetas: Louise DCA Bot Hub
 
-**A specialized autonomous trading bot built on PecunatorCore infrastructure.**
+**A dedicated DCA (Dollar-Cost Averaging) trading bot hub with full production infrastructure.**
 
-Pecunator-AccuMonetas is a dedicated bot hub featuring a modular Python engine (FastAPI) and customized Flutter desktop UI. This repository is **desktop-first**: the Flutter shell connects to the local engine over HTTP, inheriting the proven architecture from PecunatorCore (v3.7.5 stable).
+Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine and customized Flutter desktop UI. It reuses the proven architecture and risk-control infrastructure from PecunatorCore, adding specialized DCA trading logic with hardened production controls.
 
 **Key Features:**
-- Specialized trading bot strategy (AccuMonetas — *in development*)
+- Louise DCA bot strategy with position-size limits and forced-sell controls
 - Full infrastructure: REST API, WebSocket, metrics, telemetry, DB persistence
-- Risk control modules: rate-limiting, budget guards, auto-recovery
-- Production-hardened: tests, monitoring, explicit deployment policy
+- Risk control modules: API rate-limiting, budget guards, stop-loss, max-position limits
+- Real observability: unhardened telemetry, actual health status (not fake data)
+- Comprehensive tests: runner loop, endpoints, recovery, fill handling
 
-## Status: Staging-Ready (Not Production)
+## Status: Hardening in Progress → Production-Ready
 
-**Current readiness:** ✅ Safe for **non-financial testing** (dry-run, paper trading, local development)  
-**Production readiness:** ❌ **NOT READY** for operation with real capital or live Binance subaccounts
+**Current readiness:** ✅ Safe for **non-financial testing** (paper trading, local development)  
+**Production readiness:** 🟡 **IN HARDENING** — P0 fixes applied (telemetry, budget control, position limits); tests added (runner, endpoints, recovery, fills)
 
 ### Audit Findings & Remediation Status
 
