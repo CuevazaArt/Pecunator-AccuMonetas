@@ -9,9 +9,14 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from runtime.core.louise_db import LouiseDB
+from runtime.core.settings import (
+    louise_default_subaccount,
+    louise_default_max_position_size_usdt,
+    louise_default_max_purchases_per_epoch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +33,15 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
     from runtime.core.market_cache import get_market_cache
 
     current_price = 0.0
+    has_price = False
     symbol = bot["symbol"]
-    ticker = get_market_cache().get_ticker(symbol)
-    if ticker:
-        current_price = float(ticker.last_price)
+    try:
+        ticker = get_market_cache().get_ticker(symbol)
+        if ticker is not None:
+            current_price = float(ticker.last_price)
+            has_price = True
+    except (AttributeError, ValueError, TypeError) as e:
+        logger.debug(f"Ticker lookup failed for {symbol}: {e}")
 
     position_size = 0.0
     cost_basis = 0.0
@@ -60,6 +70,7 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
         "symbol": bot["symbol"],
         "status": bot["status"].lower(),
         "current_price": current_price,
+        "price_available": has_price,
         "position_size": position_size,
         "cost_basis": cost_basis,
         "unrealized_pnl": unrealized_pnl,
@@ -67,9 +78,12 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
         "free_balance": bot["daily_budget_usdt"],
         "target_profit_pct": bot["target_profit_pct"],
         "buy_volume": bot.get("buy_volume", 10.0),
+        "max_position_size_usdt": bot.get("max_position_size_usdt", 5000.0),
+        "max_purchases_per_epoch": bot.get("max_purchases_per_epoch", 20),
         "progress_percent": progress_percent,
         "daily_budget": bot["daily_budget_usdt"],
         "trades_today": trades_today,
+        "subaccount": bot.get("subaccount", "bluechip"),
     }
 
 def _hub_metrics(db: LouiseDB) -> dict[str, Any]:
@@ -107,20 +121,36 @@ def get_louise_telemetry(db: LouiseDB = None) -> dict[str, Any]:
 
 # ─── Pydantic models ──────────────────────────────────────────────────
 
+def _default_max_position() -> float:
+    return louise_default_max_position_size_usdt()
+
+
+def _default_max_purchases() -> int:
+    return louise_default_max_purchases_per_epoch()
+
+
+def _default_subaccount() -> str:
+    return louise_default_subaccount()
+
+
 class BotCreateRequest(BaseModel):
     symbol: str
     daily_budget: float = 500.0
     target_profit_pct: float = 5.0
     buy_volume: float = 10.0
     poll_interval_seconds: int = 60
-    max_position_size_usdt: float = 5000.0
-    max_purchases_per_epoch: int = 20
-    subaccount: str = "bluechip"
+    max_position_size_usdt: float = Field(default_factory=_default_max_position)
+    max_purchases_per_epoch: int = Field(default_factory=_default_max_purchases)
+    subaccount: str = Field(default_factory=_default_subaccount)
 
 class BotUpdateRequest(BaseModel):
     daily_budget: float | None = None
     target_profit_pct: float | None = None
     symbol: str | None = None
+    buy_volume: float | None = None
+    poll_interval_seconds: int | None = None
+    max_position_size_usdt: float | None = None
+    max_purchases_per_epoch: int | None = None
 
 # ─── GET endpoints ────────────────────────────────────────────────────
 
@@ -206,27 +236,46 @@ async def get_weight_history() -> dict[str, Any]:
 
 @router.get("/telemetry/requests")
 async def get_requests_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
-    bots = db.get_all_bots()
-    counts = {}
-    total = 0
-    for b in bots:
-        mapped = map_bot_to_ui(b, db)
-        c = mapped.get("trades_today", 0) * 82
-        counts[b["bot_id"]] = c
-        total += c
-    return {**counts, "total": total}
+    """Per-bot request counts derived from real OrderLedger entries (not synthetic).
+
+    Returns:
+        {bot_id: request_count, ..., "total": total, "source": "order_ledger"}
+        Or {"error": "...", "ready": False} if telemetry source unavailable.
+    """
+    try:
+        from runtime.core.order_ledger import get_order_ledger
+        ledger = get_order_ledger()
+        bots = db.get_all_bots()
+        counts: dict[str, Any] = {}
+        total = 0
+        for b in bots:
+            bot_id = b["bot_id"]
+            try:
+                stats = ledger.stats_for_bot(bot_id) if hasattr(ledger, "stats_for_bot") else {}
+                n = int(stats.get("orders_today", 0) or 0)
+            except Exception:
+                n = 0
+            counts[bot_id] = n
+            total += n
+        return {**counts, "total": total, "source": "order_ledger"}
+    except Exception as e:
+        logger.warning(f"requests telemetry unavailable: {e}")
+        return {"total": 0, "ready": False, "error": str(e)}
+
 
 @router.get("/telemetry/bandwidth")
 async def get_bandwidth_stats(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
-    bots = db.get_all_bots()
-    bw = {}
-    total = 0
-    for b in bots:
-        mapped = map_bot_to_ui(b, db)
-        c = mapped.get("trades_today", 0) * 82000
-        bw[b["bot_id"]] = c
-        total += c
-    return {**bw, "total": total}
+    """Network bandwidth metric.
+
+    Not currently tracked at the bot level — exposed as 'not_implemented'
+    so the UI shows a placeholder instead of fabricated numbers.
+    """
+    return {
+        "total": 0,
+        "ready": False,
+        "message": "bandwidth tracking not implemented",
+        "status": "not_implemented",
+    }
 
 @router.get("/health")
 async def louise_health(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
@@ -314,18 +363,23 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
     )
     db.update_bot_status(bot_id, "PAUSED")
 
-    # Try to initialize bot to validate config loads correctly
+    # Validate that the runner can initialize against this config + DB row.
+    # We use the ctx bus when available (production) or create a fresh EventBus (tests).
     try:
         from runtime.bot.louise import LouiseBotRunner
-        from runtime.core.event_bus import get_event_bus
+        from runtime.core.event_bus import EventBus
 
-        bot_runner = LouiseBotRunner(bot_id, db, get_event_bus(), None)
+        bus = getattr(ctx, "bus", None) or EventBus()
+        bot_runner = LouiseBotRunner(bot_id, db, bus, None)
         if not bot_runner.initialize():
-            raise RuntimeError("Bot initialization failed")
+            raise RuntimeError("Bot initialization failed (config could not be loaded)")
 
-        # Only now transition to RUNNING after successful init
+        # Only now transition to RUNNING after successful init.
+        # The louise immortality loop will pick it up within ~10s and start the runner.
         db.update_bot_status(bot_id, "RUNNING")
         logger.info(f"Bot {bot_id} created and validated, status=RUNNING")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Bot {bot_id} initialization failed: {e}")
         db.update_bot_status(bot_id, "ERROR")
@@ -364,29 +418,42 @@ async def update_bot(bot_id: str, req: BotUpdateRequest, db: LouiseDB = Depends(
     if not bot:
         raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
 
-    # Validate new values before updating
-    new_budget = req.daily_budget if req.daily_budget is not None else bot.get("daily_budget_usdt", 500.0)
-    new_target = req.target_profit_pct if req.target_profit_pct is not None else bot.get("target_profit_pct", 5.0)
-    new_symbol = req.symbol if req.symbol is not None else bot.get("symbol")
-
-    if new_budget is not None and new_budget <= 0:
+    # Validate each provided field
+    if req.daily_budget is not None and req.daily_budget <= 0:
         raise HTTPException(status_code=400, detail="daily_budget must be > 0")
-    if new_target is not None and new_target == 0:
-        raise HTTPException(status_code=400, detail="target_profit_pct cannot be 0")
-    if new_target is not None and (new_target < -50 or new_target > 100):
-        raise HTTPException(status_code=400, detail="target_profit_pct must be between -50% and 100%")
-    if new_symbol is not None and new_symbol != bot.get("symbol"):
-        filters = get_exchange_filters().get(new_symbol)
+    if req.target_profit_pct is not None:
+        if req.target_profit_pct == 0:
+            raise HTTPException(status_code=400, detail="target_profit_pct cannot be 0")
+        if req.target_profit_pct < -50 or req.target_profit_pct > 100:
+            raise HTTPException(status_code=400, detail="target_profit_pct must be between -50% and 100%")
+    if req.buy_volume is not None and req.buy_volume <= 0:
+        raise HTTPException(status_code=400, detail="buy_volume must be > 0")
+    if req.poll_interval_seconds is not None and req.poll_interval_seconds < 10:
+        raise HTTPException(status_code=400, detail="poll_interval_seconds must be >= 10")
+    if req.max_position_size_usdt is not None and req.max_position_size_usdt <= 0:
+        raise HTTPException(status_code=400, detail="max_position_size_usdt must be > 0")
+    if req.max_purchases_per_epoch is not None and req.max_purchases_per_epoch <= 0:
+        raise HTTPException(status_code=400, detail="max_purchases_per_epoch must be > 0")
+    if req.symbol is not None and req.symbol != bot.get("symbol"):
+        filters = get_exchange_filters().get(req.symbol)
         if not filters:
-            raise HTTPException(status_code=400, detail=f"Symbol {new_symbol} not found in exchange filters")
+            raise HTTPException(status_code=400, detail=f"Symbol {req.symbol} not found in exchange filters")
 
     # Warn if bot is running and config changes
     if bot.get("status") == "RUNNING":
-        logger.warning(f"Bot {bot_id} config updated while RUNNING: budget {new_budget}, target {new_target}")
+        logger.warning(f"Bot {bot_id} config updated while RUNNING")
 
-    db.update_bot_config(bot_id, new_budget, new_target)
+    db.update_bot_config(
+        bot_id,
+        daily_budget_usdt=req.daily_budget,
+        target_profit_pct=req.target_profit_pct,
+        symbol=req.symbol,
+        buy_volume=req.buy_volume,
+        poll_interval_seconds=req.poll_interval_seconds,
+        max_position_size_usdt=req.max_position_size_usdt,
+        max_purchases_per_epoch=req.max_purchases_per_epoch,
+    )
 
-    # Reload bot
     bot = db.get_bot(bot_id)
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "updated", "bot": map_bot_to_ui(bot, db)}

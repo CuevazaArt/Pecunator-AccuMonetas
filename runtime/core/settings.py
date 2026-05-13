@@ -204,3 +204,74 @@ def api_fuse_cooldown_sec() -> int:
         return 300
     return max(_MIN_FUSE_COOLDOWN_SEC, v)
 
+
+# ─── Louise bot tunables ────────────────────────────────────────────
+# All previously hardcoded thresholds, now overridable via environment.
+
+def louise_price_staleness_sec() -> int:
+    """Maximum age (seconds) for cached price before bot waits for fresh data."""
+    raw = os.environ.get("LOUISE_PRICE_STALENESS_SEC", "15").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 15
+
+
+def louise_min_usdt_balance() -> float:
+    """Minimum USDT free balance required for the bot to attempt buys."""
+    raw = os.environ.get("LOUISE_MIN_USDT_BALANCE", "8").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 8.0
+
+
+def louise_cooldown_buy_fail_sec() -> int:
+    """Cooldown (seconds) after a BUY execution failure."""
+    raw = os.environ.get("LOUISE_COOLDOWN_BUY_FAIL_SEC", "300").strip()
+    try:
+        return max(10, int(raw))
+    except ValueError:
+        return 300
+
+
+def louise_cooldown_gateway_fail_sec() -> int:
+    """Cooldown (seconds) after a gateway-unavailable error."""
+    raw = os.environ.get("LOUISE_COOLDOWN_GATEWAY_FAIL_SEC", "60").strip()
+    try:
+        return max(10, int(raw))
+    except ValueError:
+        return 60
+
+
+def louise_default_subaccount() -> str:
+    """Default subaccount when none is specified at bot creation."""
+    return os.environ.get("LOUISE_DEFAULT_SUBACCOUNT", "bluechip").strip() or "bluechip"
+
+
+def louise_default_max_position_size_usdt() -> float:
+    """Default maximum position size (USDT) per epoch."""
+    raw = os.environ.get("LOUISE_DEFAULT_MAX_POSITION_SIZE_USDT", "5000").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 5000.0
+
+
+def louise_default_max_purchases_per_epoch() -> int:
+    """Default maximum number of buy fills per epoch before force-sell."""
+    raw = os.environ.get("LOUISE_DEFAULT_MAX_PURCHASES_PER_EPOCH", "20").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 20
+
+
+def louise_default_max_drawdown_pct() -> float:
+    """Default max drawdown percent (negative) before stop-loss triggers."""
+    raw = os.environ.get("LOUISE_DEFAULT_MAX_DRAWDOWN_PCT", "-10").strip()
+    try:
+        return float(raw)
+    except ValueError:
+        return -10.0
+
