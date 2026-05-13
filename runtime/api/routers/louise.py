@@ -469,6 +469,152 @@ async def delete_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, A
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "deleted"}
 
+
+# ─── Console/Telemetry endpoints ─────────────────────────────────────
+
+@router.get("/bots/{bot_id}/pnl-history")
+async def get_bot_pnl_history(
+    bot_id: str,
+    since: int | None = None,
+    limit: int = 2000,
+    db: LouiseDB = Depends(get_db),
+) -> dict[str, Any]:
+    """Time-series of P&L snapshots for charting (oldest first)."""
+    if not db.get_bot(bot_id):
+        raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
+    snapshots = db.get_pnl_history(bot_id, since=since, limit=limit)
+    return {"bot_id": bot_id, "snapshots": snapshots, "count": len(snapshots)}
+
+
+@router.get("/bots/{bot_id}/purchases")
+async def get_bot_purchases(
+    bot_id: str,
+    since: int | None = None,
+    limit: int = 1000,
+    db: LouiseDB = Depends(get_db),
+) -> dict[str, Any]:
+    """Every entry point (BUY/SHORT) made by a bot, oldest first.
+    Used to overlay buys on the price chart."""
+    if not db.get_bot(bot_id):
+        raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
+    purchases = db.get_purchases_by_bot(bot_id, since=since, limit=limit)
+    return {"bot_id": bot_id, "purchases": purchases, "count": len(purchases)}
+
+
+@router.get("/hub/combined-pnl")
+async def get_hub_combined_pnl(
+    since: int | None = None,
+    limit: int = 4000,
+    db: LouiseDB = Depends(get_db),
+) -> dict[str, Any]:
+    """P&L snapshots across ALL bots in the hub, grouped per bot."""
+    all_snapshots = db.get_combined_pnl_history(since=since, limit=limit)
+    by_bot: dict[str, list[dict[str, Any]]] = {}
+    for s in all_snapshots:
+        by_bot.setdefault(s["bot_id"], []).append(s)
+
+    # Aggregate latest per-bot for totals
+    realized_sum = 0.0
+    unrealized_sum = 0.0
+    for bot_id, series in by_bot.items():
+        if not series:
+            continue
+        latest = series[-1]
+        realized_sum += float(latest.get("cumulative_realized_pnl_usdt") or 0.0)
+        unrealized_sum += float(latest.get("unrealized_pnl_usdt") or 0.0)
+
+    return {
+        "snapshots": all_snapshots,
+        "by_bot_id": by_bot,
+        "totals": {
+            "cumulative_realized_pnl_usdt": realized_sum,
+            "unrealized_pnl_usdt": unrealized_sum,
+            "net_position_usdt": realized_sum + unrealized_sum,
+        },
+        "count": len(all_snapshots),
+    }
+
+
+@router.get("/hub/dual-state")
+async def get_hub_dual_state(db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    """Snapshot of all bots' current state for the console header.
+    Pulls from louise_bots (config), latest pnl_snapshots (P&L), and the in-memory
+    LouiseService.runners dict for `last_purchase_price` / `last_short_price`."""
+    from runtime.api.louise_service import get_louise_service
+    svc = get_louise_service()
+    bots_data: list[dict[str, Any]] = []
+    realized_sum = 0.0
+    unrealized_sum = 0.0
+
+    for bot in db.get_all_bots():
+        bot_id = bot["bot_id"]
+        latest = db.get_latest_pnl_snapshot(bot_id) or {}
+        epoch = db.get_active_epoch(bot_id)
+        runner = svc.runners.get(bot_id)
+
+        runtime_last_entry = None
+        runtime_current_price = None
+        if runner is not None:
+            # Louise has last_purchase_price; AntiLouise has last_short_price
+            runtime_last_entry = float(
+                getattr(runner, "last_purchase_price", None)
+                or getattr(runner, "last_short_price", 0)
+            )
+            runtime_current_price = float(getattr(runner, "current_price", 0))
+
+        realized_sum += float(latest.get("cumulative_realized_pnl_usdt") or 0.0)
+        unrealized_sum += float(latest.get("unrealized_pnl_usdt") or 0.0)
+
+        bots_data.append({
+            "bot_id": bot_id,
+            "bot_type": bot.get("bot_type", "louise"),
+            "symbol": bot["symbol"],
+            "subaccount": bot.get("subaccount", "bluechip"),
+            "status": bot["status"],
+            "buy_volume": bot["buy_volume"],
+            "target_profit_pct": bot["target_profit_pct"],
+            "active_epoch": epoch,
+            "last_entry_price": runtime_last_entry,
+            "current_price": runtime_current_price,
+            "latest_snapshot": latest,
+        })
+
+    return {
+        "ts_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "bots": bots_data,
+        "totals": {
+            "cumulative_realized_pnl_usdt": realized_sum,
+            "unrealized_pnl_usdt": unrealized_sum,
+            "net_position_usdt": realized_sum + unrealized_sum,
+        },
+    }
+
+
+@router.get("/klines/{symbol}")
+async def get_klines_with_ha(
+    symbol: str,
+    interval: str = "1d",
+    limit: int = 500,
+) -> dict[str, Any]:
+    """OHLC + Heikin-Ashi candles from kline_history (newest first).
+
+    Returns both raw OHLC and HA-derived values. The HA values are stored
+    pre-computed in the same row → operator sees identical HA construction
+    as TradingView/source charts (recursive chain preserved on every ingest)."""
+    from runtime.core.telemetry_vault import get_telemetry_vault
+    from runtime.api import deps as _deps
+    ctx = _deps.peek_ctx()
+    data_dir = ctx.config.data_dir if ctx is not None else None
+    vault = get_telemetry_vault(data_dir)
+    rows = vault.get_klines(symbol.upper(), interval, limit=limit)
+    return {
+        "symbol": symbol.upper(),
+        "interval": interval,
+        "candles": rows,
+        "count": len(rows),
+    }
+
+
 # ─── WS push helper ──────────────────────────────────────────────────
 
 def _push_louise_ws(db: LouiseDB = None) -> None:

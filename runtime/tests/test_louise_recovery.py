@@ -146,22 +146,31 @@ class TestRecoveryScenarios:
         assert temp_db.get_active_epoch(sample_bot) is None
 
     @pytest.mark.asyncio
-    async def test_max_position_size_blocks_buy(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test bot stops buying when max_position_size_usdt reached."""
+    async def test_buy_blocked_when_price_not_below_last_purchase(
+        self, sample_bot, temp_db, event_bus, mock_gateway
+    ):
+        """Price must be strictly below last_purchase_price to trigger a buy.
+        When price == last_purchase_price the bot should skip."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
-        # Tighten position cap to a small value
-        runner.config["max_position_size_usdt"] = 100.0
 
         runner.current_price = Decimal("50000")
+        runner.last_purchase_price = Decimal("50000")  # same price → no buy
         runner.usdt_free_balance = Decimal("1000")
         runner.last_price_timestamp = int(time.time())
 
-        # Create epoch with exposure already at limit
-        epoch_id = f"epoch_{sample_bot}_max"
+        epoch_id = f"epoch_{sample_bot}_same"
         temp_db.create_epoch(epoch_id, sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(epoch_id, 1, 150.0, 50000.0)  # Above max 100
+        temp_db.update_epoch_stats(epoch_id, 1, 50.0, 50000.0)
         runner.active_epoch = temp_db.get_active_epoch(sample_bot)
+
+        buy_called = []
+        original_buy = runner._execute_buy
+
+        async def track_buy(*args, **kwargs):
+            buy_called.append(True)
+
+        runner._execute_buy = track_buy
 
         with patch("runtime.bot.louise.get_api_governor") as mock_gov:
             mock_gov.return_value.can_execute.return_value = True
@@ -169,44 +178,48 @@ class TestRecoveryScenarios:
                 mock_fuse.return_value.is_tripped.return_value = False
                 with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
                     mock_bg.return_value.can_spend.return_value = True
+                    with patch("runtime.bot.louise.get_exchange_filters") as mock_filt:
+                        mock_filt.return_value.get.return_value = None
 
-                    await runner.poll_market()
+                        await runner.poll_market()
 
-        # Max exposure check prevented new purchase
-        purchases = temp_db.get_purchases_by_epoch(epoch_id)
-        assert len(purchases) == 0
+        assert len(buy_called) == 0, "Buy should not execute when price == last_purchase_price"
 
     @pytest.mark.asyncio
-    async def test_max_purchases_triggers_force_sell(self, sample_bot, temp_db, event_bus, mock_gateway):
-        """Test bot force-sells at max_purchases_per_epoch limit."""
+    async def test_buy_allowed_when_price_below_last_purchase(
+        self, sample_bot, temp_db, event_bus, mock_gateway
+    ):
+        """When current price is strictly below last_purchase_price, the bot buys."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
         runner.initialize()
-        runner.config["max_purchases_per_epoch"] = 2
 
-        runner.current_price = Decimal("48000")  # Below avg → losing but not stop-loss
+        runner.current_price = Decimal("49000")   # lower than last buy
+        runner.last_purchase_price = Decimal("50000")
         runner.usdt_free_balance = Decimal("1000")
         runner.last_price_timestamp = int(time.time())
 
-        # Epoch already at max purchases
-        epoch_id = f"epoch_{sample_bot}_maxp"
+        epoch_id = f"epoch_{sample_bot}_lower"
         temp_db.create_epoch(epoch_id, sample_bot, "RUNNING")
-        temp_db.update_epoch_stats(epoch_id, 2, 200.0, 50000.0)
+        temp_db.update_epoch_stats(epoch_id, 1, 50.0, 50000.0)
         runner.active_epoch = temp_db.get_active_epoch(sample_bot)
 
-        sell_called = []
+        buy_called = []
 
-        async def track_sell(*args, **kwargs):
-            # Capture status keyword + positional args (we don't need to execute the real sell)
-            sell_called.append(kwargs.get("status", "DEFAULT"))
+        async def track_buy(*args, **kwargs):
+            buy_called.append(True)
 
-        runner._execute_sell = track_sell
+        runner._execute_buy = track_buy
 
         with patch("runtime.bot.louise.get_api_governor") as mock_gov:
             mock_gov.return_value.can_execute.return_value = True
             with patch("runtime.bot.louise.get_api_fuse") as mock_fuse:
                 mock_fuse.return_value.is_tripped.return_value = False
+                with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
+                    mock_bg.return_value.can_spend.return_value = True
+                    with patch("runtime.bot.louise.get_exchange_filters") as mock_filt:
+                        mock_filt.return_value.get.return_value = None
+                        with patch("runtime.bot.louise.get_alert_dispatcher"):
 
-                await runner.poll_market()
+                            await runner.poll_market()
 
-        # Force-sell triggered with CLOSED_MAX_PURCHASES status
-        assert "CLOSED_MAX_PURCHASES" in sell_called, f"got: {sell_called}"
+        assert len(buy_called) == 1, "Buy should execute when price < last_purchase_price"

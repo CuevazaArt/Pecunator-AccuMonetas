@@ -182,6 +182,35 @@ class TestFillHandling:
         purchases = temp_db.get_purchases_by_epoch(epoch["epoch_id"])
         assert len(purchases) == 0
 
+    def test_last_purchase_price_updated_on_fill(self, sample_bot, temp_db, event_bus, mock_gateway):
+        """last_purchase_price must be set to the actual fill price after each BUY."""
+        runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
+        runner.initialize()
+        assert runner.last_purchase_price == Decimal("0")
+
+        epoch = temp_db.get_active_epoch(sample_bot)
+        client_oid = f"l_{sample_bot}_lpp"
+        runner.pending_orders[client_oid] = {
+            "type": "BUY",
+            "epoch_id": epoch["epoch_id"],
+            "epoch": epoch,
+        }
+
+        fill_event = {
+            "c": client_oid,
+            "X": "FILLED",
+            "i": 555555,
+            "z": "0.002",
+            "Z": "100",
+            "p": "50000",
+        }
+
+        with patch("runtime.bot.louise.get_budget_guard"):
+            runner._on_execution_report(fill_event)
+
+        # price_at_buy = 100 / 0.002 = 50000
+        assert runner.last_purchase_price == Decimal("50000")
+
     def test_slippage_recorded_at_actual_price(self, sample_bot, temp_db, event_bus, mock_gateway):
         """Test that filled cost = actual cost from fill, accounting for slippage."""
         runner = LouiseBotRunner(sample_bot, temp_db, event_bus, mock_gateway)
