@@ -275,7 +275,10 @@ class TelemetryVault:
         for k in sorted_klines:
             try:
                 open_time = int(k[0])
-                o = float(k[1]); h = float(k[2]); lo = float(k[3]); c = float(k[4])
+                o = float(k[1])
+                h = float(k[2])
+                lo = float(k[3])
+                c = float(k[4])
                 close_time = int(k[6])
 
                 # HA recursive formula

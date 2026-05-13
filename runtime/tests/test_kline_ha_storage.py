@@ -6,8 +6,6 @@ would be computed from the full history in one pass — no drift
 allowed when ingesting in chunks.
 """
 
-from pathlib import Path
-
 import pytest
 
 from runtime.core.telemetry_vault import TelemetryVault

@@ -165,7 +165,6 @@ class TestRecoveryScenarios:
         runner.active_epoch = temp_db.get_active_epoch(sample_bot)
 
         buy_called = []
-        original_buy = runner._execute_buy
 
         async def track_buy(*args, **kwargs):
             buy_called.append(True)
