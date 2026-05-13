@@ -349,7 +349,7 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
     base = req.symbol.split("/")[0].lower()
     bot_id = f"louise_{base}_{str(uuid.uuid4())[:4]}"
 
-    # Create bot in PAUSED state initially
+    # Create bot in PAUSED state initially (single DB operation)
     db.create_bot(
         bot_id=bot_id,
         symbol=req.symbol,
@@ -359,19 +359,20 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
         daily_budget_usdt=req.daily_budget,
         max_position_size_usdt=req.max_position_size_usdt,
         max_purchases_per_epoch=req.max_purchases_per_epoch,
-        subaccount=req.subaccount
+        subaccount=req.subaccount,
+        status="PAUSED"
     )
-    db.update_bot_status(bot_id, "PAUSED")
 
     # Validate that the runner can initialize against this config + DB row.
     # We use the ctx bus when available (production) or create a fresh EventBus (tests).
+    # Pass subscribe=False to avoid registering event bus callbacks on this temporary runner.
     try:
         from runtime.bot.louise import LouiseBotRunner
         from runtime.core.event_bus import EventBus
 
         bus = getattr(ctx, "bus", None) or EventBus()
         bot_runner = LouiseBotRunner(bot_id, db, bus, None)
-        if not bot_runner.initialize():
+        if not bot_runner.initialize(subscribe=False):
             raise RuntimeError("Bot initialization failed (config could not be loaded)")
 
         # Only now transition to RUNNING after successful init.

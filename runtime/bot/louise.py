@@ -48,8 +48,14 @@ class LouiseBotRunner:
         self._running = False
         self._task: Optional[asyncio.Task] = None
 
-    def initialize(self) -> bool:
-        """Loads bot configuration and active epoch from database."""
+    def initialize(self, subscribe: bool = True) -> bool:
+        """Loads bot configuration and active epoch from database.
+
+        Args:
+            subscribe: If True, register event bus callbacks for live data. If False,
+                      only validate config/DB state without side effects. Use False
+                      when initializing a temporary runner for validation purposes.
+        """
         self.config = self.db.get_bot(self.bot_id)
         if not self.config:
             logger.error(f"Bot {self.bot_id} not found in database.")
@@ -58,11 +64,13 @@ class LouiseBotRunner:
         self.active_epoch = self.db.get_active_epoch(self.bot_id)
 
         # Subscribe to websocket data for price & balances (zero REST weight)
-        symbol = self.config['symbol']
-        self.bus.subscribe(f"market.ticker.{symbol}", self._on_ticker)
-        self.bus.subscribe("account.balances", self._on_balances)
-        self.bus.subscribe("account.execution_report", self._on_execution_report)
+        if subscribe:
+            symbol = self.config['symbol']
+            self.bus.subscribe(f"market.ticker.{symbol}", self._on_ticker)
+            self.bus.subscribe("account.balances", self._on_balances)
+            self.bus.subscribe("account.execution_report", self._on_execution_report)
 
+        symbol = self.config['symbol']
         logger.info(f"Initialized LouiseBot {self.bot_id} on {symbol} (subaccount: {self.config.get('subaccount', 'bluechip')}). Active epoch: {self.active_epoch['epoch_id'] if self.active_epoch else 'None'}")
         return True
 
