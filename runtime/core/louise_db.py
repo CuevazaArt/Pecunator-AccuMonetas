@@ -7,7 +7,7 @@ from runtime.core.db_util import open_db
 
 class LouiseDB:
     """Database interface for the Louise bot hub."""
-    
+
     def __init__(self, db_path: str = "runtime/data/louise_hub.sqlite"):
         self.db_path = db_path
         self._init_db()
@@ -15,7 +15,7 @@ class LouiseDB:
     def _init_db(self):
         # Create directories if they do not exist
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open_db(self.db_path) as conn:
             # Table: louise_bots
             conn.execute("""
@@ -26,12 +26,24 @@ class LouiseDB:
                     poll_interval_seconds INTEGER NOT NULL,
                     target_profit_pct REAL NOT NULL,
                     daily_budget_usdt REAL NOT NULL,
+                    max_position_size_usdt REAL DEFAULT 5000.0,
+                    max_purchases_per_epoch INTEGER DEFAULT 20,
                     subaccount TEXT DEFAULT 'bluechip',
                     status TEXT NOT NULL,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
                 )
             """)
+
+            # Add migration: ensure new columns exist (for existing DBs)
+            try:
+                conn.execute("ALTER TABLE louise_bots ADD COLUMN max_position_size_usdt REAL DEFAULT 5000.0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                conn.execute("ALTER TABLE louise_bots ADD COLUMN max_purchases_per_epoch INTEGER DEFAULT 20")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # Table: louise_epochs
             conn.execute("""
@@ -68,22 +80,22 @@ class LouiseDB:
                     FOREIGN KEY(epoch_id) REFERENCES louise_epochs(epoch_id)
                 )
             """)
-            
+
             # Indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_epochs_bot_id ON louise_epochs(bot_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_purchases_epoch_id ON louise_purchases(epoch_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_louise_purchases_bot_id ON louise_purchases(bot_id)")
-            
+
             conn.commit()
 
-    def create_bot(self, bot_id: str, symbol: str, buy_volume: float, poll_interval_seconds: int, target_profit_pct: float, daily_budget_usdt: float, subaccount: str = "bluechip", status: str = "IDLE") -> None:
+    def create_bot(self, bot_id: str, symbol: str, buy_volume: float, poll_interval_seconds: int, target_profit_pct: float, daily_budget_usdt: float, subaccount: str = "bluechip", status: str = "IDLE", max_position_size_usdt: float = 5000.0, max_purchases_per_epoch: int = 20) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
             conn.execute("""
-                INSERT INTO louise_bots 
-                (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, subaccount, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, subaccount, status, now, now))
+                INSERT INTO louise_bots
+                (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, max_position_size_usdt, max_purchases_per_epoch, subaccount, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (bot_id, symbol, buy_volume, poll_interval_seconds, target_profit_pct, daily_budget_usdt, max_position_size_usdt, max_purchases_per_epoch, subaccount, status, now, now))
             conn.commit()
 
     def update_bot_status(self, bot_id: str, status: str) -> None:
@@ -100,7 +112,7 @@ class LouiseDB:
             cursor = conn.execute("SELECT * FROM louise_bots WHERE bot_id = ?", (bot_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
-            
+
     def get_all_bots(self) -> List[Dict[str, Any]]:
         with open_db(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -133,7 +145,7 @@ class LouiseDB:
                 WHERE epoch_id = ?
             """, (num_purchases, total_cost, avg_buy_price, epoch_id))
             conn.commit()
-            
+
     def close_epoch(self, epoch_id: str, final_price: float, final_value: float, profit_usdt: float, profit_pct: float, status: str = "CLOSED_SUCCESSFUL") -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
@@ -143,7 +155,7 @@ class LouiseDB:
                 WHERE epoch_id = ?
             """, (final_price, final_value, profit_usdt, profit_pct, status, now, epoch_id))
             conn.commit()
-            
+
     def add_purchase(self, purchase_id: str, bot_id: str, epoch_id: str, price_at_buy: float, volume: float, cost_usdt: float, order_id: Optional[str], status: str) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
@@ -153,7 +165,7 @@ class LouiseDB:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (purchase_id, bot_id, epoch_id, price_at_buy, volume, cost_usdt, order_id, status, now))
             conn.commit()
-            
+
     def get_purchases_by_epoch(self, epoch_id: str) -> List[Dict[str, Any]]:
         with open_db(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
