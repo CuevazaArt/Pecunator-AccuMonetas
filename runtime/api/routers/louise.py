@@ -84,6 +84,9 @@ def map_bot_to_ui(bot: dict, db: LouiseDB) -> dict:
         "daily_budget": bot["daily_budget_usdt"],
         "trades_today": trades_today,
         "subaccount": bot.get("subaccount", "bluechip"),
+        "louise_enabled": bool(bot.get("louise_enabled", 1)),
+        "anti_louise_enabled": bool(bot.get("anti_louise_enabled", 0)),
+        "paired_bot_id": bot.get("paired_bot_id"),
     }
 
 def _hub_metrics(db: LouiseDB) -> dict[str, Any]:
@@ -484,6 +487,90 @@ async def delete_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, A
     db.update_bot_status(bot_id, "SHUTDOWN")
     _push_louise_ws(db)
     return {"bot_id": bot_id, "status": "deleted"}
+
+
+# ─── Hemisphere switch endpoints ──────────────────────────────────────
+
+class HemisphereUpdateRequest(BaseModel):
+    louise_enabled: bool | None = None
+    anti_louise_enabled: bool | None = None
+
+
+@router.get("/bots/{bot_id}/hemispheres")
+async def get_hemispheres(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
+    """Return the current hemisphere enable/disable state for a bot."""
+    bot = db.get_bot(bot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
+    return {
+        "bot_id": bot_id,
+        "louise_enabled": bool(bot.get("louise_enabled", 1)),
+        "anti_louise_enabled": bool(bot.get("anti_louise_enabled", 0)),
+        "paired_bot_id": bot.get("paired_bot_id"),
+    }
+
+
+@router.patch("/bots/{bot_id}/hemispheres")
+async def update_hemispheres(
+    bot_id: str, req: HemisphereUpdateRequest, db: LouiseDB = Depends(get_db)
+) -> dict[str, Any]:
+    """Enable or disable Louise/AntiLouise hemispheres independently.
+
+    Setting ``louise_enabled=false`` stops the LONG DCA side.
+    Setting ``anti_louise_enabled=true`` activates the SHORT DCA side.
+    Changes take effect within the next immortality loop tick (~10s).
+    """
+    bot = db.get_bot(bot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
+
+    if req.louise_enabled is None and req.anti_louise_enabled is None:
+        raise HTTPException(status_code=400, detail="Provide at least one of louise_enabled or anti_louise_enabled")
+
+    db.update_bot_hemispheres(
+        bot_id,
+        louise_enabled=req.louise_enabled,
+        anti_louise_enabled=req.anti_louise_enabled,
+    )
+
+    # If disabling a hemisphere while RUNNING, set to PAUSED so immortality stops it
+    updated = db.get_bot(bot_id)
+    if updated and updated.get("status") in ("RUNNING", "ACCUMULATING"):
+        bot_type = updated.get("bot_type", "louise")
+        if bot_type == "louise" and req.louise_enabled is False:
+            db.update_bot_status(bot_id, "PAUSED")
+            logger.info(f"Bot {bot_id}: Louise hemisphere disabled → PAUSED")
+        elif bot_type == "anti_louise" and req.anti_louise_enabled is False:
+            db.update_bot_status(bot_id, "PAUSED")
+            logger.info(f"Bot {bot_id}: AntiLouise hemisphere disabled → PAUSED")
+
+    _push_louise_ws(db)
+    updated = db.get_bot(bot_id)
+    return {
+        "bot_id": bot_id,
+        "status": "updated",
+        "louise_enabled": bool(updated.get("louise_enabled", 1)),
+        "anti_louise_enabled": bool(updated.get("anti_louise_enabled", 0)),
+    }
+
+
+@router.patch("/bots/{bot_id}/pair")
+async def pair_bots(
+    bot_id: str,
+    db: LouiseDB = Depends(get_db),
+    pair_with_bot_id: str | None = None,
+) -> dict[str, Any]:
+    """Link a Louise bot with its AntiLouise counterpart (or clear the link)."""
+    if not db.get_bot(bot_id):
+        raise HTTPException(status_code=404, detail=f"Bot {bot_id} not found")
+    if pair_with_bot_id and not db.get_bot(pair_with_bot_id):
+        raise HTTPException(status_code=404, detail=f"Pair target {pair_with_bot_id} not found")
+
+    db.update_bot_pair(bot_id, pair_with_bot_id)
+    if pair_with_bot_id:
+        db.update_bot_pair(pair_with_bot_id, bot_id)
+
+    return {"bot_id": bot_id, "paired_with": pair_with_bot_id}
 
 
 # ─── Console/Telemetry endpoints ─────────────────────────────────────

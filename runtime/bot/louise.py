@@ -19,6 +19,7 @@ from runtime.core.settings import (
     louise_cooldown_gateway_fail_sec,
 )
 from runtime.bot._ws_emit import publish_pnl_snapshot as _publish_pnl_snapshot_ws
+from runtime.core.telemetry_vault import get_telemetry_vault
 
 logger = logging.getLogger("louise_bot")
 
@@ -43,6 +44,8 @@ class LouiseBotRunner:
         self.pending_orders: Dict[str, Dict[str, Any]] = {}
         self.cooldown_until: int = 0
         self.last_purchase_price: Decimal = Decimal("0")
+        # Lucky Strike: True when the last fill was classified as a lucky extreme entry
+        self._last_fill_was_lucky: bool = False
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -104,20 +107,38 @@ class LouiseBotRunner:
             meta = self.pending_orders.pop(client_oid)
 
             if meta['type'] == 'BUY':
-                volume = Decimal(str(event.get('z', '0'))) # Cumulative filled quantity
-                cost_usdt = Decimal(str(event.get('Z', '0'))) # Cumulative quote asset transacted qty
-                price_at_buy = cost_usdt / volume if volume > Decimal("0") else Decimal(str(event.get('p', '0')))
+                volume = Decimal(str(event.get('z', '0')))  # cumulative filled qty
+                cost_usdt = Decimal(str(event.get('Z', '0')))  # cumulative quote transacted
+                price_at_buy = (
+                    cost_usdt / volume if volume > Decimal("0")
+                    else Decimal(str(event.get('p', '0')))
+                )
+
+                # Lucky Strike classification: a fill is "lucky" when it was
+                # explicitly flagged in pending_orders metadata (set in _execute_buy
+                # when the price qualifies as a Heikin-Ashi extreme entry).
+                is_lucky = bool(meta.get('is_lucky_fill', False))
+                self._last_fill_was_lucky = is_lucky
+                if is_lucky:
+                    logger.info(
+                        f"{self.bot_id}: LUCKY STRIKE fill at {price_at_buy:.4f} — "
+                        "recording in DB but NOT updating last_purchase_price to "
+                        "preserve DCA rhythm"
+                    )
 
                 # order_id makes this unique even if two fills arrive in the same second
                 purchase_id = f"pur_{self.bot_id}_{int(time.time())}_{order_id or client_oid}"
                 self.db.add_purchase(
                     purchase_id, self.bot_id, meta['epoch_id'],
-                    float(price_at_buy), float(volume), float(cost_usdt), order_id, "FILLED"
+                    float(price_at_buy), float(volume), float(cost_usdt),
+                    order_id, "FILLED", is_lucky_fill=is_lucky,
                 )
 
                 # Record to global budget guard
                 from runtime.core.budget_guard import get_budget_guard
-                get_budget_guard().record_spend(self.bot_id, self.config["symbol"], "BUY", cost_usdt)  # type: ignore[index]
+                get_budget_guard().record_spend(  # type: ignore[index]
+                    self.bot_id, self.config["symbol"], "BUY", cost_usdt
+                )
 
                 # Update epoch stats
                 epoch = meta['epoch']
@@ -127,14 +148,23 @@ class LouiseBotRunner:
                 old_avg_price = Decimal(str(epoch['avg_buy_price']))
 
                 new_cost = old_cost + cost_usdt
-                current_total_vol = (old_cost / old_avg_price) if old_avg_price > Decimal("0") else Decimal("0")
+                current_total_vol = (
+                    (old_cost / old_avg_price) if old_avg_price > Decimal("0") else Decimal("0")
+                )
                 new_total_vol = current_total_vol + volume
                 new_avg_price = new_cost / new_total_vol if new_total_vol > Decimal("0") else price_at_buy
 
                 self.db.update_epoch_stats(meta['epoch_id'], new_purchases, float(new_cost), float(new_avg_price))
                 self.active_epoch = self.db.get_active_epoch(self.bot_id)
-                self.last_purchase_price = price_at_buy
-                logger.info(f"{self.bot_id}: Buy WS confirmed. New avg price: {new_avg_price:.4f}")
+
+                # Lucky fills do NOT update last_purchase_price so the DCA rhythm
+                # continues uninterrupted from the pre-lucky reference point.
+                if not is_lucky:
+                    self.last_purchase_price = price_at_buy
+                logger.info(
+                    f"{self.bot_id}: Buy WS confirmed {'[LUCKY] ' if is_lucky else ''}"
+                    f"avg={new_avg_price:.4f} last_ref={self.last_purchase_price:.4f}"
+                )
 
             elif meta['type'] == 'SELL':
                 status = meta.get('status', 'CLOSED_SUCCESSFUL')
@@ -319,11 +349,36 @@ class LouiseBotRunner:
 
         await self._execute_buy(epoch, buy_volume)
 
+    def _is_lucky_entry(self) -> bool:
+        """True if current price is at or below the HA low of the last closed daily candle.
+
+        A Lucky Strike LONG entry: price touches the Heikin-Ashi downside extreme,
+        meaning we are accumulating at a historically anomalous low — worth marking
+        separately so the DCA rhythm is not disrupted by a single extreme fill.
+        Returns False on any error (fail-safe → normal DCA behaviour).
+        """
+        try:
+            vault = get_telemetry_vault()
+            klines = vault.get_klines(self.config["symbol"], "1d", limit=2)
+            closed = [k for k in klines if k.get("is_closed", 1) == 1]
+            if not closed:
+                return False
+            ha_low = closed[0].get("ha_low")
+            if ha_low is None:
+                return False
+            return float(self.current_price) <= float(ha_low)
+        except Exception:
+            return False
+
     async def _execute_buy(self, epoch: Dict[str, Any], cost_usdt: Decimal):
         symbol = self.config["symbol"]  # type: ignore[index]
         alerts = get_alert_dispatcher()
 
-        logger.info(f"{self.bot_id}: Executing MARKET BUY of {cost_usdt} USDT on {symbol}")
+        is_lucky = self._is_lucky_entry()
+        logger.info(
+            f"{self.bot_id}: Executing {'LUCKY STRIKE ' if is_lucky else ''}"
+            f"MARKET BUY of {cost_usdt} USDT on {symbol}"
+        )
         client_oid = f"l_{self.bot_id}_{int(time.time())}"
 
         try:
@@ -332,11 +387,12 @@ class LouiseBotRunner:
             if self.gateway and getattr(self.gateway, "_client", None):
                 client = self.gateway._client
 
-                # Register intent for WS confirmation
+                # Register intent for WS confirmation; is_lucky_fill read in _on_execution_report
                 self.pending_orders[client_oid] = {
                     'type': 'BUY',
                     'epoch_id': epoch['epoch_id'],
                     'epoch': epoch,
+                    'is_lucky_fill': is_lucky,
                 }
 
                 if is_simulation:

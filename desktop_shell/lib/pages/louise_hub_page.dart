@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../api_client.dart';
 import '../services/telemetry_hub.dart';
 import '../models/louise_models.dart';
+import '../widgets/hemisphere_toggle.dart';
 
 /// Louise Hub — main dashboard page.
 ///
@@ -255,6 +256,10 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
       targetProfitPct: targetPct,
       buyVolume: buyVol,
     );
+    await _loadSupplementaryData();
+  });
+
+  Future<void> _patchHemispheres(String botId) => _mutate(() async {
     await _loadSupplementaryData();
   });
 
@@ -1272,6 +1277,15 @@ class _LouiseHubPageState extends State<LouiseHubPage> {
                       ),
                       _metricCell('Trades de Ciclo', '${bot.tradesToday}'),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Hemisphere controls
+                  HemisphereToggle(
+                    botId: bot.id,
+                    louiseEnabled: bot.louiseEnabled,
+                    antiLouiseEnabled: bot.antiLouiseEnabled,
+                    api: _api,
+                    onChanged: () => _patchHemispheres(bot.id),
                   ),
                   const SizedBox(height: 20),
                   // Progress
