@@ -14,6 +14,9 @@ class BotMetrics {
   final double progressPercent;
   final double dailyBudget;
   final int tradesToday;
+  final bool louiseEnabled;
+  final bool antiLouiseEnabled;
+  final String? pairedBotId;
 
   BotMetrics({
     required this.id,
@@ -31,6 +34,9 @@ class BotMetrics {
     required this.progressPercent,
     required this.dailyBudget,
     required this.tradesToday,
+    this.louiseEnabled = true,
+    this.antiLouiseEnabled = false,
+    this.pairedBotId,
   });
 
   factory BotMetrics.fromJson(Map<String, dynamic> json) => BotMetrics(
@@ -49,6 +55,9 @@ class BotMetrics {
     progressPercent: (json['progress_percent'] as num?)?.toDouble() ?? 0.0,
     dailyBudget: (json['daily_budget'] as num?)?.toDouble() ?? 0.0,
     tradesToday: (json['trades_today'] as int?) ?? 0,
+    louiseEnabled: json['louise_enabled'] as bool? ?? true,
+    antiLouiseEnabled: json['anti_louise_enabled'] as bool? ?? false,
+    pairedBotId: json['paired_bot_id'] as String?,
   );
 
   String get statusEmoji {

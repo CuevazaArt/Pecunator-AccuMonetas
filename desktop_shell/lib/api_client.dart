@@ -458,4 +458,29 @@ class EngineApi {
       if (symbol != null) 'symbol': symbol,
     },
   );
+
+  // ── Hemisphere controls ─────────────────────────────────────────
+
+  Future<Map<String, dynamic>> louiseGetHemispheres(String botId) =>
+      _client.get('/api/louise/bots/$botId/hemispheres');
+
+  Future<Map<String, dynamic>> louisePatchHemispheres(
+    String botId, {
+    bool? louiseEnabled,
+    bool? antiLouiseEnabled,
+  }) => _client.patch(
+    '/api/louise/bots/$botId/hemispheres',
+    body: {
+      if (louiseEnabled != null) 'louise_enabled': louiseEnabled,
+      if (antiLouiseEnabled != null) 'anti_louise_enabled': antiLouiseEnabled,
+    },
+  );
+
+  Future<Map<String, dynamic>> louisePairBots(
+    String botId, {
+    required String pairedBotId,
+  }) => _client.patch(
+    '/api/louise/bots/$botId/pair',
+    body: {'paired_bot_id': pairedBotId},
+  );
 }

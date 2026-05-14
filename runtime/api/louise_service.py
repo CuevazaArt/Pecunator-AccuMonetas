@@ -97,6 +97,21 @@ class LouiseService:
 
                     gw = self._gateways[subaccount]
                     bot_type = bot_data.get("bot_type", "louise")
+
+                    # Hemisphere gate: skip if the corresponding side is disabled
+                    louise_on = bool(bot_data.get("louise_enabled", 1))
+                    anti_on = bool(bot_data.get("anti_louise_enabled", 0))
+                    if bot_type == "louise" and not louise_on:
+                        logger.info(
+                            f"Bot {bot_id}: Louise hemisphere disabled — skipping start"
+                        )
+                        continue
+                    if bot_type == "anti_louise" and not anti_on:
+                        logger.info(
+                            f"Bot {bot_id}: AntiLouise hemisphere disabled — skipping start"
+                        )
+                        continue
+
                     if bot_type == "anti_louise":
                         runner = AntiLouiseBotRunner(bot_id, self.db, ctx.bus, gw)
                     else:
