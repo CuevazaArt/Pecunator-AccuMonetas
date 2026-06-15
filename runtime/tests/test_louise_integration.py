@@ -198,7 +198,7 @@ class TestBudgetCeiling:
                 mock_gov.return_value.can_execute.return_value = True
                 with patch("runtime.bot.louise.get_budget_guard") as mock_bg:
                     mock_budget = MagicMock()
-                    mock_budget.can_spend.side_effect = [True, False]  # First bot OK, second blocked
+                    mock_budget.try_reserve.side_effect = [True, False]  # First bot OK, second blocked
                     mock_bg.return_value = mock_budget
 
                     # Create 2 bots (status=RUNNING so poll_market processes them)
@@ -224,8 +224,8 @@ class TestBudgetCeiling:
                     await runner2.poll_market()
                     time.sleep(0.2)
 
-                    # Verify budget guard was called with both bots
-                    assert mock_budget.can_spend.call_count >= 1
+                    # Verify budget guard was called with both bots (now uses try_reserve)
+                    assert mock_budget.try_reserve.call_count >= 1
 
 
 class TestConcurrentBuys:

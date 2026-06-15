@@ -210,33 +210,30 @@ class LouiseDB:
         louise_enabled: Optional[bool] = None,
         anti_louise_enabled: Optional[bool] = None,
     ) -> None:
-        """Enable or disable each hemisphere independently."""
-        fields: List[str] = []
-        params: List[Any] = []
-        if louise_enabled is not None:
-            fields.append("louise_enabled = ?")
-            params.append(1 if louise_enabled else 0)
-        if anti_louise_enabled is not None:
-            fields.append("anti_louise_enabled = ?")
-            params.append(1 if anti_louise_enabled else 0)
-        if not fields:
-            return
-        fields.append("updated_at = ?")
-        params.append(int(time.time()))
-        params.append(bot_id)
-        sql = f"UPDATE louise_bots SET {', '.join(fields)} WHERE bot_id = ?"
-        with open_db(self.db_path) as conn:
-            conn.execute(sql, tuple(params))
-            conn.commit()
+        """Enable or disable each hemisphere independently.
+
+        .. deprecated:: 4.1
+            AntiLouise has been removed. This method is retained for DB
+            compatibility only. Use update_bot_config() instead.
+        """
+        import warnings
+        warnings.warn(
+            "update_bot_hemispheres() is deprecated (AntiLouise removed in v4.0)",
+            DeprecationWarning, stacklevel=2,
+        )
 
     def update_bot_pair(self, bot_id: str, paired_bot_id: Optional[str]) -> None:
-        """Link a Louise bot to its AntiLouise counterpart (or clear the link)."""
-        with open_db(self.db_path) as conn:
-            conn.execute(
-                "UPDATE louise_bots SET paired_bot_id = ?, updated_at = ? WHERE bot_id = ?",
-                (paired_bot_id, int(time.time()), bot_id),
-            )
-            conn.commit()
+        """Link a Louise bot to its AntiLouise counterpart (or clear the link).
+
+        .. deprecated:: 4.1
+            AntiLouise has been removed. This method is retained for DB
+            compatibility only.
+        """
+        import warnings
+        warnings.warn(
+            "update_bot_pair() is deprecated (AntiLouise removed in v4.0)",
+            DeprecationWarning, stacklevel=2,
+        )
 
     def update_bot_config(
         self,
@@ -530,3 +527,24 @@ class LouiseDB:
                     (limit,),
                 )
             return [dict(row) for row in cursor.fetchall()]
+
+    def purge_old_snapshots(self, days: int = 90) -> int:
+        """Delete pnl_snapshots older than N days. Returns rows deleted.
+
+        Call periodically (e.g., from TelegramNotifier loop) to prevent
+        unbounded DB growth. Default 90 days preserves ~3 months of charting.
+        """
+        cutoff = int(time.time()) - (days * 86400)
+        with open_db(self.db_path) as conn:
+            cur = conn.execute(
+                "DELETE FROM pnl_snapshots WHERE snapshot_at < ?",
+                (cutoff,),
+            )
+            conn.commit()
+            deleted = cur.rowcount
+            if deleted > 0:
+                import logging
+                logging.getLogger("pecunator.louise_db").info(
+                    "Purged %d old pnl_snapshots (>%d days)", deleted, days
+                )
+            return deleted

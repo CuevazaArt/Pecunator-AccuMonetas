@@ -134,11 +134,8 @@ class LouiseBotRunner:
                     order_id, "FILLED", is_lucky_fill=is_lucky,
                 )
 
-                # Record to global budget guard
-                from runtime.core.budget_guard import get_budget_guard
-                get_budget_guard().record_spend(  # type: ignore[index]
-                    self.bot_id, self.config["symbol"], "BUY", cost_usdt
-                )
+                # NOTE: BudgetGuard spend is already recorded atomically
+                # by try_reserve() in poll_market(). No double-recording here.
 
                 # Update epoch stats
                 epoch = meta['epoch']
@@ -306,10 +303,54 @@ class LouiseBotRunner:
                 total_cost, profit_usdt, profit_pct, realized,
             )
 
-            # Take Profit: only exit condition
+            # Take Profit
             if profit_pct >= target_profit:
                 await self._execute_sell(epoch, current_value, profit_usdt, profit_pct)
                 return
+
+            # F2: Stop-Loss / Max-Drawdown emergency exit
+            from runtime.core.settings import louise_default_max_drawdown_pct
+            max_drawdown = Decimal(str(self.config.get(
+                "max_drawdown_pct", louise_default_max_drawdown_pct()
+            )))
+            if max_drawdown < Decimal("0") and profit_pct <= max_drawdown:
+                logger.critical(
+                    f"{self.bot_id}: MAX DRAWDOWN BREACHED! PnL={profit_pct:.2f}% "
+                    f"<= limit={max_drawdown}%. Executing emergency SELL."
+                )
+                alerts = get_alert_dispatcher()
+                alerts.critical(
+                    "STOPLOSS_TRIGGERED",
+                    f"Louise {self.bot_id} hit max drawdown {profit_pct:.2f}% "
+                    f"(limit: {max_drawdown}%). Emergency sell executed.",
+                    payload={"bot_id": self.bot_id, "symbol": symbol,
+                             "pnl_pct": float(profit_pct), "limit": float(max_drawdown)},
+                    silent=False,
+                )
+                await self._execute_sell(
+                    epoch, current_value, profit_usdt, profit_pct,
+                    status="CLOSED_STOPLOSS"
+                )
+                return
+
+        # F3: Enforce max_purchases_per_epoch
+        max_buys = int(self.config.get("max_purchases_per_epoch", 20))
+        if epoch['num_purchases'] >= max_buys:
+            logger.warning(
+                f"{self.bot_id}: Max purchases per epoch reached "
+                f"({epoch['num_purchases']}/{max_buys}). Holding position."
+            )
+            return
+
+        # F4: Enforce max_position_size_usdt
+        total_cost_so_far = Decimal(str(epoch.get('total_cost', 0.0)))
+        max_pos = Decimal(str(self.config.get("max_position_size_usdt", 5000)))
+        if total_cost_so_far + buy_volume > max_pos:
+            logger.warning(
+                f"{self.bot_id}: Max position size reached "
+                f"({total_cost_so_far + buy_volume}/{max_pos} USDT). Holding."
+            )
+            return
 
         # Only buy if current price is strictly below the last purchase price
         if epoch['num_purchases'] > 0:
@@ -318,15 +359,14 @@ class LouiseBotRunner:
                            f"last buy {self.last_purchase_price:.4f}. Waiting for lower price.")
                 return
 
-        # BudgetGuard is the source of truth for global spend limits (checked first)
+        # F1: BudgetGuard — atomic reserve (eliminates TOCTOU race)
         bg = get_budget_guard()
-        if not bg.can_spend(buy_volume, self.bot_id):
+        if not bg.try_reserve(self.bot_id, symbol, buy_volume):
             logger.warning(f"{self.bot_id}: Global BudgetGuard rejected buy of {buy_volume} USDT. Throttling.")
             return
 
         # Local sanity check: daily_budget is per-bot limit, BudgetGuard is global truth
         daily_budget = Decimal(str(self.config.get("daily_budget_usdt", 500.0)))
-        total_cost_so_far = Decimal(str(epoch.get('total_cost', 0.0)))
 
         if total_cost_so_far + buy_volume > daily_budget:
             logger.warning(f"{self.bot_id}: Daily budget reached "

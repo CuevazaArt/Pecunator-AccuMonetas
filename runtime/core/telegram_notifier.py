@@ -78,6 +78,14 @@ class TelegramNotifier:
             except Exception as e:
                 _LOG.exception("Error sending scheduled Telegram report: %s", e)
 
+            # F9: Periodically purge old pnl_snapshots to prevent unbounded DB growth
+            try:
+                deleted = self._db.purge_old_snapshots(days=90)
+                if deleted > 0:
+                    _LOG.info("DB hygiene: purged %d old pnl snapshots", deleted)
+            except Exception as e:
+                _LOG.warning("DB purge failed: %s", e)
+
             try:
                 await asyncio.sleep(interval_sec)
             except asyncio.CancelledError:

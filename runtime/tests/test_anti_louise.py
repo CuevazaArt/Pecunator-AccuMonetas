@@ -1,9 +1,16 @@
-"""Test suite for AntiLouise bot — margin SHORT strategy."""
+"""Test suite for AntiLouise bot — margin SHORT strategy.
+
+.. deprecated:: 4.0
+    AntiLouise has been removed from the runtime. These tests are retained
+    for reference but skipped in CI.
+"""
 
 import time
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
+
+pytestmark = pytest.mark.skip(reason="AntiLouise deprecated in v4.0 — tests retained for reference")
 
 from runtime.bot.anti_louise import AntiLouiseBotRunner
 from runtime.core.louise_db import LouiseDB

@@ -74,6 +74,7 @@ class TestHemisphereDefaults:
 
 # ── DB: update_bot_hemispheres ────────────────────────────────────────────────
 
+@pytest.mark.skip(reason="update_bot_hemispheres deprecated in v4.0 — AntiLouise removed")
 class TestUpdateBotHemispheres:
     def test_enable_anti_louise(self, temp_db):
         _make_bot(temp_db, "bot_010")
@@ -106,6 +107,7 @@ class TestUpdateBotHemispheres:
 
 # ── DB: update_bot_pair ───────────────────────────────────────────────────────
 
+@pytest.mark.skip(reason="update_bot_pair deprecated in v4.0 — AntiLouise removed")
 class TestPairBots:
     def test_pair_sets_paired_bot_id(self, temp_db):
         _make_bot(temp_db, "bot_a")
@@ -284,6 +286,7 @@ class TestLuckyStrikeFills:
 
 # ── AntiLouise Lucky Strike ───────────────────────────────────────────────────
 
+@pytest.mark.skip(reason="AntiLouise deprecated in v4.0")
 class TestAntiLouiseLuckyStrike:
     def _make_runner(self, db, bot_id, bus, gw):
         runner = AntiLouiseBotRunner(bot_id, db, bus, gw)
@@ -455,6 +458,7 @@ class TestIsLuckyEntry:
             assert runner._is_lucky_entry() is False
 
 
+@pytest.mark.skip(reason="AntiLouise deprecated in v4.0")
 class TestAntiLouiseIsLuckyEntry:
     """Mirror tests for AntiLouise HA-high detection."""
 

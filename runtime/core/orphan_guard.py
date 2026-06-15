@@ -387,6 +387,75 @@ class OrphanGuard:
         """Return last scan results."""
         return list(self._orphans)
 
+    # ── Louise orphan detection ──────────────────────────────────────
+
+    def scan_louise_orphans(
+        self,
+        stale_hours: float = 24.0,
+    ) -> list[dict[str, Any]]:
+        """Detect Louise epochs stuck in RUNNING state without recent activity.
+
+        A Louise orphan is: an epoch with status='RUNNING' whose most recent
+        purchase was placed more than `stale_hours` ago, AND the bot itself
+        is not actively running (or has no purchases at all after creation).
+
+        This catches cases where a MARKET SELL failed mid-execution or the
+        bot crashed without closing the epoch.
+        """
+        from runtime.core.louise_db import LouiseDB
+
+        orphans: list[dict[str, Any]] = []
+        try:
+            db = LouiseDB()
+            bots = db.get_all_bots()
+            now = int(time.time())
+            cutoff = now - int(stale_hours * 3600)
+
+            for bot in bots:
+                if bot.get("status") not in ("RUNNING", "ACCUMULATING"):
+                    continue
+                epoch = db.get_active_epoch(bot["bot_id"])
+                if epoch is None:
+                    continue
+                # Check if epoch has been running too long without activity
+                purchases = db.get_purchases_by_epoch(epoch["epoch_id"])
+                if not purchases:
+                    # Epoch created but no purchases — check creation time
+                    if epoch.get("created_at", now) < cutoff:
+                        orphans.append({
+                            "type": "LOUISE_ORPHAN",
+                            "symbol": bot["symbol"],
+                            "bot_id": bot["bot_id"],
+                            "epoch_id": epoch["epoch_id"],
+                            "missing": "NO_PURCHASES_STALE_EPOCH",
+                            "epoch_age_hours": round((now - epoch["created_at"]) / 3600, 1),
+                            "detected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        })
+                else:
+                    last_purchase_ts = purchases[-1].get("created_at", now)
+                    if last_purchase_ts < cutoff:
+                        orphans.append({
+                            "type": "LOUISE_ORPHAN",
+                            "symbol": bot["symbol"],
+                            "bot_id": bot["bot_id"],
+                            "epoch_id": epoch["epoch_id"],
+                            "missing": "STALE_RUNNING_EPOCH",
+                            "last_purchase_hours_ago": round((now - last_purchase_ts) / 3600, 1),
+                            "num_purchases": epoch.get("num_purchases", 0),
+                            "total_cost": epoch.get("total_cost", 0),
+                            "detected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        })
+
+            if orphans:
+                _LOG.warning(
+                    "Louise orphan scan: found %d stale epochs (threshold=%.0fh)",
+                    len(orphans), stale_hours,
+                )
+        except Exception as e:
+            _LOG.warning("Louise orphan scan failed: %s", e)
+
+        return orphans
+
 
 # ── Singleton ───────────────────────────────────────────────────────
 

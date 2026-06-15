@@ -22,13 +22,29 @@ _SALT_LENGTH = 32  # 256 bits
 
 
 def restrict_secret_file(path: Path) -> None:
-    """Best-effort owner-only read/write on Unix (no-op on typical Windows)."""
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+    """Best-effort owner-only read/write permissions.
+
+    On POSIX: chmod 600.
+    On Windows: uses icacls to remove inherited permissions and grant
+    full control only to the current user.
+    """
+    if os.name == "posix":
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+    elif os.name == "nt":
+        import subprocess
+        try:
+            p = str(path)
+            # Remove inherited permissions, grant only current user
+            subprocess.run(
+                ["icacls", p, "/inheritance:r", "/grant:r",
+                 f"{os.environ.get('USERNAME', 'CURRENT_USER')}:(R,W)"],
+                capture_output=True, timeout=10,
+            )
+        except Exception:
+            _LOG.debug("Could not restrict permissions on %s (Windows)", path)
 
 
 def sanitize_log_message(text: str, max_len: int = 240) -> str:
@@ -124,8 +140,8 @@ def audit_log_vault_event(event: str, details: str = "") -> None:
     from runtime.core.settings import data_dir
     audit_path = Path(data_dir()) / "vault_audit.log"
 
-    import datetime
-    timestamp = datetime.datetime.utcnow().isoformat() + "Z"
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).isoformat()
     audit_entry = f"[{timestamp}] {event}"
     if details:
         audit_entry += f" - {sanitize_log_message(details)}"

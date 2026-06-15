@@ -67,6 +67,16 @@ class LouiseService:
 
             if status in ["RUNNING", "ACCUMULATING"]:
                 if bot_id not in self.runners:
+                    # F6: Notify operator about automatic restart
+                    logger.warning(f"Bot {bot_id} not in runners dict — auto-restarting.")
+                    alerts.warning(
+                        "BOT_AUTO_RESTART",
+                        f"Louise bot {bot_id} ({bot_data.get('symbol', '?')}) was not running "
+                        f"and is being auto-restarted by the immortality loop.",
+                        payload={"bot_id": bot_id, "symbol": bot_data.get("symbol"), "status": status},
+                        silent=False,
+                    )
+
                     subaccount = bot_data.get("subaccount", "bluechip")
                     pair = resolve_pair_for_bot(ctx, subaccount)
                     if not pair:
