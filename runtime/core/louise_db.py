@@ -49,6 +49,26 @@ class LouiseDB:
                 conn.execute("ALTER TABLE louise_bots ADD COLUMN bot_type TEXT DEFAULT 'louise'")
             except sqlite3.OperationalError:
                 pass
+            # Hemisphere switches — each bot row tracks which side is active
+            try:
+                conn.execute(
+                    "ALTER TABLE louise_bots ADD COLUMN louise_enabled INTEGER DEFAULT 1"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(
+                    "ALTER TABLE louise_bots ADD COLUMN anti_louise_enabled INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
+            # paired_bot_id links a Louise bot to its AntiLouise counterpart
+            try:
+                conn.execute(
+                    "ALTER TABLE louise_bots ADD COLUMN paired_bot_id TEXT DEFAULT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
 
             # Table: louise_epochs
             conn.execute("""
@@ -80,11 +100,19 @@ class LouiseDB:
                     cost_usdt REAL NOT NULL,
                     order_id TEXT,
                     status TEXT NOT NULL,
+                    is_lucky_fill INTEGER DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     FOREIGN KEY(bot_id) REFERENCES louise_bots(bot_id),
                     FOREIGN KEY(epoch_id) REFERENCES louise_epochs(epoch_id)
                 )
             """)
+            # Lucky Strike migration for existing purchases tables
+            try:
+                conn.execute(
+                    "ALTER TABLE louise_purchases ADD COLUMN is_lucky_fill INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
 
             # Table: pnl_snapshots — time-series P&L for long-term charting
             # Every poll cycle with an active position writes one row.
@@ -176,6 +204,40 @@ class LouiseDB:
             cursor = conn.execute("SELECT * FROM louise_bots ORDER BY created_at DESC")
             return [dict(row) for row in cursor.fetchall()]
 
+    def update_bot_hemispheres(
+        self,
+        bot_id: str,
+        louise_enabled: Optional[bool] = None,
+        anti_louise_enabled: Optional[bool] = None,
+    ) -> None:
+        """Enable or disable each hemisphere independently."""
+        fields: List[str] = []
+        params: List[Any] = []
+        if louise_enabled is not None:
+            fields.append("louise_enabled = ?")
+            params.append(1 if louise_enabled else 0)
+        if anti_louise_enabled is not None:
+            fields.append("anti_louise_enabled = ?")
+            params.append(1 if anti_louise_enabled else 0)
+        if not fields:
+            return
+        fields.append("updated_at = ?")
+        params.append(int(time.time()))
+        params.append(bot_id)
+        sql = f"UPDATE louise_bots SET {', '.join(fields)} WHERE bot_id = ?"
+        with open_db(self.db_path) as conn:
+            conn.execute(sql, tuple(params))
+            conn.commit()
+
+    def update_bot_pair(self, bot_id: str, paired_bot_id: Optional[str]) -> None:
+        """Link a Louise bot to its AntiLouise counterpart (or clear the link)."""
+        with open_db(self.db_path) as conn:
+            conn.execute(
+                "UPDATE louise_bots SET paired_bot_id = ?, updated_at = ? WHERE bot_id = ?",
+                (paired_bot_id, int(time.time()), bot_id),
+            )
+            conn.commit()
+
     def update_bot_config(
         self,
         bot_id: str,
@@ -264,18 +326,19 @@ class LouiseDB:
         volume: float,
         cost_usdt: float,
         order_id: Optional[str],
-        status: str
+        status: str,
+        is_lucky_fill: bool = False,
     ) -> None:
         now = int(time.time())
         with open_db(self.db_path) as conn:
             conn.execute("""
                 INSERT INTO louise_purchases
                 (purchase_id, bot_id, epoch_id, price_at_buy, volume,
-                 cost_usdt, order_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 cost_usdt, order_id, status, is_lucky_fill, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 purchase_id, bot_id, epoch_id, price_at_buy, volume,
-                cost_usdt, order_id, status, now
+                cost_usdt, order_id, status, 1 if is_lucky_fill else 0, now
             ))
             conn.commit()
 

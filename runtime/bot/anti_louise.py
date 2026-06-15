@@ -55,6 +55,7 @@ from runtime.core.settings import (
     louise_cooldown_gateway_fail_sec,
 )
 from runtime.bot._ws_emit import publish_pnl_snapshot as _publish_pnl_snapshot_ws
+from runtime.core.telemetry_vault import get_telemetry_vault
 
 logger = logging.getLogger("anti_louise_bot")
 
@@ -84,6 +85,8 @@ class AntiLouiseBotRunner:
         self.cooldown_until: int = 0
         # Last price at which a short was opened (used for entry gating)
         self.last_short_price: Decimal = Decimal("0")
+        # Lucky Strike: True when the last fill was classified as a lucky extreme entry
+        self._last_fill_was_lucky: bool = False
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -170,11 +173,19 @@ class AntiLouiseBotRunner:
                 else Decimal(str(event.get('p', '0')))
             )
 
+            is_lucky = bool(meta.get('is_lucky_fill', False))
+            self._last_fill_was_lucky = is_lucky
+            if is_lucky:
+                logger.info(
+                    f"{self.bot_id}: LUCKY STRIKE short fill at {price_at_short:.4f} — "
+                    "recording in DB but NOT updating last_short_price to preserve DCA rhythm"
+                )
+
             purchase_id = f"al_{self.bot_id}_{int(time.time())}_{order_id or client_oid}"
             self.db.add_purchase(
                 purchase_id, self.bot_id, meta['epoch_id'],
                 float(price_at_short), float(volume), float(received_usdt),
-                order_id, "FILLED"
+                order_id, "FILLED", is_lucky_fill=is_lucky,
             )
 
             get_budget_guard().record_spend(
@@ -196,10 +207,13 @@ class AntiLouiseBotRunner:
                 meta['epoch_id'], new_entries, float(new_received), float(new_avg)
             )
             self.active_epoch = self.db.get_active_epoch(self.bot_id)
-            self.last_short_price = price_at_short
+            # Lucky fills do NOT update last_short_price so the DCA rhythm
+            # continues uninterrupted from the pre-lucky reference point.
+            if not is_lucky:
+                self.last_short_price = price_at_short
             logger.info(
-                f"{self.bot_id}: Short-open WS confirmed. "
-                f"New avg short price: {new_avg:.4f}"
+                f"{self.bot_id}: Short-open WS confirmed {'[LUCKY] ' if is_lucky else ''}"
+                f"avg={new_avg:.4f} last_ref={self.last_short_price:.4f}"
             )
 
         elif meta['type'] == 'SHORT_COVER':
@@ -397,13 +411,36 @@ class AntiLouiseBotRunner:
 
     # ── Order execution ──────────────────────────────────────────────
 
+    def _is_lucky_entry(self) -> bool:
+        """True if current price is at or above the HA high of the last closed daily candle.
+
+        A Lucky Strike SHORT entry: price touches the Heikin-Ashi upside extreme,
+        meaning we are shorting at a historically anomalous high — worth marking
+        separately so the DCA rhythm is not disrupted by a single extreme fill.
+        Returns False on any error (fail-safe → normal DCA behaviour).
+        """
+        try:
+            vault = get_telemetry_vault()
+            klines = vault.get_klines(self.config["symbol"], "1d", limit=2)
+            closed = [k for k in klines if k.get("is_closed", 1) == 1]
+            if not closed:
+                return False
+            ha_high = closed[0].get("ha_high")
+            if ha_high is None:
+                return False
+            return float(self.current_price) >= float(ha_high)
+        except Exception:
+            return False
+
     async def _execute_short_open(self, epoch: Dict[str, Any], usdt_amount: Decimal):
         """Open a new short position: margin SELL with auto-borrow."""
         symbol = self.config["symbol"]  # type: ignore[index]
         alerts = get_alert_dispatcher()
 
+        is_lucky = self._is_lucky_entry()
         logger.info(
-            f"{self.bot_id}: Opening SHORT {usdt_amount} USDT on {symbol} (margin)"
+            f"{self.bot_id}: Opening {'LUCKY STRIKE ' if is_lucky else ''}"
+            f"SHORT {usdt_amount} USDT on {symbol} (margin)"
         )
         client_oid = f"al_{self.bot_id}_{int(time.time())}"
 
@@ -417,6 +454,7 @@ class AntiLouiseBotRunner:
                     'type': 'SHORT_OPEN',
                     'epoch_id': epoch['epoch_id'],
                     'epoch': epoch,
+                    'is_lucky_fill': is_lucky,
                 }
 
                 if is_simulation:
