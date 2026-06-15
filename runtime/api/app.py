@@ -39,7 +39,7 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="PecunatorCore Engine API",
-        description="Local HTTP API for the Flutter shell. Bind loopback only unless you know the risk.",
+        description="Local HTTP API for the Louise CLI and REST consumers. Bind loopback only unless you know the risk.",
         version="0.4.0",
         lifespan=lifespan,
         dependencies=[],  # auth injected per-router

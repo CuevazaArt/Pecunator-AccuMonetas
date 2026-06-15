@@ -1,4 +1,11 @@
-"""AntiLouise bot — mirror-image DCA using margin SHORT positions.
+"""DEPRECATED (2026-06-15) — AntiLouise bot is no longer part of the active runtime.
+
+This module is retained for reference only. It is not imported by any active
+code path. The project now focuses exclusively on the Louise DCA long strategy.
+
+Original description below:
+---
+AntiLouise bot — mirror-image DCA using margin SHORT positions.
 
 Strategy:
   - Opens SHORT positions (margin SELL with auto-borrow) each time the price

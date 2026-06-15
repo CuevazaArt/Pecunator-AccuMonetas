@@ -407,6 +407,18 @@ async def create_bot(req: BotCreateRequest, db: LouiseDB = Depends(get_db)) -> d
     bot_raw = db.get_bot(bot_id)
     return {"bot_id": bot_id, "status": "created", "bot": map_bot_to_ui(bot_raw, db)}
 
+@router.post("/notify")
+async def force_telegram_notification() -> dict[str, Any]:
+    """Force an immediate status and balance report dispatch to Telegram."""
+    from runtime.core.telegram_notifier import get_telegram_notifier
+    try:
+        notifier = get_telegram_notifier()
+        await notifier.send_report(force=True)
+        return {"status": "dispatched", "message": "Report sent to Telegram"}
+    except Exception as e:
+        logger.error(f"Failed to dispatch Telegram report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/bots/{bot_id}/pause")
 async def pause_bot(bot_id: str, db: LouiseDB = Depends(get_db)) -> dict[str, Any]:
     bot = db.get_bot(bot_id)

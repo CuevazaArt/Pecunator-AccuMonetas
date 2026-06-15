@@ -2,7 +2,7 @@
 
 **A dedicated DCA (Dollar-Cost Averaging) trading bot hub with full production infrastructure.**
 
-Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine and customized Flutter desktop UI. It reuses the proven architecture and risk-control infrastructure from PecunatorCore, adding specialized DCA trading logic with hardened production controls.
+Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine and a CLI (command-line interface). It reuses the proven architecture and risk-control infrastructure from PecunatorCore, adding specialized DCA trading logic with hardened production controls.
 
 **Key Features:**
 - Louise DCA bot strategy with position-size limits and forced-sell controls
@@ -11,26 +11,18 @@ Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine 
 - Real observability: unhardened telemetry, actual health status (not fake data)
 - Comprehensive tests: runner loop, endpoints, recovery, fill handling
 
-## Status: 🟠 Staging-Ready — Production Pending UI Validation
+## Status: 🟠 Staging-Ready — Production Pending Validation
 
 **Current readiness:** ✅ Safe for **paper trading + staging** (local development, dry runs)  
-**Production readiness:** 🟠 **NOT YET** (see blockers below) — backend 85% hardened, UI 10% tested, ops docs 0%
+**Production readiness:** 🟠 **NOT YET** (see blockers below) — backend 85% hardened, CLI ready, ops docs complete
 
 ### Blockers to Production Deployment (Real Money)
 
-1. **UI Testing:** Only boilerplate Flutter tests exist. Critical flows untested:
-   - Login flow (token → Bearer auth)
-   - Bot creation + validation
-   - Emergency control (pause/resume/cancel)
-   - WebSocket real-time updates
-   - Network error recovery
-   - **Impact:** Operators cannot validate emergency controls without UI tests
+1. ~~**UI Testing:** Flutter UI deprecated~~ ✅ **RESOLVED** — Replaced by CLI (`cli/`). Flutter desktop shell deprecated.
 
 2. ~~**Operational Docs:** No deployment/runbook/rollback procedures exist~~ ✅ **RESOLVED** — `DEPLOYMENT.md`, `OPERATIONAL_RUNBOOK.md`, `ROLLBACK_PLAN.md`, `MONITORING_CHECKLIST.md` all created.
 
 3. ~~**Technical Debt:** Hardcodes + unused modules remain~~ ✅ **RESOLVED** — `balance_checker.py` and `trailing_tp.py` removed; `orphan.py` BTCUSDT hardcode fixed; deprecated endpoints flagged.
-
-**Remaining blocker: UI Testing only** (~5h). See `ESTADO_REAL.md`.
 
 ### Verified hardening (this branch)
 - **Telemetry is honest:** `/health`, `/weight-governor/*`, `/telemetry/*` return real data or explicit `error`/`ready=false` payloads. No more fake `"healthy"`, `"GREEN"`, `weight=1050`, multipliers `× 82`, or hardcoded UI numbers.
@@ -39,7 +31,7 @@ Pecunator-AccuMonetas is a Louise DCA bot hub featuring a Python FastAPI engine 
 - **Preventive risk controls:** `max_position_size_usdt` (default 5000) blocks new buys above exposure cap; `max_purchases_per_epoch` (default 20) force-closes overgrown epochs with `CLOSED_MAX_PURCHASES` status.
 - **All tunables in `runtime/core/settings.py`:** Price staleness, min USDT balance, cooldowns, default subaccount, max position size, max purchases, max drawdown — all overridable via env vars.
 - **Bug fix:** Purchase IDs no longer collide when two fills arrive in the same second.
-- **CI gate enforces Flutter tests:** `flutter test --coverage` is now a hard merge requirement (no more `|| true`).
+- **CI gate enforces Python tests:** `pytest` + `ruff check` are hard merge requirements.
 - **Secret scan covers `runtime/data/`:** Previously ignored — now scanned (binary `.sqlite*` still excluded).
 - **MarketCache exposes `get_ticker(symbol)` / `set_ticker(...)`:** Previously called on a non-existent method.
 
@@ -76,22 +68,72 @@ Before operating this system with real capital:
 - Este IDE, conversación y coordinación entre nosotros: **Español latino**, por defecto.
 - Código fuente, nombres de símbolos, comentarios en código, mensajes de commit orientados al repositorio, y demás artefactos de implementación: **Inglés**.
 
-## Flutter desktop (UI)
+## CLI (Command-Line Interface)
 
-1. Instalar [Flutter SDK (Windows)](https://docs.flutter.dev/get-started/install/windows).
-2. En la raíz del repo: `powershell -ExecutionPolicy Bypass -File scripts/ui/init_flutter_desktop.ps1`
-3. Abrir `desktop_shell/` en el IDE Flutter y ejecutar (p. ej. `flutter run -d windows`).
-   - Atajo (PATH recargado + `flutter run`): `powershell -ExecutionPolicy Bypass -File scripts/ui/run_dashboard.ps1`, o doble clic en `scripts/ui/run_dashboard.cmd`.
-   - Acceso rápido en el escritorio (motor + app): `powershell -ExecutionPolicy Bypass -File scripts/ui/InstallDesktopShortcut.ps1` crea **`PecunatorCore.lnk`**; el lanzador está en `scripts/ui/PecunatorDesktopLauncher.ps1`.
-4. Producción Windows: `flutter build windows` y ejecutar `desktop_shell/build/windows/x64/runner/Release/pecunator_desktop.exe`.
+Louise se opera completamente desde la línea de comandos. La CLI consume la API REST del motor.
 
-**Limpiar caché y recompilar la UI:** cierra la app (`pecunator_desktop.exe`) para liberar DLLs; en `desktop_shell/` ejecuta `flutter clean`, luego `flutter pub get` y `flutter build windows` (o `flutter run -d windows`). Datos del hub en SQLite: `runtime/data/dorothy_hub.sqlite` y `runtime/data/elphaba_hub.sqlite`.
+### Quick Start
 
-Más detalle: [`docs/architecture-next.md`](docs/architecture-next.md).
+```bash
+# 1. Instalar dependencias
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. Arrancar el motor
+python -m cli engine start
+
+# 3. En otra terminal — operar bots
+python -m cli bot list
+python -m cli bot create --symbol XRPUSDT --budget 500 --target-profit 5.0
+python -m cli bot pause <bot_id>
+python -m cli bot resume <bot_id>
+python -m cli health
+python -m cli gateway status
+python -m cli metrics
+python -m cli weight
+```
+
+### Comandos disponibles
+
+| Comando | Descripción |
+|---|---|
+| `engine start` | Arranca el motor FastAPI + uvicorn |
+| `bot list` | Lista todos los bots con estado actual |
+| `bot create` | Crea un nuevo bot DCA |
+| `bot pause <id>` | Pausa un bot |
+| `bot resume <id>` | Reanuda un bot pausado |
+| `bot update <id>` | Actualiza config de un bot |
+| `bot delete <id>` | Shutdown de un bot |
+| `bot pnl <id>` | Historial de P&L |
+| `bot purchases <id>` | Historial de compras |
+| `health` | Estado de salud del hub |
+| `metrics` | Métricas agregadas del hub |
+| `weight` | Estado del weight governor |
+| `hub pnl` | P&L combinado de todos los bots |
+| `hub state` | Snapshot del estado actual de todos los bots |
+| `gateway start` | Conectar gateway Binance |
+| `gateway stop` | Desconectar gateway |
+| `gateway status` | Snapshot del gateway |
+| `vault status` | Estado del cofre de credenciales |
+| `vault list` | Listar credenciales (hints) |
+| `vault add` | Agregar credencial al cofre |
+
+### Output JSON
+
+Todos los comandos soportan `--json` para output parseble:
+
+```bash
+python -m cli --json bot list | jq '.[] | .id'
+```
+
+### Flutter desktop (DEPRECATED)
+
+> ⚠️ El frontend Flutter (`desktop_shell/`) ha sido deprecado. Ver `desktop_shell/DEPRECATED.md`.
 
 ## Motor Python (HTTP API)
 
-Por defecto la API se levanta en **[`http://127.0.0.1:8000`](http://127.0.0.1:8000)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) alinea la barra de "peso REST" en la UI con el límite de referencia de `exchangeInfo`.
+Por defecto la API se levanta en **[`http://127.0.0.1:8000`](http://127.0.0.1:8000)** (ajusta con `PECUNATOR_API_HOST` / `PECUNATOR_API_PORT`). Opcional: **`PECUNATOR_API_WEIGHT_LIMIT_1M`** (por defecto `6000`) para el límite de referencia de `exchangeInfo`.
 
 ### API Authentication
 

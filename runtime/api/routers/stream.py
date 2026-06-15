@@ -1,7 +1,7 @@
 """WebSocket streaming endpoint — replaces REST polling for telemetry.
 
 Provides ``/ws/telemetry`` — a persistent WebSocket that pushes every
-telemetry tick, fuse trip, and critical alert to connected Flutter clients
+telemetry tick, fuse trip, and critical alert to connected clients
 in real-time.
 
 WebSocket auth is required via token query param or x-api-token header

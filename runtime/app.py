@@ -1,4 +1,4 @@
-"""Process context: engine state (connectors, vault, event bus). Web UI removed; Flutter is the shell."""
+"""Process context: engine state (connectors, vault, event bus)."""
 
 from __future__ import annotations
 

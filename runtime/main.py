@@ -1,4 +1,4 @@
-"""CLI entry: optional HTTP API (FastAPI + Uvicorn) for the Flutter shell."""
+"""CLI entry: HTTP API (FastAPI + Uvicorn) for the Louise CLI and REST consumers."""
 
 from __future__ import annotations
 

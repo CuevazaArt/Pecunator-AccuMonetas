@@ -1,4 +1,4 @@
-"""Run the PecunatorCore Python engine stub (logging); Flutter is the UI shell."""
+"""Run the PecunatorCore Python engine (see also: python -m cli engine start)."""
 
 from __future__ import annotations
 

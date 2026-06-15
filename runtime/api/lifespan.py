@@ -57,7 +57,7 @@ def get_shutdown_elapsed() -> float:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start Louise/AntiLouise services + supporting infrastructure, with graceful shutdown."""
+    """Start Louise services + supporting infrastructure, with graceful shutdown."""
     import os
     global _shutdown_requested, _shutdown_start_time
 
@@ -111,11 +111,26 @@ async def lifespan(app: FastAPI):
             type(e).__name__, sanitize_log_message(str(e)),
         )
 
+    # ── Start Telegram Notifier ────────────────────────────────────
+    try:
+        from runtime.core.telegram_notifier import get_telegram_notifier
+        await get_telegram_notifier(ctx.config.data_dir).start()
+    except Exception as e:
+        _LOG.warning("telegram_notifier startup failed: %s", sanitize_log_message(str(e)))
+
     yield
 
     # ── Graceful Shutdown ──────────────────────────────────────────
     _LOG.info("Starting graceful shutdown sequence...")
     shutdown_start = time.time()
+
+    # Step 0: Stop Telegram Notifier
+    try:
+        from runtime.core.telegram_notifier import get_telegram_notifier
+        _LOG.info("Stopping Telegram notifier...")
+        await get_telegram_notifier().stop()
+    except Exception as e:
+        _LOG.error("Telegram notifier stop error: %s", e)
 
     # Step 1: Stop Louise immortality loop (stops creating new bot tasks)
     try:
