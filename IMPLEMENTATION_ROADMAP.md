@@ -429,3 +429,25 @@ Each branch:
 - `docs/BOT_SPECIFICATION.md` — Technical details
 - `docs/UI_WIREFRAMES.md` — UI/UX design
 - `CLAUDE.md` — Development process
+
+---
+
+## 🔮 Future Hardening & Resilience Needs (Production Backlog)
+
+These items represent key areas of improvement identified for cluster production maturity and system resilience:
+
+### 1. Connection Resilience & Network Hardening (Binance REST & WebSockets)
+- [ ] **Adaptive API Weight Governor**: Automatically monitor `x-mbx-used-weight` response headers and throttle bot polling cycles dynamically as weight utilization nears 80%.
+- [ ] **Exponential Backoff WebSocket Reconnector**: Implement robust reconnection logic with jitter and backoff for market data and user data streams to survive network drops.
+
+### 2. Observability & Monitoring
+- [ ] **Terminal Dashboard (TUI)**: Create a real-time console dashboard using `rich` or `textual` to monitor multiple runners, active drawdowns, and available budget in a single screen.
+- [ ] **Automated Encrypted SQLite Backups**: Periodically back up, encrypt, and dispatch the SQLite database file to the operator via Telegram or secure cloud storage.
+
+### 3. API Security & Key Governance
+- [ ] **Secret Encryption in SQLite**: Encrypt stored Binance API keys/secrets using AES-256 symmetric encryption integrated with the OS keyring.
+- [ ] **Startup Permission & IP Diagnostics**: Run automated API capability checks at startup to verify spot trading permission and validate IP whitelist restrictions before bot execution.
+
+### 4. Strategy Optimization (Zero Stop-Loss DCA)
+- [ ] **Volatility-Based Dynamic DCA Step**: Dynamically expand or contract the DCA buy step spacing based on the Average True Range (ATR) to buy wider during panics and closer during consolidations.
+- [ ] **Trailing Take-Profit & Partial Exits**: Implement optional partial position scaling and trailing profit limits to maximize returns on strong upside momentum.
