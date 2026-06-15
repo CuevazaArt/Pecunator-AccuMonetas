@@ -51,11 +51,6 @@ LOUISE_TELEGRAM_NOTIFY_INTERVAL_HOURS=12                           # Reporte per
 # Variables de Ajuste Generales
 LOUISE_MIN_USDT_BALANCE=10.0                                       # Balance mínimo en USDT para permitir compras
 LOUISE_PRICE_STALENESS_SEC=15                                      # Segundos máximos de precio antiguo aceptable
-
-# Stop-Loss y Protección de Capital (v4.2+)
-LOUISE_DEFAULT_MAX_DRAWDOWN_PCT=-10                                # Máximo drawdown permitido antes de venta de emergencia
-LOUISE_DEFAULT_MAX_POSITION_SIZE_USDT=5000                         # Tamaño máximo de posición por epoch (USDT)
-LOUISE_DEFAULT_MAX_PURCHASES_PER_EPOCH=20                          # Máximo de compras por epoch antes de hold
 ```
 
 ---
@@ -73,32 +68,28 @@ El cluster de Louise cuenta con protección contra caídas y sobre-exposición m
 
 ---
 
-## 5. Protección de Capital: Stop-Loss y Límites
+## 5. Filosofía de Acumulación: Sin Stop-Loss por Diseño
 
-### Stop-Loss / Max Drawdown (v4.2+)
+> [!IMPORTANT]
+> Louise **no tiene stop-loss ni límites artificiales de compra por epoch**. Esto es intencional y central a la estrategia.
 
-Louise ahora incluye un mecanismo de salida de emergencia. Si el PnL no realizado de un epoch cae por debajo del `max_drawdown_pct` configurado (default: -10%), el bot ejecuta automáticamente un MARKET SELL y cierra el epoch con status `CLOSED_STOPLOSS`.
+### ¿Por qué no hay stop-loss?
+- Louise opera **sin apalancamiento** en activos **bluechip** (BTC, ETH, BNB, SOL).
+- El riesgo de que un activo bluechip caiga a cero de forma permanente es extremadamente bajo.
+- Vender en pérdida (ej. -90%) **consolida una pérdida real** que, históricamente, se habría recuperado al mantener la posición.
+- La estrategia DCA está diseñada para promediar el precio de entrada hacia abajo durante caídas — cuanto más baja el precio, mejor es el precio promedio de acumulación.
 
-> [!WARNING]
-> El stop-loss ejecuta una venta a mercado al precio actual. En mercados ilíquidos o con alta volatilidad, el slippage puede ser significativo. Configura el drawdown máximo según tu tolerancia al riesgo.
+### ¿Por qué no hay límites de compras o posición?
+- Los límites artificiales (`max_purchases_per_epoch`, `max_position_size_usdt`) **entorpecen la lógica de acumulación**.
+- Louise debe ser libre de seguir comprando mientras haya presupuesto diario y USDT disponible.
+- El único control de gasto es el **BudgetGuard** (presupuesto diario) y el **saldo libre de USDT en la subcuenta**.
 
-**Configuración:**
-```bash
-# Al crear el bot (CLI):
-python -m cli bot create --symbol BTCUSDT --max-drawdown -15   # Stop-loss al -15%
-
-# Vía variable de entorno (default global):
-LOUISE_DEFAULT_MAX_DRAWDOWN_PCT=-10
-```
-
-### Límites por Epoch
-| Parámetro | Default | Descripción |
-|---|---|---|
-| `max_purchases_per_epoch` | 20 | Máximo número de compras antes de entrar en modo "hold" |
-| `max_position_size_usdt` | 5000 | Capital máximo comprometido antes de dejar de comprar |
-| `daily_budget_usdt` | 500 | Gasto diario máximo por bot individual |
-
-Cuando cualquier límite se alcanza, el bot deja de comprar pero **no vende**. La posición permanece abierta esperando el take-profit o el stop-loss.
+### Control de riesgo real
+El operador controla su exposición mediante:
+1. **Presupuesto diario (`--budget`):** Limita cuánto gasta cada bot por día.
+2. **Volumen de compra (`--buy-volume`):** Define el tamaño de cada orden individual.
+3. **USDT asignado a la subcuenta:** Transferir solo el capital que estás dispuesto a comprometer.
+4. **Selección de activos:** Solo operar activos con fundamentos sólidos y alta capitalización.
 
 ---
 
@@ -187,13 +178,8 @@ Si detectas un epoch huérfano:
 ### Bot no compra a pesar de tener USDT disponible
 1. **Precio no ha bajado:** Louise solo compra cuando el precio es **estrictamente inferior** al de la última compra.
 2. **BudgetGuard bloqueado:** Verifica el estado: `python -m cli hub state`. Si el gasto de 24h del hub "louise" llegó a su techo, espera a que se reinicie la ventana.
-3. **Max purchases alcanzado:** Si `num_purchases >= max_purchases_per_epoch`, el bot está en modo "hold". Solo venderá cuando alcance el take-profit o el stop-loss.
-4. **API Fuse activo:** Si el peso de la API de Binance superó el 80%, todas las llamadas REST están bloqueadas. Espera al auto-reset.
-
-### Bot vendió por stop-loss inesperadamente
-1. Revisa el valor de `max_drawdown_pct` en la configuración del bot.
-2. Los eventos de stop-loss se registran con nivel `CRITICAL` en los logs y se envían como alerta de Telegram con código `STOPLOSS_TRIGGERED`.
-3. El epoch se cierra con status `CLOSED_STOPLOSS`. Puedes verificarlo en la API: `GET /api/louise/bots/{bot_id}/epochs`.
+3. **API Fuse activo:** Si el peso de la API de Binance superó el 80%, todas las llamadas REST están bloqueadas. Espera al auto-reset.
+4. **USDT insuficiente:** Verifica que la subcuenta tiene saldo libre suficiente para cubrir el `buy_volume` configurado.
 
 ### Notificaciones de Telegram no llegan
 1. Verifica que `PECUNATOR_ALERT_TELEGRAM_TOKEN` y `PECUNATOR_ALERT_TELEGRAM_CHAT_ID` estén configurados en `.env`.
@@ -213,10 +199,8 @@ Si recibes alertas `BOT_AUTO_RESTART` frecuentes, revisa:
 1. [ ] Crear un Bot de Telegram con `@BotFather` y obtener su Token.
 2. [ ] Obtener tu Chat ID (utilizando bots de Telegram como `@userinfobot`).
 3. [ ] Añadir las variables `PECUNATOR_ALERT_TELEGRAM_TOKEN`, `PECUNATOR_ALERT_TELEGRAM_CHAT_ID` y `LOUISE_TELEGRAM_NOTIFY_INTERVAL_HOURS` al archivo `.env`.
-4. [ ] Configurar protección de capital: `LOUISE_DEFAULT_MAX_DRAWDOWN_PCT`, `LOUISE_DEFAULT_MAX_POSITION_SIZE_USDT`, `LOUISE_DEFAULT_MAX_PURCHASES_PER_EPOCH`.
-5. [ ] Crear y encriptar las credenciales API de Binance en el Vault de Pecunator (`python -m cli vault add`).
-6. [ ] Crear tu cluster de bots usando el comando masivo `python -m cli bot create`.
-7. [ ] Iniciar el gateway de Binance (`python -m cli gateway start`).
-8. [ ] Iniciar el motor en segundo plano (`python -m cli engine start`).
-9. [ ] Comprobar el correcto funcionamiento enviando un reporte manual (`python -m cli notify`).
-10. [ ] Verificar que el stop-loss está activo revisando los logs del primer ciclo de `poll_market()`.
+4. [ ] Crear y encriptar las credenciales API de Binance en el Vault de Pecunator (`python -m cli vault add`).
+5. [ ] Crear tu cluster de bots usando el comando masivo `python -m cli bot create`.
+6. [ ] Iniciar el gateway de Binance (`python -m cli gateway start`).
+7. [ ] Iniciar el motor en segundo plano (`python -m cli engine start`).
+8. [ ] Comprobar el correcto funcionamiento enviando un reporte manual (`python -m cli notify`).
