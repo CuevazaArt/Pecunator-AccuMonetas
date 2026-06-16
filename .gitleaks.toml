@@ -1,0 +1,20 @@
+# Gitleaks configuration for Pecunator-AccuMonetas
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+title = "Pecunator-AccuMonetas Gitleaks Config"
+
+[allowlist]
+description = """
+Historical findings that have been triaged and remediated.
+The secrets listed here were revoked after discovery.
+DO NOT add new entries without first revoking the exposed credential.
+"""
+
+# commit 5e1edc29: chart-img API key was hardcoded in runtime/modules/vmo.py.
+# Fixed in the very next commit (4a200ce) by switching to os.environ.get().
+# The vmo.py module was later removed entirely from the codebase.
+# ACTION REQUIRED: revoke/rotate key REDACTED-ROTATED-CHART-IMG-KEY
+# at https://chart-img.com — do not remove this allowlist entry until rotation is confirmed.
+commits = [
+    "5e1edc29a8b22a7b9c4d58016d732aecdb13630f",
+]
