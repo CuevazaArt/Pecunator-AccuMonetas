@@ -48,3 +48,6 @@ backend.log.*
 .coverage
 *.sqlite-shm
 *.sqlite-wal
+# Local market-data caches - never commit
+*.db
+data/vmo/
